@@ -134,7 +134,6 @@ const pieces = () => (S.data && S.data.pieces) || [];
 const byId = id => pieces().find(p => p.id === id);
 const inCat = c => pieces().filter(p => nk(p.category) === nk(c));
 const catByslug = s => ((S.data && S.data.categories) || []).find(c => slug(c.name) === s);
-const isList = c => /flyer/.test(nk(c));
 
 // ================= shared pieces =================
 function tabs(active) {
@@ -161,11 +160,6 @@ function cardWithDownload(p) {
   return '<div class="card dl">' + card(p).replace(/^<a class="card"/, '<a class="cardlink"') +
     '<div class="cardacts"><a class="btn mini" href="' + esc(p.url) + '?dl=1" download aria-label="Download ' + esc(p.title) + '">' + I.down + 'Download</a>' +
     (canShare ? '<button class="btn mini icon" data-share="' + esc(p.id) + '" aria-label="Share ' + esc(p.title) + '">' + I.share + '</button>' : '') + '</div></div>';
-}
-function listRow(p) {
-  return '<li><a class="go" href="#p/' + esc(p.id) + '"><span class="mini">' + (p.kind === 'image' ? '<img src="' + esc(p.url) + '" alt="" loading="lazy" decoding="async">' : '<span class="doc" style="font-size:10px">' + (p.ext || '').toUpperCase() + '</span>') + '</span>' +
-    '<span>' + esc(p.title) + (p.isNew ? ' <span class="badge" style="vertical-align:2px">NEW</span>' : '') + '<span class="meta">' + esc(p.kind === 'pdf' ? 'PDF' : p.kind === 'image' ? 'Image' : p.kind) + (p.date ? ' · ' + nice(p.date) : '') + '</span></span></a>' +
-    '<button class="iconbtn" data-share="' + esc(p.id) + '" aria-label="Share ' + esc(p.title) + '" style="color:var(--brand)">' + I.share + '</button></li>';
 }
 function installCard() {
   if (standalone() || store.get('installHidden')) return '';
@@ -201,7 +195,7 @@ function homeHtml() {
     h += '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">' + (anyNew ? 'This week’s market update' : 'Your market update') + '</h2>' + (anyNew ? '<span class="badge">NEW</span>' : '') + '</div>' +
       '<div class="sub">' + (d ? 'Updated ' + nice(d) : '') + (imgs.length ? ' · ' + esc(imgs.map(p => p.title).join(', ')) : '') + '</div>' +
       '<div class="week">' + (vid ? '<div class="hero"><video src="' + esc(vid.url) + '#t=0.5" controls playsinline preload="metadata" aria-label="Market update video"></video></div>' : '') +
-      '<div style="display:flex;flex-direction:column;gap:12px">' + (imgs.length ? '<div class="areas">' + imgs.map(p => '<a class="card" style="font-size:12px" href="#p/' + esc(p.id) + '"><span class="thumb">' + thumbInner(p) + '</span>' + esc(p.title) + '</a>').join('') + '</div>' : '') +
+      '<div style="display:flex;flex-direction:column;gap:12px">' + (imgs.length ? '<div class="areas">' + imgs.map(cardWithDownload).join('') + '</div>' : '') +
       '<button class="btn primary block" data-share-week="1">' + I.share + 'Share this week’s update</button>' +
       (vid ? '<a class="btn block" href="#p/' + esc(vid.id) + '">Open the video</a>' : '') + '</div></div></div></section>';
   }
@@ -219,7 +213,7 @@ function homeHtml() {
   if (row.length) {
     h += '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">' + (fresh.length ? 'New for you' : 'Latest ' + esc(latestCat.name.toLowerCase())) + '</h2>' +
       (!fresh.length && latestCat ? '<a href="#c/' + esc(slug(latestCat.name)) + '" style="font-size:14px;font-weight:600">See all</a>' : '') + '</div>' +
-      '<div class="strip">' + row.slice(0, 12).map(card).join('') + '</div></div></section>';
+      '<div class="strip wide">' + row.slice(0, 12).map(cardWithDownload).join('') + '</div></div></section>';
   }
   if (!all.length) h += '<section class="blk"><div class="wrap"><div class="empty">Nothing here yet. When West Marketing adds pieces for you on the Employee Marketing Portal, they appear here automatically.</div></div></section>';
   h += installCard() + foot() + '</div>' + t.bottom;
@@ -240,36 +234,58 @@ function catHtml(s) {
     '</div></header><div class="body"><div class="wrap" id="results">' + resultsHtml(c.name, shown) + '</div></div>' + foot() + '</div>' + t.bottom;
   return h;
 }
-// Photos & Personal Branding is split into sections by what each piece is (matched on its name).
-// A section only shows once something is in it; anything that doesn't match lands in "More branding".
-const BRAND_SECTIONS = [
-  ['Headshots', /headshot|facing|portrait|photo/],
-  ['Business Cards', /business card/],
-  ['Drop Cards', /drop card|door hanger|leave behind/],
-  ['Email Signature', /signature/],
-  ['Name Badges', /badge|name tag/],
-  ['Social Media Profile', /profile|banner|cover|avatar/],
-  ['Bio & Introductions', /\bbio\b|about me|introduc|meet /],
+// ---------- sections ----------
+// Each category can be split into sections (matched on each piece's name). Sections show as sideways rows;
+// a section only appears once something is in it, and anything unmatched goes in the last "More …" section.
+// A category with no rules here (any new one) shows as a grid. Every piece gets the red Download button.
+const SECTION_RULES = [
+  [/brand|photo/, 'More branding', [
+    ['Headshots', /headshot|facing|portrait|photo/],
+    ['Business Cards', /business card/],
+    ['Drop Cards', /drop card|door hanger|leave behind/],
+    ['Email Signature', /signature/],
+    ['Name Badges', /badge|name tag/],
+    ['Social Media Profile', /profile|banner|cover|avatar/],
+    ['Bio & Introductions', /\bbio\b|about me|introduc|meet /],
+  ]],
+  [/flyer/, 'More flyers', [
+    ['Spanish', /spanish|espanol/],
+    ['Rates & Closing Costs', /\brate\b|\bstar\b|closing cost|expect to pay|fees?\b/],
+    ['Plat Maps', /plat map/],
+    ['Fraud & Safety', /fraud|cyber|wire|scam|notary/],
+    ['Wildfire', /wildfire|fire safety|fire readiness/],
+    ['Buyers & Sellers', /buyer|seller|earnest|renting|owning|closing disclosure|realtor|title insurance|holding title/],
+    ['Property, Tax & Law', /tax|exemption|proposition|solar|adu|partition|quiet title|deed|trust|homestead|chapter|\bbill\b|guarantee|inspection|preliminary|investment|disbursement/],
+    ['Local Info', /directory|numbers|utilities|services|stewart now|app\b/],
+  ]],
+  [/tip/, 'More tips', [
+    ['Safety Tips', /safety|meeting|showing|access|red flag|verify|looked familiar/],
+    ['Farming & Marketing', /farm|data|tool|marketing/],
+    ['Title Stories', /^the |mystery|easement|deed|transfer|closing date/],
+  ]],
+  [/market/, 'Area graphics', [
+    ['Video', /video|slideshow/],
+  ]],
 ];
-const isBranding = c => /brand|photo/.test(nk(c));
-function sectionsOf(list) {
-  const out = BRAND_SECTIONS.map(([name]) => ({ name, items: [] })), more = { name: 'More branding', items: [] };
+function sectionsFor(cat, list) {
+  const rule = SECTION_RULES.find(([re]) => re.test(nk(cat)));
+  if (!rule) return [{ name: cat, items: list }];
+  const [, moreName, defs] = rule;
+  const out = defs.map(([name]) => ({ name, items: [] })), more = { name: moreName, items: [] };
   list.forEach(p => {
-    const text = nk(p.row + ' ' + p.title);
-    const i = BRAND_SECTIONS.findIndex(([, re]) => re.test(text));
+    const text = nk(p.row + ' ' + p.title), raw = String(p.title).toLowerCase();
+    const i = defs.findIndex(([, re]) => re.test(text) || re.test(raw));
     (i >= 0 ? out[i] : more).items.push(p);
   });
-  return out.concat(more).filter(s => s.items.length);
+  return out.concat(more).filter(x => x.items.length);
 }
 function resultsHtml(cat, shown) {
   if (!shown.length) return '<div class="empty">Nothing matches. Try a different word.</div>';
-  if (isBranding(cat)) {
-    const secs = sectionsOf(shown);
-    return (secs.length > 1 ? '<nav class="chips" aria-label="Sections" style="margin-bottom:18px">' + secs.map(s => '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#sec-' + slug(s.name) + '" data-jump="sec-' + slug(s.name) + '">' + esc(s.name) + ' (' + s.items.length + ')</a>').join('') + '</nav>' : '') +
-      secs.map(s => '<section id="sec-' + slug(s.name) + '" style="margin-bottom:28px;scroll-margin-top:84px"><div class="h2row" style="margin-bottom:12px"><h2 class="h">' + esc(s.name) + '</h2>' +
-        (s.items.length > 2 ? '<span class="hint">Swipe for more →</span>' : '') + '</div><div class="strip wide">' + s.items.map(cardWithDownload).join('') + '</div></section>').join('');
-  }
-  return isList(cat) ? '<ul class="list">' + shown.map(listRow).join('') + '</ul>' : '<div class="grid">' + shown.map(card).join('') + '</div>';
+  const secs = sectionsFor(cat, shown);
+  if (secs.length < 2) return '<div class="grid dlgrid">' + shown.map(cardWithDownload).join('') + '</div>';
+  return '<nav class="chips" aria-label="Sections" style="margin-bottom:18px">' + secs.map(x => '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#sec-' + slug(x.name) + '" data-jump="sec-' + slug(x.name) + '">' + esc(x.name) + ' (' + x.items.length + ')</a>').join('') + '</nav>' +
+    secs.map(x => '<section id="sec-' + slug(x.name) + '" style="margin-bottom:28px;scroll-margin-top:84px"><div class="h2row" style="margin-bottom:12px"><h2 class="h">' + esc(x.name) + '</h2>' +
+      (x.items.length > 2 ? '<span class="hint">Swipe for more →</span>' : '') + '</div><div class="strip wide">' + x.items.map(cardWithDownload).join('') + '</div></section>').join('');
 }
 
 // ================= search everything =================
@@ -279,7 +295,7 @@ function searchHtml() {
   const shown = q ? pieces().filter(p => nk(p.title + ' ' + p.category).includes(nk(q))) : [];
   return t.top + '<div class="frame"><header class="pagehead"><div class="wrap"><a class="back" href="#home">' + I.back + 'Home</a><h1>Search</h1>' +
     '<label class="search"><span style="color:var(--muted);display:flex">' + I.search + '</span><input type="search" id="sq" placeholder="Search flyers, tips, updates" aria-label="Search" value="' + esc(q) + '"></label></div></header>' +
-    '<div class="body"><div class="wrap" id="results">' + (q ? (shown.length ? '<p class="hint" style="margin:0 0 12px">' + shown.length + ' result' + (shown.length === 1 ? '' : 's') + '</p><ul class="list">' + shown.map(listRow).join('') + '</ul>' : '<div class="empty">Nothing matches “' + esc(q) + '”.</div>') : '') + '</div></div></div>' + t.bottom;
+    '<div class="body"><div class="wrap" id="results">' + (q ? (shown.length ? '<p class="hint" style="margin:0 0 12px">' + shown.length + ' result' + (shown.length === 1 ? '' : 's') + '</p><div class="grid dlgrid">' + shown.map(cardWithDownload).join('') + '</div>' : '<div class="empty">Nothing matches “' + esc(q) + '”.</div>') : '') + '</div></div></div>' + t.bottom;
 }
 
 // ================= one piece =================

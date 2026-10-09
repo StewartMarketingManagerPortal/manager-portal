@@ -32,3 +32,12 @@ Rows on the portal board whose **Person** column is them. Columns are matched by
   - `SESSION_SECRET` — optional Secret; changing it signs everyone out.
 
 Sign-in codes and rate limits are kept in a Durable Object (`Gate`), included in the Workers Free plan.
+
+## Look and layout rules (keep for anything new)
+- **Every piece** is shown as a card with the red pill **Download** button under it (plus Share on phones): `cardWithDownload()` in `public/app.js`.
+- **All buttons** use `.btn` — red pill (`.btn.primary` solid red, plain `.btn` white with red outline). Don't add other button styles.
+- **Categories split into sections** (sideways rows with jump buttons at the top) using `SECTION_RULES` in `public/app.js`:
+  Photos & Personal Branding, Flyers, Title Tips and Market Update have rules. A section shows only once it has
+  something in it; unmatched pieces go in the last "More …" section. A brand-new category with no rules shows as a grid
+  of the same cards — add a rule there to give it sections.
+- Names lose underscores automatically (`tidy()` in `src/worker.js`).

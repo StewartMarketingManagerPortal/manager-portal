@@ -218,3 +218,19 @@ h2.h { margin: 0; font-size: 19px; font-weight: 800; }
 .btn.mini.icon { width: 42px; background: #fff; color: var(--brand); border: 1.5px solid #E7C9D1; box-shadow: none; }
 .btn.mini.icon:hover { background: var(--tint); color: var(--brand-dark); }
 .list .iconbtn { color: var(--brand); }
+
+/* ---------- one button style for the whole site (red pill); anything new picks it up from .btn ---------- */
+.btn { border-radius: 999px; border: 1.5px solid #E7C9D1; color: var(--brand); background: #fff; font-weight: 700; transition: background .15s, transform .1s, box-shadow .15s, border-color .15s; }
+.btn:hover { background: var(--tint); border-color: var(--brand); color: var(--brand-dark); }
+.btn:active { transform: scale(.98); }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 4px 14px rgba(163,12,51,.28); }
+.btn.primary:hover { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; box-shadow: 0 6px 18px rgba(163,12,51,.34); }
+.btn:disabled { transform: none; }
+.iconbtn { border-radius: 999px; }
+/* the three area graphics on Home are narrow: Download only, a touch smaller */
+.areas .card.dl { gap: 6px; }
+.areas .btn.mini.icon { display: none; }
+.areas .btn.mini { font-size: 12px; padding: 0 6px; min-height: 38px; }
+.areas .btn.mini svg { width: 14px; height: 14px; }
+.areas .ttl { min-height: 0 !important; font-size: 12px; }
+.dlgrid { align-items: stretch; }
