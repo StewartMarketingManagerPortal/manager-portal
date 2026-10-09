@@ -470,11 +470,11 @@ let refreshing = false;
 async function doRefresh() {
   if (refreshing || !S.data) return;
   refreshing = true;
-  const y = window.scrollY, before = pieces().length; toast('Checking for new pieces…', 15000);
+  const y = window.scrollY;
+  document.body.classList.add('updating'); toast('Updating…', 60000);
   S.loadedAt = Date.now(); await load(true);
   window.scrollTo(0, y);
-  const added = pieces().length - before;
-  toast(added > 0 ? added + ' new piece' + (added === 1 ? '' : 's') + ' added' : 'You’re up to date');
+  document.body.classList.remove('updating'); hideToast();
   refreshing = false;
 }
 // pull down from the top of the page to refresh (home-screen apps on iPhone have no reload button)
@@ -482,6 +482,7 @@ async function doRefresh() {
   const ptr = document.createElement('div');
   ptr.className = 'ptr'; ptr.setAttribute('aria-hidden', 'true'); ptr.innerHTML = I.refresh;
   document.body.appendChild(ptr);
+  const spin = document.createElement('div'); spin.className = 'topspin'; spin.setAttribute('role', 'status'); spin.setAttribute('aria-label', 'Updating'); document.body.appendChild(spin);
   const LIMIT = 80;
   let startY = 0, startX = 0, pulling = false, dist = 0;
   document.addEventListener('touchstart', e => {

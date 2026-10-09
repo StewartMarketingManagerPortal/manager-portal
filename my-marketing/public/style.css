@@ -298,3 +298,9 @@ body.menu-open { overflow: hidden; }
 .ptr { position: fixed; left: 50%; top: calc(14px + var(--safe-t)); z-index: 60; width: 40px; height: 40px; margin-top: -60px; border-radius: 50%; background: #fff; color: var(--brand); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,.25); transform: translate(-50%, 0); transition: transform .2s; opacity: 0; pointer-events: none; }
 .ptr.on { opacity: 1; transition: none; }
 .ptr.ready { background: var(--brand); color: #fff; }
+
+/* grey see-through spinner at the top while updating */
+.topspin { position: fixed; left: 50%; top: calc(74px + var(--safe-t)); z-index: 60; width: 38px; height: 38px; margin-left: -19px; border-radius: 50%; background: rgba(60,58,56,.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; pointer-events: none; }
+.topspin::after { content: ""; width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.35); border-top-color: rgba(255,255,255,.95); animation: spin .8s linear infinite; }
+body.updating .topspin { display: flex; }
+@media (min-width: 900px) { .topspin { top: 84px; } }
