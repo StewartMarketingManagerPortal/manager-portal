@@ -97,6 +97,7 @@ function reqList(list) {
 // ----- new hire -----
 PAGES.newhire = () => {
   const n = S.nh || (S.nh = freshNewHire());
+  if (window.Cutout) Cutout.load().catch(() => {});
   const steps = ['Details + photo', 'Choose a look', 'Review'];
   let h = '<div class="head"><div><h1>' + (n.step === 2 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 3 ? 'Review and submit' : 'Add a new hire') + '</h1><div class="sub">' +
     (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Pick one, or both to get every piece in dark and light.' : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
@@ -131,14 +132,24 @@ function nhDetails(n) {
     '<div class="row" style="align-items:flex-end"><label class="field grow">Add a city or zip code<input type="text" data-f="areaInput" value="' + esc(n.areaInput) + '" placeholder="e.g. Roseville or 95661"></label><button type="button" class="btn" data-act="area-add">Add area</button></div>' +
     '<div class="small muted">Marketing connects each area to its market report — you don’t need any links.</div></div></section>';
   h += '<section class="col2"><div class="card"><h2>Headshot</h2><div class="row" style="align-items:center;flex-wrap:nowrap">' +
-    '<div class="headshot">' + (n.photoUrl ? '<img src="' + n.photoUrl + '" alt="Uploaded headshot"><div class="guide"></div>' : 'No photo yet') + '</div>' +
+    '<div class="headshot" id="headshot">' + headshotBox(n) + '</div>' +
     '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px" class="muted2">' + (n.photo ? '<span style="color:var(--green-text);font-weight:700">✓ ' + esc(n.photo.name) + '</span>' : '') +
-    '<span>Head and shoulders inside the guide. We remove the background for you.</span>' +
+    '<span id="cutnote">' + cutNote(n) + '</span>' +
     '<label class="btn small" style="align-self:flex-start">' + (n.photo ? 'Replace photo' : 'Upload photo') + '<input type="file" accept="image/*" data-file="photo" hidden></label></div></div></div>' +
     '<div class="preview"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock" id="cblock">' + cblock(n) + '</div>' +
     '<div class="small" style="color:var(--border)">This is how their details appear on flyers and the email signature.</div></div></section></div>';
   h += '<div class="row" style="justify-content:space-between"><a href="#home" style="font-weight:600">Cancel</a><button type="button" class="btn primary" data-act="nh-next">Next: choose a look →</button></div>';
   return h;
+}
+function headshotBox(n) {
+  if (!n.photoUrl) return 'No photo yet';
+  if (n.cutUrl) return '<img class="cut" src="' + n.cutUrl + '" alt="Headshot with the background removed">';
+  return '<img src="' + n.photoUrl + '" alt="Uploaded headshot"><div class="guide"></div>' + (n.cutState === 'working' ? '<div class="cutting"><span class="spin"></span>Removing background…</div>' : '');
+}
+function cutNote(n) {
+  if (n.cutUrl) return 'Background removed for the preview. Marketing makes the final cutout in Photoshop.';
+  if (n.cutState === 'failed') return 'We couldn’t preview the cutout here, but marketing removes the background for you.';
+  return 'Head and shoulders inside the guide. We remove the background for you.';
 }
 function cblock(n) {
   return (n.photoUrl && n.show.headshot ? '<img class="av" src="' + n.photoUrl + '" alt="">' : '<span class="av">' + esc(initials(n.firstName + ' ' + n.lastName) || '?') + '</span>') +
@@ -151,7 +162,7 @@ const nhTitle = n => n.title === '__other' ? n.titleOther : n.title;
 function nhAddress(n) { if (n.office === '__new') return { address1: n.address1, address2: n.address2 }; const o = S.me.offices[+n.office]; return o || { address1: '', address2: '' }; }
 function lookSample(n, cls) {
   const nm = (n.firstName || 'First') + '<br>' + (n.lastName || 'Last');
-  const pic = n.photoUrl ? '<img class="p" src="' + n.photoUrl + '" alt="">' : '';
+  const pic = n.cutUrl ? '<img class="p" src="' + n.cutUrl + '" alt="">' : n.photoUrl ? '<img class="p raw" src="' + n.photoUrl + '" alt="">' : '';
   return '<span class="samples ' + cls + '"><span class="s-ann"><span class="w">PLEASE WELCOME</span><span class="n">' + esc(n.firstName || 'First') + '<br>' + esc(n.lastName || 'Last') + '</span><span class="r"></span><span style="font-size:10px">' + esc(nhTitle(n) || 'Title') + '</span>' + pic +
     '<img class="l" src="' + (cls === 'dark' ? 'logo-light.png' : 'logo-dark.png') + '" alt=""></span>' +
     '<span class="s-sig"><span class="av" style="width:34px;height:34px;font-size:10px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span><span><b style="font-size:11px">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</b><br>' + esc(nhTitle(n) || 'Title') + '<br>' + esc(fmtPhone(n.phone)) + '</span></span>' +
@@ -389,7 +400,15 @@ document.addEventListener('change', e => {
   if (d.f && (t.tagName === 'SELECT')) { S.nh[d.f] = t.value; render(); }
   if (d.f === 'phone' && S.nh) { S.nh.phone = t.value = fmtPhone(t.value); refreshPreview(); }
   if (d.show) { S.nh.show[d.show] = t.checked; refreshPreview(); }
-  if (d.file === 'photo' && t.files[0]) { const f = t.files[0]; if (!/^image\//.test(f.type)) return toast('Please choose a photo (JPG or PNG).'); if (S.nh.photoUrl) URL.revokeObjectURL(S.nh.photoUrl); S.nh.photo = f; S.nh.photoUrl = URL.createObjectURL(f); render(); }
+  if (d.file === 'photo' && t.files[0]) {
+    const f = t.files[0]; if (!/^image\//.test(f.type)) return toast('Please choose a photo (JPG or PNG).');
+    const n = S.nh; if (n.photoUrl) URL.revokeObjectURL(n.photoUrl); if (n.cutUrl) URL.revokeObjectURL(n.cutUrl);
+    n.photo = f; n.photoUrl = URL.createObjectURL(f); n.cutUrl = ''; n.cutState = 'working'; render();
+    // preview cutout in the background; only the headshot box is redrawn, so typing elsewhere isn't disturbed
+    Cutout.make(f).then(url => { if (n.photo !== f) return URL.revokeObjectURL(url); n.cutUrl = url; n.cutState = 'done'; })
+      .catch(() => { if (n.photo === f) n.cutState = 'failed'; })
+      .finally(() => { const h = document.getElementById('headshot'), c = document.getElementById('cutnote'); if (h) h.innerHTML = headshotBox(n); if (c) c.innerHTML = cutNote(n); if (route() === 'newhire' && n.step > 1) render(); });
+  }
   if (d.files) { addFiles(d.files, t.files); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset && e.target.dataset.f === 'areaInput') { e.preventDefault(); ACT['area-add'](); } });

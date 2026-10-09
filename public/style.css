@@ -129,6 +129,10 @@ table.list td:first-child, table.list th:first-child { padding-left: 0; }
 /* new hire */
 .headshot { position: relative; width: 132px; height: 132px; border-radius: 14px; overflow: hidden; background: var(--pill); flex: none; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; text-align: center; }
 .headshot img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.headshot img.cut { object-fit: contain; object-position: bottom; }
+.headshot:has(img.cut) { background: repeating-conic-gradient(#E4E1DC 0 25%, #FFFFFF 0 50%) 0 0 / 16px 16px; }
+.headshot .cutting { position: absolute; inset: auto 0 0 0; background: rgba(26,26,28,.75); color: #fff; font-size: 11px; font-weight: 600; padding: 6px; display: flex; gap: 6px; align-items: center; justify-content: center; }
+.headshot .cutting .spin { width: 12px; height: 12px; border-width: 2px; }
 .headshot .guide { position: absolute; inset: 10px 18px 0; border: 2px dashed rgba(255,255,255,.9); border-bottom: none; border-radius: 60px 60px 0 0; pointer-events: none; }
 .preview { background: var(--ink); color: #fff; border-radius: 18px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; }
 .cblock { background: #fff; color: var(--ink); border-radius: 12px; padding: 14px 16px; display: flex; gap: 14px; align-items: center; }
@@ -141,7 +145,8 @@ table.list td:first-child, table.list th:first-child { padding-left: 0; }
 .look .samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .s-ann { grid-row: span 2; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 220px; position: relative; overflow: hidden; }
 .s-ann .w { font-size: 10px; font-weight: 700; letter-spacing: .16em; } .s-ann .n { font-size: 20px; font-weight: 800; line-height: 1.1; } .s-ann .r { width: 34px; height: 4px; background: var(--brand); border-radius: 2px; }
-.s-ann img.p { position: absolute; right: -6px; bottom: 0; width: 120px; height: 150px; object-fit: cover; object-position: top; }
+.s-ann img.p { position: absolute; right: -6px; bottom: 0; width: 130px; height: 170px; object-fit: contain; object-position: bottom; }
+.s-ann img.p.raw { object-fit: cover; object-position: top; border-radius: 8px 0 0 0; }
 .s-ann img.l { position: absolute; left: 14px; bottom: 12px; width: 70px; }
 .s-sig { border-radius: 10px; padding: 10px; display: flex; gap: 8px; align-items: center; font-size: 9px; line-height: 1.4; }
 .s-ban { border-radius: 10px; height: 46px; display: flex; align-items: center; padding: 0 12px; font-size: 10px; font-weight: 700; }

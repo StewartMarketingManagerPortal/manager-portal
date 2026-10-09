@@ -28,3 +28,6 @@ Optional columns the portal fills when they exist on the Main Employee Sheet: **
 | `CHANGES_STATUS` | optional: Status label when changes are requested (default "Working On It") |
 | `SELF_SERVE` | `1` to show "Create the package now" after a new hire |
 | `MANAGERS_BOARD_ID`, `EMPLOYEES_BOARD_ID`, `REQUESTS_BOARD_ID` | optional board ids if a board is renamed |
+
+## Third-party files
+`public/vendor/selfie/` is MediaPipe Selfie Segmentation (Apache-2.0), used only to preview a headshot without its background in the browser. The final cutout is still made in Photoshop by the Marketing Tools app.
