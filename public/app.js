@@ -60,8 +60,14 @@ function nav() {
   return '<img class="logo" src="logo-light.png" alt="Stewart Title"><div class="tag">MANAGER PORTAL</div>' +
     link('home', 'Home') + link('newhire', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
     '<div class="me"><span class="av">' + esc(initials(me.name)) + '</span><span class="who"><b>' + esc(me.name) + '</b><span>' + (me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
-    '<a href="/cdn-cgi/access/logout">Sign out</a></div>';
+    '<a href="/cdn-cgi/access/logout">Sign out</a></div>' +
+    (installEvt ? '<button class="install" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Install on this computer</button>' : '');
 }
+// "Install on this computer" - Edge/Chrome let the portal live on the desktop and taskbar as its own app
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (S.me) render(); });
+window.addEventListener('appinstalled', () => { installEvt = null; if (S.me) render(); });
+async function installApp() { if (!installEvt) return; const e = installEvt; e.prompt(); try { await e.userChoice; } catch (x) {} installEvt = null; if (S.me) render(); }
 function render() {
   if (!S.me) return;
   $('#app').innerHTML = '<nav class="side" aria-label="Main">' + nav() + '</nav><main id="main">' + (PAGES[route()] || PAGES.home)() + '</main>';

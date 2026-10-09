@@ -164,3 +164,5 @@ table.list td:first-child, table.list th:first-child { padding-left: 0; }
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 14px; z-index: 60; box-shadow: 0 10px 30px rgba(0,0,0,.2); max-width: 90vw; }
 .gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; flex: 1; }
 .gate .card { max-width: 480px; text-align: center; align-items: center; }
+nav.side .install { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: transparent; border: 1.5px solid #4A4845; border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+nav.side .install:hover { border-color: #fff; }
