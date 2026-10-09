@@ -210,3 +210,11 @@ h2.h { margin: 0; font-size: 19px; font-weight: 800; }
 .strip::-webkit-scrollbar-thumb, .chips::-webkit-scrollbar-thumb { background: #6B6865; border-radius: 999px; }
 .strip::-webkit-scrollbar-thumb:hover { background: #3A3836; }
 .strip { padding-bottom: 12px; }
+
+/* red download / share buttons under each piece */
+.btn.mini { background: var(--brand); border: none; color: #fff; font-weight: 700; letter-spacing: .01em; border-radius: 999px; min-height: 42px; box-shadow: 0 3px 10px rgba(163,12,51,.25); transition: background .15s, transform .1s, box-shadow .15s; }
+.btn.mini:hover { background: var(--brand-dark); color: #fff; box-shadow: 0 5px 14px rgba(163,12,51,.32); }
+.btn.mini:active { transform: scale(.97); }
+.btn.mini.icon { width: 42px; background: #fff; color: var(--brand); border: 1.5px solid #E7C9D1; box-shadow: none; }
+.btn.mini.icon:hover { background: var(--tint); color: var(--brand-dark); }
+.list .iconbtn { color: var(--brand); }
