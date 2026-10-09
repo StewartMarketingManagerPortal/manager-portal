@@ -153,7 +153,7 @@ function thumbInner(p) {
   return '<span class="doc">' + I.doc + (p.ext || 'FILE').toUpperCase() + '</span>';
 }
 function card(p) {
-  return '<a class="card" href="#p/' + esc(p.id) + '"><span class="thumb">' + thumbInner(p) + (p.isNew ? '<span class="badge">NEW</span>' : '') + '</span>' + esc(p.title) + '</a>';
+  return '<a class="card" href="#p/' + esc(p.id) + '"><span class="thumb">' + thumbInner(p) + (p.isNew ? '<span class="badge">NEW</span>' : '') + '</span><span class="ttl">' + esc(p.title) + '</span></a>';
 }
 // a card with its own Download (and Share, where the device can share) underneath
 function cardWithDownload(p) {
