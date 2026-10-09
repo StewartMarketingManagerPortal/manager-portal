@@ -119,7 +119,7 @@ function cleanTitle(assetName, itemName, employee, single) {
   if (single) return itemName;
   let t = String(assetName || '').replace(/\.[a-z0-9]+$/i, '');
   if (employee) t = t.split(' - ' + employee).join('').split(employee).join('');
-  t = t.replace(/\s*Market Update\s*$/i, '').replace(/\s+-\s*$/, '').trim();
+  t = t.replace(/\s*Market Update\s*$/i, '').replace(/\s+-\s*$/, '').replace(/^\s*-\s*/, '').trim();
   if (/slideshow/i.test(t)) return 'Market Update video';
   return t || itemName;
 }
@@ -139,10 +139,11 @@ async function content(env, s) {
     assets.forEach(a => {
       const ext = String(a.file_extension || '').replace('.', '').toLowerCase();
       const kind = IMG.test(ext) ? 'image' : VID.test(ext) ? 'video' : ext === 'pdf' ? 'pdf' : 'file';
-      const created = Date.parse(it.created_at || '') || 0;
+      // each upload is a new file, so the file's own date says what's new (several pieces can share one row)
+      const created = Date.parse(a.created_at || it.created_at || '') || 0;
       const dated = Date.parse(date) || 0;
       pieces.push({
-        id: String(a.id), item: String(it.id), title: cleanTitle(a.name, it.name, employee, assets.length === 1),
+        id: String(a.id), item: String(it.id), row: it.name, title: cleanTitle(a.name, it.name, employee, assets.length === 1),
         category, kind, ext, size: Number(a.file_size) || 0, date,
         isNew: isMU ? now - dated < 7 * DAY : now - created < 14 * DAY,
         url: '/api/file/' + a.id,

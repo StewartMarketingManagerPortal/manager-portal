@@ -233,8 +233,34 @@ function catHtml(s) {
     '</div></header><div class="body"><div class="wrap" id="results">' + resultsHtml(c.name, shown) + '</div></div>' + foot() + '</div>' + t.bottom;
   return h;
 }
+// Photos & Personal Branding is split into sections by what each piece is (matched on its name).
+// A section only shows once something is in it; anything that doesn't match lands in "More branding".
+const BRAND_SECTIONS = [
+  ['Headshots', /headshot|facing|portrait|photo/],
+  ['Business Cards', /business card/],
+  ['Drop Cards', /drop card|door hanger|leave behind/],
+  ['Email Signature', /signature/],
+  ['Name Badges', /badge|name tag/],
+  ['Social Media Profile', /profile|banner|cover|avatar/],
+  ['Bio & Introductions', /\bbio\b|about me|introduc|meet /],
+];
+const isBranding = c => /brand|photo/.test(nk(c));
+function sectionsOf(list) {
+  const out = BRAND_SECTIONS.map(([name]) => ({ name, items: [] })), more = { name: 'More branding', items: [] };
+  list.forEach(p => {
+    const text = nk(p.row + ' ' + p.title);
+    const i = BRAND_SECTIONS.findIndex(([, re]) => re.test(text));
+    (i >= 0 ? out[i] : more).items.push(p);
+  });
+  return out.concat(more).filter(s => s.items.length);
+}
 function resultsHtml(cat, shown) {
   if (!shown.length) return '<div class="empty">Nothing matches. Try a different word.</div>';
+  if (isBranding(cat)) {
+    const secs = sectionsOf(shown);
+    return (secs.length > 1 ? '<nav class="chips" aria-label="Sections" style="margin-bottom:18px">' + secs.map(s => '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#sec-' + slug(s.name) + '" data-jump="sec-' + slug(s.name) + '">' + esc(s.name) + ' (' + s.items.length + ')</a>').join('') + '</nav>' : '') +
+      secs.map(s => '<section id="sec-' + slug(s.name) + '" style="margin-bottom:28px;scroll-margin-top:84px"><h2 class="h" style="margin-bottom:12px">' + esc(s.name) + '</h2><div class="grid">' + s.items.map(card).join('') + '</div></section>').join('');
+  }
   return isList(cat) ? '<ul class="list">' + shown.map(listRow).join('') + '</ul>' : '<div class="grid">' + shown.map(card).join('') + '</div>';
 }
 
@@ -342,9 +368,10 @@ document.addEventListener('keydown', e => {
   if (t.dataset && t.dataset.d != null && e.key === 'Backspace' && !t.value) { const prev = document.querySelector('.digits input[data-d="' + (+t.dataset.d - 1) + '"]'); if (prev) { prev.focus(); prev.value = ''; } }
 });
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-act],[data-share],[data-share-week],[data-go],[data-filter]');
+  const el = e.target.closest('[data-act],[data-share],[data-share-week],[data-go],[data-filter],[data-jump]');
   if (!el) return;
   const d = el.dataset;
+  if (d.jump) { e.preventDefault(); const s = document.getElementById(d.jump); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if (d.share) { e.preventDefault(); const p = byId(d.share); if (p) share([p]); return; }
   if (d.shareWeek) { e.preventDefault(); share((S.data.week || []).slice()); return; }
   if (d.go) { go('p/' + d.go); return; }
