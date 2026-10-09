@@ -68,6 +68,7 @@ window.addEventListener('hashchange', () => {
 function go(h) { if (location.hash === '#' + h) render(); else location.hash = h; }
 
 function render() {
+  document.body.classList.remove('menu-open');
   const app = $('#app');
   if (!S.data) { app.innerHTML = S.loading ? '<div class="boot"><span class="spin"></span></div>' : signinHtml(); afterSignin(); return; }
   const r = route();
@@ -137,14 +138,32 @@ const catByslug = s => ((S.data && S.data.categories) || []).find(c => slug(c.na
 
 // ================= shared pieces =================
 function tabs(active) {
-  const cats = (S.data.categories || []).slice(0, 3);
-  const items = [['home', 'Home', I.home]].concat(cats.map(c => ['c/' + slug(c.name), short(c.name), catIcon(c.name)]));
-  const bottom = '<nav class="tabs" aria-label="Main" style="--n:' + items.length + '">' + items.map(([h, l, ic]) => '<a href="#' + h + '" class="' + (active === h ? 'on' : '') + '"' + (active === h ? ' aria-current="page"' : '') + '>' + ic + l + '</a>').join('') + '</nav>';
-  const allCats = [['home', 'Home']].concat((S.data.categories || []).map(c => ['c/' + slug(c.name), c.name]));
-  const top = '<header class="topbar"><div class="wrap"><img class="logo" src="logo-light.png" alt="Stewart Title"><nav aria-label="Main">' +
+  const cats = S.data.categories || [];
+  const allCats = [['home', 'Home']].concat(cats.map(c => ['c/' + slug(c.name), c.name]));
+  // computers: menu across the top
+  const desk = '<header class="topbar"><div class="wrap"><img class="logo" src="logo-light.png" alt="Stewart Title"><nav aria-label="Main">' +
     allCats.map(([h, l]) => '<a href="#' + h + '" class="' + (active === h ? 'on' : '') + '">' + esc(l) + '</a>').join('') + '</nav>' +
     '<button class="avatar" data-act="account" aria-label="Account">' + esc(initials(S.data.name)) + '</button></div></header>';
-  return { top, bottom };
+  // phones: a top bar with the three-line menu button that slides the menu out
+  const link = (h, label, ic, extra) => '<a href="#' + h + '" class="' + (active === h ? 'on' : '') + '"' + (active === h ? ' aria-current="page"' : '') + '><span class="mi">' + ic + '</span><span class="ml">' + esc(label) + '</span>' + (extra || '') + '</a>';
+  const phone = '<header class="mbar"><a href="#home" class="mlogo"><img src="logo-light.png" alt="Stewart Title · My Marketing home"></a>' +
+    '<button class="menubtn" data-act="menu" aria-label="Open menu" aria-expanded="false" aria-controls="drawer"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></header>' +
+    '<div class="scrim" data-act="menu-close" hidden></div>' +
+    '<nav class="drawer" id="drawer" aria-label="Main" hidden><div class="dhead"><img src="logo-light.png" alt="Stewart Title"><button class="menubtn" data-act="menu-close" aria-label="Close menu">' + I.x.replace(/18/g, '24') + '</button></div>' +
+    '<div class="dwho"><span class="avatar">' + esc(initials(S.data.name)) + '</span><span><b>' + esc(S.data.name) + '</b><span>My Marketing</span></span></div>' +
+    '<div class="dlinks">' + link('home', 'Home', I.home) +
+    cats.map(c => link('c/' + slug(c.name), c.name, catIcon(c.name), c.newCount ? '<span class="dnew">' + c.newCount + ' new</span>' : '')).join('') +
+    link('search', 'Search', I.search) + '</div>' +
+    '<div class="dfoot"><button class="btn block" data-act="signout">Sign out</button><span>Questions? Contact the West Marketing team.</span></div></nav>';
+  return { top: desk + phone, bottom: '' };
+}
+function openMenu(open) {
+  const d = $('#drawer'), sc = document.querySelector('.scrim'), b = document.querySelector('.mbar .menubtn');
+  if (!d) return;
+  d.hidden = !open; sc.hidden = !open; if (b) b.setAttribute('aria-expanded', String(open));
+  document.body.classList.toggle('menu-open', open);
+  requestAnimationFrame(() => d.classList.toggle('in', open));
+  if (open) { const f = d.querySelector('.dlinks a.on') || d.querySelector('.dlinks a'); if (f) f.focus(); } else if (b) b.focus();
 }
 function thumbInner(p) {
   if (p.kind === 'image') return '<img src="' + esc(p.url) + '" alt="" loading="lazy" decoding="async">';
@@ -388,6 +407,7 @@ document.addEventListener('input', e => {
   if (t.id === 'sq') { S.q = t.value; clearTimeout(window._sq); window._sq = setTimeout(() => { const pos = t.selectionStart; render(); const n = $('#sq'); if (n) n.setSelectionRange(pos, pos); }, 200); }
 });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.body.classList.contains('menu-open')) { openMenu(false); return; }
   const t = e.target;
   if (t.dataset && t.dataset.d != null && e.key === 'Backspace' && !t.value) { const prev = document.querySelector('.digits input[data-d="' + (+t.dataset.d - 1) + '"]'); if (prev) { prev.focus(); prev.value = ''; } }
 });
@@ -400,6 +420,8 @@ document.addEventListener('click', async e => {
   if (d.shareWeek) { e.preventDefault(); share((S.data.week || []).slice()); return; }
   if (d.go) { go('p/' + d.go); return; }
   if (d.filter) { S.filter = d.filter; render(); return; }
+  if (d.act === 'menu') { openMenu(true); return; }
+  if (d.act === 'menu-close') { openMenu(false); return; }
   if (d.act === 'change-email') { S.step = 'email'; S.err = ''; render(); }
   if (d.act === 'resend') { S.step = 'email'; await requestCode(); }
   if (d.act === 'signout' || d.act === 'account') {
