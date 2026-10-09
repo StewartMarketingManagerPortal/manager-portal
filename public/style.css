@@ -174,3 +174,4 @@ nav.side .install:hover { border-color: #fff; }
 .inst h2 { margin: 4px 0 0; font-size: 20px; font-weight: 800; }
 .inst ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.5; color: #3A3836; }
 .inst .btn { align-self: stretch; margin-top: 6px; }
+nav.side .install { white-space: nowrap; font-size: 12.5px; padding: 10px 8px; gap: 6px; letter-spacing: -0.005em; } nav.side .install svg { flex: none; }
