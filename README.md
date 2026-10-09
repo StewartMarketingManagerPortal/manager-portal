@@ -4,8 +4,8 @@ A private website for California and Arizona sales managers to add new hires and
 Everything they submit lands on the team's monday.com boards.
 
 ## How it fits together
-- **Website:** Cloudflare Pages publishes `public/` every time this repository changes.
-- **Server:** `functions/api/[[route]].js` (Cloudflare Pages Functions) talks to monday.com with the token kept in Cloudflare. Shared helpers are in `lib/monday.js`.
+- **Website:** a Cloudflare Worker publishes `public/` every time this repository changes (settings in `wrangler.toml`).
+- **Server:** `src/worker.js` sends `/api/...` to `src/api.js`, which talks to monday.com with the token kept in Cloudflare. Shared helpers are in `lib/monday.js`.
 - **Sign-in:** Cloudflare Access emails a one-time code. The portal then checks the signed-in email against the **Manager Contacts** board:
   - *Managers* group → can submit for the people linked to their row (their team)
   - *Portal Admins* group → can see and submit for everyone

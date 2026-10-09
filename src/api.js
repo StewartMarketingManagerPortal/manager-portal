@@ -1,7 +1,7 @@
 // Manager Portal server: every /api/... call lands here.
 // Who is signed in comes from Cloudflare Access (it checks the email code); what they may do comes from the
 // Manager Contacts board on monday.com (Managers group = their own team, Portal Admins group = everyone).
-import { gql, escHtml, nk, cached, forget, boardId, columns, allItems, buildValues, createItem, addUpdate, addFile, colValue } from '../../lib/monday.js';
+import { gql, escHtml, nk, cached, forget, boardId, columns, allItems, buildValues, createItem, addUpdate, addFile, colValue } from '../lib/monday.js';
 
 const BOARDS = {
   managers: ['Manager Contacts', 'MANAGERS_BOARD_ID'],
