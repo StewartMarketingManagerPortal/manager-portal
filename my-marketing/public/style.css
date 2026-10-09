@@ -275,3 +275,7 @@ body.menu-open { overflow: hidden; }
   .piece .top { padding-top: 24px; }
 }
 .menubtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* a tighter home header on phones */
+.homehead { padding-top: 12px; padding-bottom: 20px; }
+.homehead .wrap { gap: 14px; }
+@media (min-width: 900px) { .homehead { padding-top: 32px; padding-bottom: 32px; } }

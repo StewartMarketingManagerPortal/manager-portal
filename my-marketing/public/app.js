@@ -127,9 +127,18 @@ async function submitCode() {
 // ================= data =================
 async function load(fresh) {
   if (!S.data) { S.loading = true; render(); }
-  try { S.data = await api('content' + (fresh ? '?fresh=1' : '')); S.err = ''; }
+  try { S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = ''; }
   catch (e) { S.data = null; if (e.status !== 401) S.err = e.message; }
   S.loading = false; render();
+}
+// shorter names for some categories on the site (the monday board keeps its own names)
+const NAMES = [[/photos? (and|&)? ?personal branding/, 'Personal Branding']];
+function rename(d) {
+  const fix = n => { const m = NAMES.find(([re]) => re.test(nk(n).replace(/ +/g, ' ')) || re.test(String(n).toLowerCase())); return m ? m[1] : n; };
+  (d.categories || []).forEach(c => c.name = fix(c.name));
+  (d.pieces || []).forEach(p => p.category = fix(p.category));
+  (d.week || []).forEach(p => p.category = fix(p.category));
+  return d;
 }
 const pieces = () => (S.data && S.data.pieces) || [];
 const byId = id => pieces().find(p => p.id === id);
@@ -202,7 +211,7 @@ function homeHtml() {
   const all = pieces(), newCount = all.filter(p => p.isNew).length;
   let h = t.top + '<div class="frame">';
   h += '<header class="homehead"><div class="wrap"><div><div class="row1"><img src="logo-light.png" alt="Stewart Title"><button class="avatar" data-act="account" aria-label="Account">' + esc(initials(S.data.name)) + '</button></div>' +
-    '<div class="date" style="margin-top:18px">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div>' +
+    '<div class="date">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div>' +
     '<h1>Hi ' + esc(firstName(S.data.name)) + '</h1>' +
     '<p>' + (newCount ? 'You have <b>' + newCount + ' new piece' + (newCount === 1 ? '' : 's') + '</b> ready to share.' : all.length ? 'Everything you have is below, ready to share.' : 'Your marketing will show up here as soon as it’s ready.') + '</p></div>' +
     '<form class="search dark" id="f-search" role="search"><span style="color:var(--muted-dark);display:flex">' + I.search + '</span><input type="search" id="q" placeholder="Search flyers, tips, updates" aria-label="Search"></form></div></header>';
