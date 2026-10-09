@@ -433,13 +433,7 @@ document.addEventListener('click', async e => {
   if (d.shareWeek) { e.preventDefault(); share((S.data.week || []).slice()); return; }
   if (d.go) { go('p/' + d.go); return; }
   if (d.filter) { S.filter = d.filter; render(); return; }
-  if (d.act === 'refresh') {
-    const before = pieces().length; toast('Checking for new pieces…', 15000);
-    S.loadedAt = Date.now(); await load(true);
-    const added = pieces().length - before;
-    toast(added > 0 ? added + ' new piece' + (added === 1 ? '' : 's') + ' added' : 'You’re up to date');
-    return;
-  }
+  if (d.act === 'refresh') { doRefresh(); return; }
   if (d.act === 'menu') { openMenu(true); return; }
   if (d.act === 'menu-close') { openMenu(false); return; }
   if (d.act === 'change-email') { S.step = 'email'; S.err = ''; render(); }
@@ -470,3 +464,44 @@ document.addEventListener('loadedmetadata', e => {
   tag.textContent = vlen(v.duration) + ' · ' + (r < 0.9 ? 'Vertical' : r > 1.1 ? 'Widescreen' : 'Square');
   tag.hidden = false;
 }, true);
+
+// ---------- check monday for new pieces (Refresh button, menu, or pull down from the top) ----------
+let refreshing = false;
+async function doRefresh() {
+  if (refreshing || !S.data) return;
+  refreshing = true;
+  const y = window.scrollY, before = pieces().length; toast('Checking for new pieces…', 15000);
+  S.loadedAt = Date.now(); await load(true);
+  window.scrollTo(0, y);
+  const added = pieces().length - before;
+  toast(added > 0 ? added + ' new piece' + (added === 1 ? '' : 's') + ' added' : 'You’re up to date');
+  refreshing = false;
+}
+// pull down from the top of the page to refresh (home-screen apps on iPhone have no reload button)
+(function pullToRefresh() {
+  const ptr = document.createElement('div');
+  ptr.className = 'ptr'; ptr.setAttribute('aria-hidden', 'true'); ptr.innerHTML = I.refresh;
+  document.body.appendChild(ptr);
+  const LIMIT = 80;
+  let startY = 0, startX = 0, pulling = false, dist = 0;
+  document.addEventListener('touchstart', e => {
+    if (!S.data || refreshing || window.scrollY > 0 || document.body.classList.contains('menu-open') || e.touches.length !== 1) return;
+    if (e.target.closest('.strip, .chips, video, input, textarea')) return;
+    startY = e.touches[0].clientY; startX = e.touches[0].clientX; pulling = true; dist = 0;
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY, dx = Math.abs(e.touches[0].clientX - startX);
+    if (dy <= 0 || dx > dy || window.scrollY > 0) { dist = 0; ptr.style.transform = ''; ptr.classList.remove('on', 'ready'); return; }
+    dist = Math.min(dy * 0.5, LIMIT + 30);
+    ptr.classList.add('on'); ptr.classList.toggle('ready', dist >= LIMIT);
+    ptr.style.transform = 'translate(-50%, ' + dist + 'px) rotate(' + (dist * 3) + 'deg)';
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+    const go = dist >= LIMIT;
+    ptr.style.transform = ''; ptr.classList.remove('on', 'ready');
+    if (go) doRefresh();
+  });
+})();

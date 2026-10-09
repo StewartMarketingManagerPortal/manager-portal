@@ -293,3 +293,8 @@ body.menu-open { overflow: hidden; }
 .dl-refresh:hover { background: rgba(255,255,255,.07); color: #fff; }
 .dl-refresh .mi { display: inline-flex; width: 24px; justify-content: center; }
 @media (min-width: 900px) { .homehead .refresh { align-self: flex-end; } }
+
+/* pull-to-refresh circle */
+.ptr { position: fixed; left: 50%; top: calc(14px + var(--safe-t)); z-index: 60; width: 40px; height: 40px; margin-top: -60px; border-radius: 50%; background: #fff; color: var(--brand); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,.25); transform: translate(-50%, 0); transition: transform .2s; opacity: 0; pointer-events: none; }
+.ptr.on { opacity: 1; transition: none; }
+.ptr.ready { background: var(--brand); color: #fff; }
