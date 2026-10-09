@@ -112,7 +112,7 @@ async function session(request, env) {
 }
 
 // ---------- content ----------
-const IMG = /^(png|jpe?g|gif|webp)$/i, VID = /^(mp4|mov|m4v)$/i;
+const IMG = /^(png|jpe?g|gif|webp)$/i, VID = /^(mp4|mov|m4v|webm)$/i;
 const ORDER = ['market update', 'title tips', 'flyers', 'new hire', 'social media', 'holiday', 'happy anniversary', 'anniversary', 'newsletter', 'photos'];
 
 // underscores (from file names) become spaces, and stray ones at the ends go away
@@ -171,7 +171,7 @@ async function file(request, env, ctx, s, assetId, download) {
   if (!found) return fail(404, 'That file is no longer available.');
   const a = found.a;
   const ext = String(a.file_extension || '').replace('.', '').toLowerCase();
-  const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/mp4', pdf: 'application/pdf' }[ext] || 'application/octet-stream';
+  const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/mp4', webm: 'video/webm', pdf: 'application/pdf' }[ext] || 'application/octet-stream';
   const name = tidy(found.it.assets.length === 1 ? found.it.name : String(a.name).replace(/\.[a-z0-9]+$/i, '')).replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.' + ext;
   const head = {
     'Content-Type': type, 'Cache-Control': 'private, max-age=86400', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff',

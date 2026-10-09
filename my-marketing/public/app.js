@@ -33,17 +33,19 @@ const I = {
   person: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
   star: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>',
   info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>',
+  film: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>',
   x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
 };
 function catIcon(name) {
   const n = nk(name);
+  if (/video|reel/.test(n)) return I.film;
   if (/market/.test(n)) return I.chart;
   if (/tip/.test(n)) return I.bulb;
   if (/flyer|newsletter/.test(n)) return I.doc;
   if (/photo|brand|new hire/.test(n)) return I.person;
   return I.star;
 }
-const short = name => { const n = nk(name); return /market/.test(n) ? 'Market' : /tip/.test(n) ? 'Tips' : /flyer/.test(n) ? 'Flyers' : String(name).split(' ')[0]; };
+const short = name => { const n = nk(name); return /video/.test(n) ? 'Videos' : /market/.test(n) ? 'Market' : /tip/.test(n) ? 'Tips' : /flyer/.test(n) ? 'Flyers' : String(name).split(' ')[0]; };
 
 // ---------- server ----------
 async function api(path, opts) {
@@ -176,7 +178,7 @@ function openMenu(open) {
 }
 function thumbInner(p) {
   if (p.kind === 'image') return '<img src="' + esc(p.url) + '" alt="" loading="lazy" decoding="async">';
-  if (p.kind === 'video') return '<video src="' + esc(p.url) + '#t=0.5" muted playsinline preload="metadata"></video><span class="play">' + I.play + '</span>';
+  if (p.kind === 'video') return '<video class="vthumb" src="' + esc(p.url) + '#t=0.5" muted playsinline preload="metadata" tabindex="-1"></video><span class="play">' + I.play + '</span><span class="vtag" hidden></span>';
   return '<span class="doc">' + I.doc + (p.ext || 'FILE').toUpperCase() + '</span>';
 }
 function card(p) {
@@ -335,16 +337,16 @@ function pieceHtml(id) {
   const t = tabs('c/' + slug(p.category));
   let media;
   if (p.kind === 'image') media = '<img src="' + esc(p.url) + '" alt="' + esc(p.title) + '">';
-  else if (p.kind === 'video') media = '<video src="' + esc(p.url) + '" controls playsinline preload="metadata" aria-label="' + esc(p.title) + '"></video>';
+  else if (p.kind === 'video') media = '<video src="' + esc(p.url) + '#t=0.5" controls playsinline preload="metadata" aria-label="' + esc(p.title) + '"></video>';
   else media = '<span class="doc">' + I.doc + (p.ext || 'FILE').toUpperCase() + '<a class="btn" style="margin-top:10px;letter-spacing:0" href="' + esc(p.url) + '" target="_blank" rel="noopener">Open the ' + (p.ext || 'file').toUpperCase() + '</a></span>';
   const canShare = !!(navigator.share && navigator.canShare);
   return t.top + '<div class="piece"><div class="top"><a class="back light" href="#c/' + esc(slug(p.category)) + '">' + I.back + esc(p.category) + '</a>' +
     '<span class="pos">' + (prev ? '<button data-go="' + esc(prev.id) + '" aria-label="Previous">' + I.back + '</button>' : '') + (i + 1) + ' of ' + sib.length + (next ? '<button data-go="' + esc(next.id) + '" aria-label="Next">' + I.next + '</button>' : '') + '</span></div>' +
-    '<div class="wrap2"><div class="stage"><div class="media">' + media + '</div><div><h1>' + esc(p.title) + '</h1><div class="meta">' + esc(p.category) + (p.kind === 'image' ? ' · image' : p.kind === 'video' ? ' · video' : ' · ' + (p.ext || '').toUpperCase()) + (p.date ? ' · added ' + nice(p.date) : '') + (p.isNew ? ' · NEW' : '') + '</div></div></div>' +
+    '<div class="wrap2"><div class="stage"><div class="media">' + media + '</div><div><h1>' + esc(p.title) + '</h1><div class="meta">' + esc(p.category) + (p.kind === 'image' ? ' · image' : p.kind === 'video' ? (/video/i.test(p.category) ? '' : ' · video') : ' · ' + (p.ext || '').toUpperCase()) + (p.date ? ' · added ' + nice(p.date) : '') + (p.isNew ? ' · NEW' : '') + '</div></div></div>' +
     '<div class="acts">' +
     (canShare || !isComputer() ? '<button class="btn primary block" data-share="' + esc(p.id) + '" style="min-height:54px">' + I.share + 'Share</button>' : '') +
     '<a class="btn block' + (canShare || !isComputer() ? '' : ' primary') + '" href="' + esc(p.url) + '?dl=1" download>' + I.down + 'Download</a>' +
-    '<div class="note" style="margin-top:4px">' + I.info + '<span>' + (isComputer() ? 'Download saves it to your computer so you can post it or attach it to an email.' : 'Share opens your phone’s share menu: Instagram, Facebook, LinkedIn, Messages, email and <b>Save Image</b> to keep it in your photos.') + '</span></div>' +
+    '<div class="note" style="margin-top:4px">' + I.info + '<span>' + (isComputer() ? 'Download saves it to your computer so you can post it or attach it to an email.' : (p.kind === 'video' ? 'Share opens your phone’s share menu: Instagram, Facebook, LinkedIn, Messages and more. To keep it in your Photos, tap Share, then <b>Save Video</b>.' + (p.size > 25e6 ? ' Larger videos take a moment to get ready.' : '') : 'Share opens your phone’s share menu: Instagram, Facebook, LinkedIn, Messages, email and <b>Save Image</b> to keep it in your photos.')) + '</span></div>' +
     '</div></div></div>';
 }
 
@@ -448,3 +450,14 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
 
 S.loadedAt = Date.now();
 load();
+
+// video cards: show length and shape (Vertical for Reels/Stories, Square, Widescreen) once the video's details load
+const vlen = t => { t = Math.round(t || 0); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+document.addEventListener('loadedmetadata', e => {
+  const v = e.target;
+  if (!(v instanceof HTMLVideoElement) || !v.classList.contains('vthumb')) return;
+  const tag = v.parentNode.querySelector('.vtag'); if (!tag || !v.videoWidth) return;
+  const r = v.videoWidth / v.videoHeight;
+  tag.textContent = vlen(v.duration) + ' · ' + (r < 0.9 ? 'Vertical' : r > 1.1 ? 'Widescreen' : 'Square');
+  tag.hidden = false;
+}, true);

@@ -279,3 +279,9 @@ body.menu-open { overflow: hidden; }
 .homehead { padding-top: 12px; padding-bottom: 20px; }
 .homehead .wrap { gap: 14px; }
 @media (min-width: 900px) { .homehead { padding-top: 32px; padding-bottom: 32px; } }
+
+/* video cards: the whole frame shows on a dark background, whatever the shape */
+.thumb .vthumb { object-fit: contain; background: #111; }
+.thumb:has(.vthumb) { background: #111; }
+.vtag { position: absolute; right: 8px; bottom: 8px; background: rgba(15,15,16,.82); color: #fff; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 4px 7px; letter-spacing: .02em; }
+.thumb .play { box-shadow: 0 4px 14px rgba(0,0,0,.35); }
