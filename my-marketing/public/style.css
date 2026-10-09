@@ -185,3 +185,13 @@ h2.h { margin: 0; font-size: 19px; font-weight: 800; }
   .piece .acts { margin-top: 0; border-radius: 20px; padding: 24px; }
   .toast { bottom: 28px; }
 }
+
+/* sideways rows with a download button under each piece (Photos & Personal Branding) */
+.strip.wide .card { width: 170px; }
+.card.dl { gap: 8px; }
+.cardlink { text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 8px; }
+.cardacts { display: flex; gap: 6px; }
+.btn.mini { min-height: 40px; padding: 0 10px; font-size: 13px; border-radius: 10px; gap: 6px; flex: 1; }
+.btn.mini.icon { flex: none; width: 40px; padding: 0; color: var(--brand); }
+.btn.mini svg { width: 16px; height: 16px; }
+@media (min-width: 900px) { .strip.wide .card { width: 210px; } }

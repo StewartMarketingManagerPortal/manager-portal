@@ -155,6 +155,13 @@ function thumbInner(p) {
 function card(p) {
   return '<a class="card" href="#p/' + esc(p.id) + '"><span class="thumb">' + thumbInner(p) + (p.isNew ? '<span class="badge">NEW</span>' : '') + '</span>' + esc(p.title) + '</a>';
 }
+// a card with its own Download (and Share, where the device can share) underneath
+function cardWithDownload(p) {
+  const canShare = !!(navigator.share && navigator.canShare) && !isComputer();
+  return '<div class="card dl">' + card(p).replace(/^<a class="card"/, '<a class="cardlink"') +
+    '<div class="cardacts"><a class="btn mini" href="' + esc(p.url) + '?dl=1" download aria-label="Download ' + esc(p.title) + '">' + I.down + 'Download</a>' +
+    (canShare ? '<button class="btn mini icon" data-share="' + esc(p.id) + '" aria-label="Share ' + esc(p.title) + '">' + I.share + '</button>' : '') + '</div></div>';
+}
 function listRow(p) {
   return '<li><a class="go" href="#p/' + esc(p.id) + '"><span class="mini">' + (p.kind === 'image' ? '<img src="' + esc(p.url) + '" alt="" loading="lazy" decoding="async">' : '<span class="doc" style="font-size:10px">' + (p.ext || '').toUpperCase() + '</span>') + '</span>' +
     '<span>' + esc(p.title) + (p.isNew ? ' <span class="badge" style="vertical-align:2px">NEW</span>' : '') + '<span class="meta">' + esc(p.kind === 'pdf' ? 'PDF' : p.kind === 'image' ? 'Image' : p.kind) + (p.date ? ' · ' + nice(p.date) : '') + '</span></span></a>' +
@@ -259,7 +266,8 @@ function resultsHtml(cat, shown) {
   if (isBranding(cat)) {
     const secs = sectionsOf(shown);
     return (secs.length > 1 ? '<nav class="chips" aria-label="Sections" style="margin-bottom:18px">' + secs.map(s => '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#sec-' + slug(s.name) + '" data-jump="sec-' + slug(s.name) + '">' + esc(s.name) + ' (' + s.items.length + ')</a>').join('') + '</nav>' : '') +
-      secs.map(s => '<section id="sec-' + slug(s.name) + '" style="margin-bottom:28px;scroll-margin-top:84px"><h2 class="h" style="margin-bottom:12px">' + esc(s.name) + '</h2><div class="grid">' + s.items.map(card).join('') + '</div></section>').join('');
+      secs.map(s => '<section id="sec-' + slug(s.name) + '" style="margin-bottom:28px;scroll-margin-top:84px"><div class="h2row" style="margin-bottom:12px"><h2 class="h">' + esc(s.name) + '</h2>' +
+        (s.items.length > 2 ? '<span class="hint">Swipe for more →</span>' : '') + '</div><div class="strip wide">' + s.items.map(cardWithDownload).join('') + '</div></section>').join('');
   }
   return isList(cat) ? '<ul class="list">' + shown.map(listRow).join('') + '</ul>' : '<div class="grid">' + shown.map(card).join('') + '</div>';
 }
