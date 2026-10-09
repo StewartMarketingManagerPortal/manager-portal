@@ -1,6 +1,8 @@
 name = "manager-portal"
 main = "src/worker.js"
 compatibility_date = "2026-06-01"
+# keep settings added in the Cloudflare dashboard when a new version is published
+keep_vars = true
 
 [assets]
 directory = "./public"
