@@ -69,8 +69,28 @@ async function directory(env) {
     return { managers, employees, relColId: rel ? rel.id : null, managersBoard: mb };
   });
 }
+// Cloudflare Access signs every request it lets through (Cf-Access-Jwt-Assertion). We check that signature
+// instead of trusting the plain email header, so the code stays safe even if it ever runs without Access in front.
+const ACCESS_TEAM = 'snowy-silence-966e.cloudflareaccess.com';
+const b64d = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+async function accessEmail(request, env) {
+  const jwt = request.headers.get('Cf-Access-Jwt-Assertion') || '';
+  const parts = jwt.split('.');
+  if (parts.length !== 3) return '';
+  let head, claims;
+  try { head = JSON.parse(new TextDecoder().decode(b64d(parts[0]))); claims = JSON.parse(new TextDecoder().decode(b64d(parts[1]))); } catch (e) { return ''; }
+  const team = env.ACCESS_TEAM || ACCESS_TEAM;
+  if (head.alg !== 'RS256' || claims.iss !== 'https://' + team || !(claims.exp * 1000 > Date.now())) return '';
+  if (env.ACCESS_AUD && !(Array.isArray(claims.aud) ? claims.aud : [claims.aud]).includes(env.ACCESS_AUD)) return '';
+  const keys = await cached('access-certs', 3600e3, async () => (await (await fetch('https://' + team + '/cdn-cgi/access/certs')).json()).keys || []);
+  const jwk = keys.find(k => k.kid === head.kid);
+  if (!jwk) { forget('access-certs'); return ''; }
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64d(parts[2]), new TextEncoder().encode(parts[0] + '.' + parts[1]));
+  return ok ? String(claims.email || '').toLowerCase() : '';
+}
 async function whoAmI(request, env) {
-  let email = (request.headers.get('Cf-Access-Authenticated-User-Email') || '').toLowerCase();
+  let email = await accessEmail(request, env);
   if (!email && env.DEV_EMAIL) email = env.DEV_EMAIL.toLowerCase();       // only for testing before sign-in is set up
   if (!email) return { ok: false, error: 'Sign-in is not set up yet.' };
   const dir = await directory(env);
