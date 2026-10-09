@@ -135,13 +135,15 @@ function nhDetails(n) {
     '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px" class="muted2">' + (n.photo ? '<span style="color:var(--green-text);font-weight:700">✓ ' + esc(n.photo.name) + '</span>' : '') +
     '<span>Head and shoulders inside the guide. We remove the background for you.</span>' +
     '<label class="btn small" style="align-self:flex-start">' + (n.photo ? 'Replace photo' : 'Upload photo') + '<input type="file" accept="image/*" data-file="photo" hidden></label></div></div></div>' +
-    '<div class="preview"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock">' +
-    (n.photoUrl && n.show.headshot ? '<img class="av" src="' + n.photoUrl + '" alt="">' : '<span class="av">' + esc(initials(n.firstName + ' ' + n.lastName) || '?') + '</span>') +
-    '<div class="tx"><div class="nm">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</div><div class="tl">' + esc(nhTitle(n) || 'Title') + '</div><div>' + esc(n.company) + '</div>' +
-    '<div class="muted2">' + esc([n.show.phone && n.phone, n.show.email && n.email].filter(Boolean).join(' · ')) + '</div></div></div>' +
+    '<div class="preview"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock" id="cblock">' + cblock(n) + '</div>' +
     '<div class="small" style="color:var(--border)">This is how their details appear on flyers and the email signature.</div></div></section></div>';
   h += '<div class="row" style="justify-content:space-between"><a href="#home" style="font-weight:600">Cancel</a><button type="button" class="btn primary" data-act="nh-next">Next: choose a look →</button></div>';
   return h;
+}
+function cblock(n) {
+  return (n.photoUrl && n.show.headshot ? '<img class="av" src="' + n.photoUrl + '" alt="">' : '<span class="av">' + esc(initials(n.firstName + ' ' + n.lastName) || '?') + '</span>') +
+    '<div class="tx"><div class="nm">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</div><div class="tl">' + esc(nhTitle(n) || 'Title') + '</div><div>' + esc(n.company) + '</div>' +
+    '<div class="muted2">' + esc([n.show.phone && n.phone, n.show.email && n.email].filter(Boolean).join(' · ')) + '</div></div>';
 }
 const nhTitle = n => n.title === '__other' ? n.titleOther : n.title;
 function nhAddress(n) { if (n.office === '__new') return { address1: n.address1, address2: n.address2 }; const o = S.me.offices[+n.office]; return o || { address1: '', address2: '' }; }
@@ -399,8 +401,8 @@ function addFiles(key, list) {
   if (total() > 90 * 1048576) toast('That’s a lot of files — the upload may be slow.');
   render();
 }
-function refreshPreview() { if (route() === 'newhire' && S.nh.step === 1) { const sc = window.scrollY; const focus = document.activeElement && document.activeElement.dataset.f; const pos = document.activeElement && document.activeElement.selectionStart;
-  render(); window.scrollTo(0, sc); if (focus) { const el = document.querySelector('[data-f=' + focus + ']'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } } }
+// only the preview box is redrawn while typing, so the field being typed in is never touched
+function refreshPreview() { const el = document.getElementById('cblock'); if (el && S.nh) el.innerHTML = cblock(S.nh); }
 function updateSummaryDate() { const b = [...document.querySelectorAll('aside .card .row')].find(r => r.textContent.startsWith('Needed by')); if (b) b.querySelector('b').textContent = nice(S.rq.needBy); }
 
 // ---------- start ----------
