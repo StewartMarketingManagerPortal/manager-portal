@@ -143,8 +143,10 @@ function nhDetails(n) {
 function cblock(n) {
   return (n.photoUrl && n.show.headshot ? '<img class="av" src="' + n.photoUrl + '" alt="">' : '<span class="av">' + esc(initials(n.firstName + ' ' + n.lastName) || '?') + '</span>') +
     '<div class="tx"><div class="nm">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</div><div class="tl">' + esc(nhTitle(n) || 'Title') + '</div><div>' + esc(n.company) + '</div>' +
-    '<div class="muted2">' + esc([n.show.phone && n.phone, n.show.email && n.email].filter(Boolean).join(' · ')) + '</div></div>';
+    (n.show.phone && n.phone ? '<div class="muted2">' + esc(fmtPhone(n.phone)) + '</div>' : '') + (n.show.email && n.email ? '<div class="muted2">' + esc(n.email) + '</div>' : '') + '</div>';
 }
+// (916) 555-0142 however it was typed; anything that isn't a 10-digit US number is left as typed
+function fmtPhone(v) { const d = String(v || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, ''); return d.length === 10 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : String(v || ''); }
 const nhTitle = n => n.title === '__other' ? n.titleOther : n.title;
 function nhAddress(n) { if (n.office === '__new') return { address1: n.address1, address2: n.address2 }; const o = S.me.offices[+n.office]; return o || { address1: '', address2: '' }; }
 function lookSample(n, cls) {
@@ -152,7 +154,7 @@ function lookSample(n, cls) {
   const pic = n.photoUrl ? '<img class="p" src="' + n.photoUrl + '" alt="">' : '';
   return '<span class="samples ' + cls + '"><span class="s-ann"><span class="w">PLEASE WELCOME</span><span class="n">' + esc(n.firstName || 'First') + '<br>' + esc(n.lastName || 'Last') + '</span><span class="r"></span><span style="font-size:10px">' + esc(nhTitle(n) || 'Title') + '</span>' + pic +
     '<img class="l" src="' + (cls === 'dark' ? 'logo-light.png' : 'logo-dark.png') + '" alt=""></span>' +
-    '<span class="s-sig"><span class="av" style="width:34px;height:34px;font-size:10px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span><span><b style="font-size:11px">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</b><br>' + esc(nhTitle(n) || 'Title') + '<br>' + esc(n.phone) + '</span></span>' +
+    '<span class="s-sig"><span class="av" style="width:34px;height:34px;font-size:10px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span><span><b style="font-size:11px">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</b><br>' + esc(nhTitle(n) || 'Title') + '<br>' + esc(fmtPhone(n.phone)) + '</span></span>' +
     '<span class="s-ban">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + ' · Stewart Title</span></span>';
 }
 function nhLooks(n) {
@@ -170,7 +172,7 @@ function nhReview(n) {
   let h = '<div class="cols"><section class="card col3" style="gap:4px"><div class="row" style="padding-bottom:16px;border-bottom:1px solid var(--line);flex-wrap:nowrap">' +
     (n.photoUrl ? '<img class="av" style="width:84px;height:84px" src="' + n.photoUrl + '" alt="">' : '<span class="av" style="width:84px;height:84px;font-size:24px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span>') +
     '<div class="grow"><div style="font-size:24px;font-weight:800">' + esc(n.firstName + ' ' + n.lastName) + '</div><div style="color:var(--brand);font-weight:700">' + esc(nhTitle(n)) + '</div></div><a href="#" data-act="nh-step" data-step="1" style="font-weight:600;font-size:14px">Edit</a></div>' +
-    line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', n.phone + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) +
+    line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) +
     line('Start date', nice(n.startDate)) + line('Market areas', n.areas.join(', ')) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 2) +
     '<label class="field" style="margin-top:10px">Anything else marketing should know? (optional)<textarea data-f="notes" rows="3">' + esc(n.notes) + '</textarea></label></section>';
   h += '<section class="col2"><div class="card"><h2>What happens next</h2><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7" class="muted2"><li>' + esc(n.firstName || 'They') + ' is added to the Main Employee Sheet and your team.</li>' +
@@ -320,7 +322,7 @@ ACT['nh-submit'] = async () => {
   S.busy = true; render();
   try {
     const fd = new FormData();
-    fd.append('fields', JSON.stringify({ firstName: n.firstName, lastName: n.lastName, title: nhTitle(n), company: n.company, address1: a.address1, address2: a.address2, phone: n.phone, email: n.email,
+    fd.append('fields', JSON.stringify({ firstName: n.firstName, lastName: n.lastName, title: nhTitle(n), company: n.company, address1: a.address1, address2: a.address2, phone: fmtPhone(n.phone), email: n.email,
       startDate: n.startDate, show: n.show, areas: n.areas, looks: n.looks, notes: n.notes }));
     if (n.photo) fd.append('photo', n.photo, n.photo.name);
     await api('newhire', { method: 'POST', body: fd });
@@ -385,6 +387,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target, d = t.dataset;
   if (d.f && (t.tagName === 'SELECT')) { S.nh[d.f] = t.value; render(); }
+  if (d.f === 'phone' && S.nh) { S.nh.phone = t.value = fmtPhone(t.value); refreshPreview(); }
   if (d.show) { S.nh.show[d.show] = t.checked; refreshPreview(); }
   if (d.file === 'photo' && t.files[0]) { const f = t.files[0]; if (!/^image\//.test(f.type)) return toast('Please choose a photo (JPG or PNG).'); if (S.nh.photoUrl) URL.revokeObjectURL(S.nh.photoUrl); S.nh.photo = f; S.nh.photoUrl = URL.createObjectURL(f); render(); }
   if (d.files) { addFiles(d.files, t.files); }
