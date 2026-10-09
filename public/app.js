@@ -61,13 +61,35 @@ function nav() {
     link('home', 'Home') + link('newhire', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
     '<div class="me"><span class="av">' + esc(initials(me.name)) + '</span><span class="who"><b>' + esc(me.name) + '</b><span>' + (me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
     '<a href="/cdn-cgi/access/logout">Sign out</a></div>' +
-    (installEvt ? '<button class="install" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Install on this computer</button>' : '');
+    (!isInstalled() ? '<button class="install" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Install on this computer</button>' : '');
 }
 // "Install on this computer" - Edge/Chrome let the portal live on the desktop and taskbar as its own app
 let installEvt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (S.me) render(); });
 window.addEventListener('appinstalled', () => { installEvt = null; if (S.me) render(); });
-async function installApp() { if (!installEvt) return; const e = installEvt; e.prompt(); try { await e.userChoice; } catch (x) {} installEvt = null; if (S.me) render(); }
+const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+// Edge and Chrome can install with one click. Safari and others need a couple of steps, so we show how.
+async function installApp() {
+  if (installEvt) { const e = installEvt; e.prompt(); try { await e.userChoice; } catch (x) {} installEvt = null; if (S.me) render(); return; }
+  const ua = navigator.userAgent, mac = /Macintosh/.test(ua), ios = /iPhone|iPad|iPod/.test(ua) || (mac && navigator.maxTouchPoints > 1);
+  const edge = /Edg\//.test(ua), chrome = /Chrome\//.test(ua) && !edge, firefox = /Firefox\//.test(ua), safari = /Safari\//.test(ua) && !chrome && !edge;
+  let title = 'Install the Manager Portal', steps;
+  if (ios) steps = ['Tap the <b>Share</b> button (the square with an arrow).', 'Choose <b>Add to Home Screen</b>, then <b>Add</b>.'];
+  else if (safari && mac) { title = 'Add the Manager Portal to your Dock'; steps = ['In the menu bar at the top of the screen, click <b>File</b>.', 'Choose <b>Add to Dock…</b>, then click <b>Add</b>.', 'It opens in its own window from the Dock and Launchpad. (Needs macOS Sonoma or newer.)']; }
+  else if (edge) steps = ['Click the <b>⋯</b> menu at the top right of Edge.', 'Choose <b>Apps</b> → <b>Install this site as an app</b>, then <b>Install</b>.', 'Tick <b>Pin to taskbar</b> and <b>Create desktop shortcut</b> if Edge asks.'];
+  else if (chrome) steps = ['Click the <b>⋮</b> menu at the top right of Chrome.', 'Choose <b>Cast, save and share</b> → <b>Install page as app</b> (or <b>Install Manager Portal</b>).', 'Click <b>Install</b>.'];
+  else if (firefox) steps = ['Firefox can’t install websites as apps.', 'Drag the <b>padlock</b> next to the web address onto your desktop to make a shortcut, or open the portal in <b>Edge</b> or <b>Chrome</b> to install it.'];
+  else steps = ['Open your browser’s menu and look for <b>Install</b> or <b>Add to Dock / Home Screen</b>.', 'Or drag the <b>padlock</b> next to the web address onto your desktop to make a shortcut.'];
+  const box = document.createElement('div');
+  box.className = 'inst-wrap';
+  box.innerHTML = '<div class="inst" role="dialog" aria-modal="true" aria-labelledby="inst-t"><img src="icons/icon-192.png" alt="" width="64" height="64"><h2 id="inst-t">' + title + '</h2><ol>' + steps.map(x => '<li>' + x + '</li>').join('') + '</ol><button class="btn primary" type="button">Got it</button></div>';
+  const close = () => { box.remove(); document.removeEventListener('keydown', esc); };
+  const esc = e => { if (e.key === 'Escape') close(); };
+  box.addEventListener('click', e => { if (e.target === box || e.target.closest('button')) close(); });
+  document.addEventListener('keydown', esc);
+  document.body.appendChild(box);
+  box.querySelector('button').focus();
+}
 function render() {
   if (!S.me) return;
   $('#app').innerHTML = '<nav class="side" aria-label="Main">' + nav() + '</nav><main id="main">' + (PAGES[route()] || PAGES.home)() + '</main>';
