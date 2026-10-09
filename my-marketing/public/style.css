@@ -285,3 +285,11 @@ body.menu-open { overflow: hidden; }
 .thumb:has(.vthumb) { background: #111; }
 .vtag { position: absolute; right: 8px; bottom: 8px; background: rgba(15,15,16,.82); color: #fff; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 4px 7px; letter-spacing: .02em; }
 .thumb .play { box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+
+/* Refresh: top of Home and in the menu */
+.refresh { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid #4A4845; background: transparent; color: #fff; font-size: 13px; font-weight: 700; }
+.refresh:hover { border-color: #fff; background: rgba(255,255,255,.07); }
+.dl-refresh { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 12px; border-radius: 12px; border: none; background: transparent; color: var(--on-dark); font-size: 16px; font-weight: 600; text-align: left; width: 100%; }
+.dl-refresh:hover { background: rgba(255,255,255,.07); color: #fff; }
+.dl-refresh .mi { display: inline-flex; width: 24px; justify-content: center; }
+@media (min-width: 900px) { .homehead .refresh { align-self: flex-end; } }

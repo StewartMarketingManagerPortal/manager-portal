@@ -85,7 +85,7 @@ export async function allowed(env, uid) {
 
 // everything on the portal board assigned to this person (Person column), with its files
 export async function itemsFor(env, uid) {
-  return cached('items:' + uid, 240e3, async () => {
+  return cached('items:' + uid, 30e3, async () => {
     const p = await portal(env);
     const cols = [p.category, p.date, p.employee, p.status].filter(Boolean);
     const fields = 'cursor items{id name created_at updated_at group{title} column_values(ids:$c){id text} assets(column_ids:$f){id name file_extension file_size public_url created_at}}';

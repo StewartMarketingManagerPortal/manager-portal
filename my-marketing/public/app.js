@@ -34,6 +34,7 @@ const I = {
   star: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>',
   info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>',
   film: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>',
+  refresh: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
   x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
 };
 function catIcon(name) {
@@ -164,7 +165,7 @@ function tabs(active) {
     '<div class="dwho"><span class="avatar">' + esc(initials(S.data.name)) + '</span><span><b>' + esc(S.data.name) + '</b><span>My Marketing</span></span></div>' +
     '<div class="dlinks">' + link('home', 'Home', I.home) +
     cats.map(c => link('c/' + slug(c.name), c.name, catIcon(c.name), c.newCount ? '<span class="dnew">' + c.newCount + ' new</span>' : '')).join('') +
-    link('search', 'Search', I.search) + '</div>' +
+    link('search', 'Search', I.search) + '<button class="dl-refresh" data-act="refresh">' + '<span class="mi">' + I.refresh + '</span><span class="ml">Check for new pieces</span></button></div>' +
     '<div class="dfoot"><button class="btn block" data-act="signout">Sign out</button><span>Questions? Contact the West Marketing team.</span></div></nav>';
   return { top: desk + phone, bottom: '' };
 }
@@ -216,6 +217,7 @@ function homeHtml() {
     '<div class="date">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div>' +
     '<h1>Hi ' + esc(firstName(S.data.name)) + '</h1>' +
     '<p>' + (newCount ? 'You have <b>' + newCount + ' new piece' + (newCount === 1 ? '' : 's') + '</b> ready to share.' : all.length ? 'Everything you have is below, ready to share.' : 'Your marketing will show up here as soon as it’s ready.') + '</p></div>' +
+    '<button class="refresh" data-act="refresh" aria-label="Check for new pieces">' + I.refresh + '<span>Refresh</span></button>' +
     '<form class="search dark" id="f-search" role="search"><span style="color:var(--muted-dark);display:flex">' + I.search + '</span><input type="search" id="q" placeholder="Search flyers, tips, updates" aria-label="Search"></form></div></header>';
 
   const week = S.data.week || [];
@@ -431,6 +433,13 @@ document.addEventListener('click', async e => {
   if (d.shareWeek) { e.preventDefault(); share((S.data.week || []).slice()); return; }
   if (d.go) { go('p/' + d.go); return; }
   if (d.filter) { S.filter = d.filter; render(); return; }
+  if (d.act === 'refresh') {
+    const before = pieces().length; toast('Checking for new pieces…', 15000);
+    S.loadedAt = Date.now(); await load(true);
+    const added = pieces().length - before;
+    toast(added > 0 ? added + ' new piece' + (added === 1 ? '' : 's') + ' added' : 'You’re up to date');
+    return;
+  }
   if (d.act === 'menu') { openMenu(true); return; }
   if (d.act === 'menu-close') { openMenu(false); return; }
   if (d.act === 'change-email') { S.step = 'email'; S.err = ''; render(); }
@@ -446,7 +455,7 @@ function confirmSignout() { return window.confirm('Signed in as ' + S.data.name 
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.data) render(); });
 window.addEventListener('appinstalled', () => { S.installEvt = null; store.set('installHidden', '1'); if (S.data) render(); });
 // new things may have arrived while the app sat in the background
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.data && Date.now() - (S.loadedAt || 0) > 5 * 60e3) { S.loadedAt = Date.now(); load(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.data && Date.now() - (S.loadedAt || 0) > 60e3) { S.loadedAt = Date.now(); load(); } });
 
 S.loadedAt = Date.now();
 load();
