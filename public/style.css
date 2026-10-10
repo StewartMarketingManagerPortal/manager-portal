@@ -263,3 +263,11 @@ select { -webkit-appearance: none; appearance: none; font-family: inherit; heigh
   background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236B6966' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 14px center; background-size: 12px 8px; box-sizing: border-box; }
 select:disabled { opacity: .6; cursor: default; }
+
+/* My Team: current portal content, scrolls sideways */
+.pc-strip { display: flex; gap: 14px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.pc-item { flex: none; margin: 0; display: flex; flex-direction: column; gap: 8px; scroll-snap-align: start; width: 220px; }
+.pc-item img, .pc-item video, .pc-file { display: block; width: 220px; height: 240px; object-fit: contain; background: var(--pill); border-radius: 10px; border: 1px solid var(--line); }
+.pc-file { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--muted); text-decoration: none; }
+.pc-item figcaption { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; }
+.pc-item figcaption span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -9,6 +9,7 @@ const BOARDS = {
   requests: ['Marketing Request', 'REQUESTS_BOARD_ID'],
   areas: ['Market Areas', 'AREAS_BOARD_ID'],
   newsletter: ['Newsletter Template', 'NEWSLETTER_BOARD_ID'],
+  portal: ['Employee Marketing Portal-New', 'PORTAL_BOARD_ID'],
 };
 const bid = (env, k) => boardId(env, BOARDS[k][0], BOARDS[k][1]);
 const json = (data, status) => new Response(JSON.stringify(data), { status: status || 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -32,6 +33,8 @@ export async function onRequest(ctx) {
     if (route === 'team' && m === 'GET') return json(await myTeam(env, me));
     if (route.startsWith('photo/') && m === 'GET') return await teamPhoto(env, me, route.split('/')[1]);
     if (route === 'areas' && m === 'POST') { const r = await changeArea(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
+    if (route.startsWith('content/') && m === 'GET') { const r = await teamContent(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
+    if (route.startsWith('asset/') && m === 'GET') return await teamAsset(env, me, route.split('/')[1], route.split('/')[2], new URL(request.url).searchParams.get('dl'));
     if (route === 'nlareas' && m === 'GET') return json({ options: await nlOptions(env) });
     if (route === 'nlarea' && m === 'POST') { const r = await changeNl(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'altos' && m === 'POST') return json(await checkAltos((await request.json()).link));
@@ -447,4 +450,52 @@ async function changeNl(env, me, body) {
   } else return { error: 'Unknown change.' };
   forget('nl');
   return { ok: true, team: (await myTeam(env, me)).team.find(p => p.id === who.id) };
+}
+
+// ---------- what's on someone's portal now: their "Market Update" and "Event Calendar" rows ----------
+const CONTENT_ROWS = { market: 'Market Update', newsletter: 'Event Calendar' };
+async function portalCols(env) {
+  const id = await bid(env, 'portal'), cols = await columns(env, id);
+  return { id, emp: cols.byTitle[nk('Employee')], doc: Object.values(cols.byTitle).find(c => c.type === 'file' && nk(c.title) === nk('Document')) || Object.values(cols.byTitle).find(c => c.type === 'file') };
+}
+async function teamContent(env, me, id) {
+  const who = teamOf(me).find(p => String(p.id) === String(id));
+  if (!who) return { error: 'You can only see your own team.' };
+  const pc = await portalCols(env);
+  if (!pc.emp || !pc.doc) return { market: null, newsletter: null };
+  return cached('content:' + who.id, 120e3, async () => {
+    const d = await gql(env, 'query($b:ID!,$c:String!,$v:[String]!,$f:[String!]){items_page_by_column_values(board_id:$b,limit:100,columns:[{column_id:$c,column_values:$v}]){items{id name updated_at assets(column_ids:$f){id name file_extension created_at}}}}',
+      { b: String(pc.id), c: pc.emp.id, v: [who.name], f: [pc.doc.id] });
+    const items = (d.items_page_by_column_values || {}).items || [];
+    const out = {};
+    Object.keys(CONTENT_ROWS).forEach(k => {
+      const it = items.find(x => nk(x.name) === nk(CONTENT_ROWS[k]));
+      if (!it) { out[k] = null; return; }
+      const files = (it.assets || []).map(a => ({ id: String(a.id), name: a.name, ext: String(a.file_extension || '').replace('.', '').toLowerCase(), url: 'api/asset/' + it.id + '/' + a.id }));
+      // slideshow first, then pictures in name order
+      files.sort((a, b) => (b.ext === 'mp4') - (a.ext === 'mp4') || a.name.localeCompare(b.name, undefined, { numeric: true }));
+      out[k] = { item: String(it.id), updated: it.updated_at, files };
+    });
+    return out;
+  });
+}
+// streams one file from a team member's portal row (preview, or download with ?dl=1). Videos are sent to monday's own link so they can play.
+async function teamAsset(env, me, itemId, assetId, dl) {
+  itemId = String(itemId || '').replace(/\D/g, ''); assetId = String(assetId || '').replace(/\D/g, '');
+  const pc = await portalCols(env);
+  const d = await gql(env, 'query($i:[ID!],$c:[String!],$a:[String!]){items(ids:$i){id column_values(ids:$c){text} assets(column_ids:$a){id name file_extension public_url}}}', { i: [itemId], c: [pc.emp.id], a: [pc.doc.id] });
+  const it = (d.items || [])[0];
+  if (!it) return fail('Not found', 404);
+  const emp = ((it.column_values || [])[0] || {}).text || '';
+  if (!teamOf(me).some(p => nk(p.name) === nk(emp))) return fail('Not found', 404);
+  const a = (it.assets || []).find(x => String(x.id) === assetId);
+  if (!a) return fail('Not found', 404);
+  const ext = String(a.file_extension || '').replace('.', '').toLowerCase();
+  if (!dl && ext === 'mp4') return Response.redirect(a.public_url, 302);
+  const r = await fetch(a.public_url);
+  if (!r.ok) return fail('Could not load the file', 502);
+  const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', pdf: 'application/pdf', mp4: 'video/mp4' }[ext] || 'application/octet-stream';
+  const head = { 'Content-Type': type, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' };
+  if (dl) head['Content-Disposition'] = 'attachment; filename="' + String(a.name).replace(/["\\\r\n]/g, '') + '"';
+  return new Response(r.body, { headers: head });
 }

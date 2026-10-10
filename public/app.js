@@ -555,6 +555,7 @@ PAGES.team = () => {
         '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="tm-add" data-ar-add="tm"' + (t.link && t.area && !t.busy ? '' : ' disabled') + '>' + (t.busy ? '<span class="spin"></span> Saving…' : 'Add area') + '</button></div></div>';
     }
     h += '</section>';
+    h += tmContent(p, 'market', 'Current market update', 'What’s on ' + p.name.split(' ')[0] + '’s portal now - this week’s graphics and slideshow.');
     // newsletter / event calendar areas
     h += '<section class="card"><div><h2>Newsletter areas</h2><div class="sub" style="font-size:14px">Their monthly newsletter / event calendar - one for each area, with that area’s local events. Changes are picked up by the next monthly run.</div></div>';
     if (!t.data.nlReady) h += '<div class="err">The Newsletter Template board isn’t available. Ask West Marketing.</div>';
@@ -566,10 +567,31 @@ PAGES.team = () => {
       h += nlForm('tm');
     }
     h += '</section>';
+    h += tmContent(p, 'newsletter', 'Current newsletter', 'What’s on ' + p.name.split(' ')[0] + '’s portal now - this month’s event calendar.');
   }
   h += '</div></div>';
   return h;
 };
+// ---------- what's on their portal now (Market Update / Event Calendar rows), scrolls sideways ----------
+function tmContent(p, kind, title, sub) {
+  const t = tmState(); t.content = t.content || {};
+  const c = t.content[p.id];
+  if (c === undefined) { t.content[p.id] = null; api('content/' + p.id).then(r => { t.content[p.id] = r; }).catch(e => { t.content[p.id] = { error: e.message }; }).finally(() => { if (route() === 'team') render(); }); }
+  let h = '<section class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><div><h2>' + esc(title) + '</h2><div class="sub" style="font-size:14px">' + esc(sub) + '</div></div>';
+  if (!c) return h + '</div><div class="empty"><span class="spin dark"></span></div></section>';
+  if (c.error) return h + '</div><div class="err">' + esc(c.error) + '</div></section>';
+  const row = c[kind];
+  if (!row || !row.files.length) return h + '</div><div class="empty" style="padding:16px">Nothing on their portal yet.</div></section>';
+  h += '<span class="small muted">' + plural(row.files.length, 'file') + (row.updated ? ' · updated ' + esc(new Date(row.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) : '') + '</span></div>';
+  h += '<div class="pc-strip">' + row.files.map(f => {
+    const nm = f.name.replace(/\.[^.]+$/, '').replace(new RegExp('\\s*-\\s*' + p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'), '').replace(/^Market Update Slideshow$/i, 'Slideshow').replace(/\s+Market Update$/i, '').replace(/\s+Newsletter\s+-\s+/i, ' · ');
+    const media = f.ext === 'mp4' ? '<video src="' + esc(f.url) + '" controls preload="metadata" playsinline></video>'
+      : /^(png|jpe?g|gif|webp)$/.test(f.ext) ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener"><img src="' + esc(f.url) + '" alt="' + esc(nm) + '" loading="lazy"></a>'
+      : '<a class="pc-file" href="' + esc(f.url) + '" target="_blank" rel="noopener">' + esc(f.ext.toUpperCase() || 'FILE') + '</a>';
+    return '<figure class="pc-item">' + media + '<figcaption><span title="' + esc(f.name) + '">' + esc(nm) + '</span><a class="btn small" href="' + esc(f.url) + '?dl=1" download>Download</a></figcaption></figure>';
+  }).join('') + '</div></section>';
+  return h;
+}
 // ---------- newsletter area form (My Team and New Hires) ----------
 const nlName = h => String(h || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\s+Events$/i, '');
 function nlfState(scope) {
