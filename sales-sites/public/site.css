@@ -193,7 +193,8 @@ footer img { width: 120px; height: auto; display: block; }
   .row.c5 .card, .row.c3 .card { flex: 0 0 56%; scroll-snap-align: start; }
   .card.hidden { display: flex; }
   .see-all { display: none; }
-  .row.c2 { padding-right: 20px; gap: 12px; }
+  .row.c2 { display: flex; overflow-x: auto; gap: 12px; padding: 4px 20px 12px 0; scroll-snap-type: x mandatory; scrollbar-color: #8F8B86 transparent; }
+  .row.c2 .tool { flex: 0 0 78%; scroll-snap-align: start; align-content: flex-start; }
   .tool { padding: 18px; gap: 14px; flex-wrap: wrap; }
   .tool .ico { width: 56px; height: 56px; border-radius: 14px; }
   .tool h3 { font-size: 18px; }
