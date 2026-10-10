@@ -214,7 +214,7 @@ async function submitNewHire(env, me, fd) {
     phone: show.phone === false ? '' : f.phone,
     address1: show.address === false ? '' : f.address1, address2: show.address === false ? '' : f.address2,
     'Marketing Setup': 'Pending', 'Package Look': (f.looks || []).join(', '), 'Requested By': me.email,
-    'Start Date': f.startDate, 'Market Areas': (f.areas || []).join(', '), 'Notes for Marketing': f.notes,
+    'Start Date': f.startDate, 'Market Areas': (f.areas || []).map(a => typeof a === 'string' ? a : (a.label || a.area)).join(', '), 'Notes for Marketing': f.notes,
   };
   const { values, missing } = buildValues(ec, fields);
   const itemId = await createItem(env, eb, null, name, values);
@@ -233,6 +233,17 @@ async function submitNewHire(env, me, fd) {
         { b: me.dir.managersBoard, i: String(me.row.rowId), c: me.dir.relColId, v: JSON.stringify({ item_ids: ids }) });
     }
   } catch (e) {}
+  // their market update areas go straight onto the Market Areas board (the weekly run picks them up)
+  try {
+    const b = await areasBoard(env);
+    const areas = (f.areas || []).filter(a => a && typeof a === 'object' && /^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i.test(String(a.link || '')));
+    if (b) for (const a of areas) {
+      const v = {}; v[b.col.Employee] = name; v[b.col.Area] = String(a.area || '').trim(); v[b.col['Location Label']] = String(a.label || a.area || '').trim();
+      v[b.col['Altos Link']] = String(a.link).trim(); v[b.col.Active] = 'Yes'; v[b.col.Notes] = 'Added with the new hire by ' + me.row.name + ' in the Manager Portal ' + today();
+      await createItem(env, b.id, null, name + ' - ' + v[b.col.Area], v);
+    }
+    forget('areas');
+  } catch (e) { await addUpdate(env, itemId, 'Market areas could not be added to the Market Areas board: ' + escHtml(String(e.message || e))).catch(() => {}); }
   forget('dir');
   return { ok: true, id: itemId, name };
 }

@@ -52,7 +52,7 @@ const CB_ICONS = {
 
 // ---------- state ----------
 const S = { me: null, reqs: null, busy: false, nh: null, rq: null, last: null };
-function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], areaInput: '', looks: ['Modern Dark'], notes: '' }; }
+function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, looks: ['Modern Dark'], notes: '' }; }
 function freshRequest() { return { step: 1, state: 'California', type: null, other: '', projectName: '', who: 'pick', people: [], needBy: inDays(7), description: '', files: [], photos: [], x: {} }; }
 
 // ---------- routing ----------
@@ -161,11 +161,13 @@ function nhDetails(n) {
     fld('Work phone', 'phone', n.phone, { type: 'tel', ph: '(916) 555-0100' }) + fld('Work email', 'email', n.email, { type: 'email', ph: 'first.last@stewart.com' }) + '</div>' +
     '<div class="field">Show on their materials<div class="row" style="gap:4px 24px">' + [['phone', 'Phone'], ['email', 'Email'], ['address', 'Office address'], ['headshot', 'Headshot']].map(([k, l]) =>
       '<label class="check"><input type="checkbox" data-show="' + k + '" ' + (n.show[k] ? 'checked' : '') + '> ' + l + '</label>').join('') + '</div></div>' +
-    '<div style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Market update areas <span class="muted" style="font-size:14px;font-weight:500">· optional</span></h2>' +
-    '<div class="muted2" style="font-size:14px;margin-top:4px">The cities or zip codes they work. They’ll get a weekly market update graphic for each one.</div></div>' +
-    (n.areas.length ? '<div class="chips">' + n.areas.map((a, i) => '<span class="areatag">' + esc(a) + '<button type="button" data-act="area-del" data-i="' + i + '" aria-label="Remove ' + esc(a) + '">×</button></span>').join('') + '</div>' : '') +
-    '<div class="row" style="align-items:flex-end"><label class="field grow">Add a city or zip code<input type="text" data-f="areaInput" value="' + esc(n.areaInput) + '" placeholder="e.g. Roseville or 95661"></label><button type="button" class="btn" data-act="area-add">Add area</button></div>' +
-    '<div class="small muted">Marketing connects each area to its market report — you don’t need any links.</div></div></section>';
+    '<div id="nh-areas" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Market update areas <span class="muted" style="font-size:14px;font-weight:500">· at least 2</span></h2>' +
+    '<div class="muted2" style="font-size:14px;margin-top:4px">The cities or zip codes they work. They’ll get a weekly market snapshot graphic for each one.</div></div>' +
+    (n.areas.length ? '<div class="tm-areas">' + n.areas.map((a, i) => '<div class="tm-area"><span class="grow"><b>' + esc(a.label || a.area) + '</b><a class="small" href="' + esc(a.link) + '" target="_blank" rel="noopener">View report</a></span>' +
+      '<button type="button" class="btn small" data-act="nh-area-del" data-i="' + i + '">Remove</button></div>').join('') + '</div>' : '') +
+    (n.areas.length < 2 ? '<div class="small" style="color:var(--brand);font-weight:600">' + (n.areas.length ? 'Add 1 more area to continue.' : 'Add at least 2 areas to continue.') + '</div>' : '') +
+    '<div class="tm-add" style="border-top:none;padding-top:0"><h3>Add an area</h3>' + areaSteps() + areaFields('nh') +
+    '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="nh-area-add" data-ar-add="nh"' + (arState('nh').link && arState('nh').area ? '' : ' disabled') + '>Add area</button></div></div></div></section>';
   h += '<section class="col2"><div class="card"><h2>Headshot</h2><div class="row" style="align-items:center;flex-wrap:nowrap">' +
     '<div class="headshot" id="headshot">' + headshotBox(n) + '</div>' +
     '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px" class="muted2">' + (n.photo ? '<span style="color:var(--green-text);font-weight:700">✓ ' + esc(n.photo.name) + '</span>' : '') +
@@ -229,7 +231,7 @@ function nhReview(n) {
     (n.photoUrl ? '<img class="av" style="width:84px;height:84px" src="' + n.photoUrl + '" alt="">' : '<span class="av" style="width:84px;height:84px;font-size:24px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span>') +
     '<div class="grow"><div style="font-size:24px;font-weight:800">' + esc(n.firstName + ' ' + n.lastName) + '</div><div style="color:var(--brand);font-weight:700">' + esc(nhTitle(n)) + '</div></div><a href="#" data-act="nh-step" data-step="1" style="font-weight:600;font-size:14px">Edit</a></div>' +
     line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) +
-    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.join(', ')) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 2) +
+    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 2) +
     '<label class="field" style="margin-top:10px">Anything else marketing should know? (optional)<textarea data-f="notes" rows="3">' + esc(n.notes) + '</textarea></label></section>';
   h += '<section class="col2"><div class="card"><h2>What happens next</h2><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7" class="muted2"><li>' + esc(n.firstName || 'They') + ' is added to the Main Employee Sheet and your team.</li>' +
     '<li>Marketing removes the photo background and builds the package' + (n.looks.length > 1 ? ' in both looks' : ' in ' + esc(n.looks[0])) + '.</li><li>Everything lands on the Employee Marketing Portal.</li></ol></div>' +
@@ -356,8 +358,15 @@ PAGES.mine = () => {
 
 // ---------- actions ----------
 const ACT = {};
-ACT['area-add'] = () => { const n = S.nh, v = n.areaInput.trim(); if (v && !n.areas.includes(v)) n.areas.push(v); n.areaInput = ''; render(); const i = document.querySelector('[data-f=areaInput]'); if (i) i.focus(); };
-ACT['area-del'] = el => { S.nh.areas.splice(+el.dataset.i, 1); render(); };
+ACT['nh-area-add'] = () => {
+  const n = S.nh, st = arState('nh'), link = st.link.trim(), area = st.area.trim();
+  if (!ALTOS_RX.test(link)) return toast('Paste an Altos report link (it starts with https://altos.re/r/…).');
+  if (!area) return toast('Add the city or zip code.');
+  if (n.areas.some(a => a.link === link)) return toast('That area is already added.');
+  n.areas.push({ link, area, label: st.label.trim() || area }); arClear(st); render();
+  const el = document.getElementById('nh-areas'); if (el) el.scrollIntoView({ block: 'nearest' });
+};
+ACT['nh-area-del'] = el => { S.nh.areas.splice(+el.dataset.i, 1); render(); };
 ACT['nh-next'] = () => {
   const n = S.nh;
   if (n.step === 1) {
@@ -365,6 +374,7 @@ ACT['nh-next'] = () => {
     const miss = need.filter(([, v]) => !String(v || '').trim()).map(([k]) => k);
     if (miss.length) { miss.forEach(k => { const el = document.querySelector('[data-f=' + k + ']'); if (el) el.classList.add('bad'); }); toast('Please fill in the highlighted fields.'); return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.email)) { toast('That email doesn’t look right.'); return; }
+    if (n.areas.length < 2) { toast('Add at least 2 market update areas.'); const el = document.getElementById('nh-areas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   }
   if (n.step === 2 && !n.looks.length) return toast('Pick at least one look.');
   n.step++; render(); window.scrollTo(0, 0);
@@ -438,11 +448,11 @@ document.addEventListener('input', e => {
   const t = e.target, d = t.dataset;
   if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther|address1|address2/.test(d.f)) refreshPreview(); }
   if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); if (d.r === 'needBy') updateSummaryDate(); }
-  if (d.tm) {
-    const t = tmState(); t[d.tm] = e.target.value;
-    if (d.tm === 'q') { document.getElementById('tm-list').innerHTML = tmList(t); return; }
-    const add = document.querySelector('[data-act=tm-add]'); if (add) add.disabled = !(t.link && t.area) || t.busy;
-    if (d.tm === 'link') { clearTimeout(tmCheckTimer); t.check = null; tmCheckTimer = setTimeout(tmCheck, 700); }
+  if (d.tm === 'q') { const t = tmState(); t.q = e.target.value; document.getElementById('tm-list').innerHTML = tmList(t); return; }
+  if (d.ar) {
+    const [scope, k] = d.ar.split('.'), st = arState(scope); st[k] = e.target.value;
+    if (k === 'link') { clearTimeout(arTimers[scope]); st.check = null; arTimers[scope] = setTimeout(() => arCheck(scope), 700); }
+    arPaint(scope);
     return;
   }
   if (d.actInput === 'teamsearch') { S.rq.search = t.value; document.getElementById('teamchips').innerHTML = teamChips(S.me.team, new Set(S.rq.people), t.value); }
@@ -463,7 +473,7 @@ document.addEventListener('change', e => {
   }
   if (d.files) { addFiles(d.files, t.files); }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset && e.target.dataset.f === 'areaInput') { e.preventDefault(); ACT['area-add'](); } });
+document.addEventListener('keydown', e => { const d = e.target.dataset || {}; if (e.key === 'Enter' && d.ar === 'nh.link') { e.preventDefault(); arCheck('nh'); } });
 ['dragover', 'dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
   const z = e.target.closest && e.target.closest('[data-drop]'); if (!z) return;
   e.preventDefault(); z.classList.toggle('over', ev === 'dragover');
@@ -528,14 +538,8 @@ PAGES.team = () => {
         '<button type="button" class="btn small" data-act="tm-remove" data-id="' + esc(a.id) + '" data-label="' + esc(a.label || a.area) + '"' + (t.busy ? ' disabled' : '') + '>Remove</button></div>').join('') + '</div>'
         : '<div class="empty" style="padding:16px">No market areas yet.</div>';
       const ck = t.check;
-      h += '<div class="tm-add"><h3>Add an area</h3>' +
-        '<ol class="tm-steps"><li>Click <b>Search Altos</b> and look up the city or zip code.</li><li>Open the report and copy its link (the address bar, or <b>Share → Copy link</b>).</li><li>Paste the link below, then click <b>Add area</b>.</li></ol>' +
-        '<div class="row"><a class="btn" href="' + esc(t.data.altosSearch) + '" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Search Altos</a></div>' +
-        '<label class="field">Altos report link<input type="text" inputmode="url" placeholder="https://altos.re/r/…" data-tm="link" value="' + esc(t.link) + '"></label>' +
-        '<div id="tm-check">' + tmCheckHtml(t) + '</div>' +
-        '<div class="row" style="align-items:flex-end;flex-wrap:nowrap"><label class="field grow">City or zip<input type="text" data-tm="area" value="' + esc(t.area) + '"></label>' +
-        '<label class="field grow">Shows on the graphic as<input type="text" data-tm="label" value="' + esc(t.label) + '" placeholder="Same as city"></label></div>' +
-        '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="tm-add"' + (t.link && t.area && !t.busy ? '' : ' disabled') + '>' + (t.busy ? '<span class="spin"></span> Saving…' : 'Add area') + '</button></div></div>';
+      h += '<div class="tm-add"><h3>Add an area</h3>' + areaSteps() + areaFields('tm') +
+        '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="tm-add" data-ar-add="tm"' + (t.link && t.area && !t.busy ? '' : ' disabled') + '>' + (t.busy ? '<span class="spin"></span> Saving…' : 'Add area') + '</button></div></div>';
     }
     h += '</section>';
   }
@@ -552,35 +556,11 @@ async function tmChange(body, msg) {
   catch (e) { toast(e.message, 6000); return false; }
   finally { t.busy = false; render(); }
 }
-let tmCheckTimer = null;
-function tmCheckHtml(t) {
-  const ck = t.check;
-  return t.checking ? '<div class="muted" style="font-size:13px">Checking the link…</div>' : ck ? (ck.ok ? '<div class="okbox">✓ This link opens <b>' + esc(ck.location) + '</b></div>' : '<div class="err">' + esc(ck.error) + '</div>') : '';
-}
-// checks the pasted link without redrawing the page (so typing isn't interrupted)
-function tmPaint() {
-  const t = tmState(), c = document.getElementById('tm-check'); if (c) c.innerHTML = tmCheckHtml(t);
-  ['area', 'label'].forEach(k => { const el = document.querySelector('[data-tm=' + k + ']'); if (el && el !== document.activeElement && el.value !== t[k]) el.value = t[k]; });
-  const add = document.querySelector('[data-act=tm-add]'); if (add) add.disabled = !(t.link && t.area) || t.busy;
-}
-async function tmCheck() {
-  const t = tmState(), link = t.link.trim();
-  if (!link) { t.check = null; tmPaint(); return; }
-  if (!/^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i.test(link)) { t.check = { ok: false, error: 'Paste an Altos report link (it starts with https://altos.re/r/…).' }; tmPaint(); return; }
-  t.checking = true; tmPaint();
-  try {
-    const r = await api('altos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link }) });
-    if (t.link.trim() !== link) return;
-    t.check = r;
-    if (r.ok) { if (!t.area) t.area = r.city || r.zip || ''; if (!t.label) t.label = (r.location || '').replace(/,\s*[A-Z]{2}\b.*$/, '').trim() || t.area; }
-  } catch (e) { t.check = null; }
-  t.checking = false; tmPaint();
-}
 ACT['tm-reload'] = () => { const t = tmState(); t.err = ''; t.data = null; render(); };
 ACT['tm-sel'] = el => { const t = tmState(); t.sel = el.dataset.name; t.link = ''; t.area = ''; t.label = ''; t.check = null; render(); };
 ACT['tm-add'] = async () => {
   const t = tmState(), p = t.data.team.find(x => x.name === t.sel); if (!p) return;
-  if (await tmChange({ op: 'add', employee: p.name, link: t.link.trim(), area: t.area.trim(), label: t.label.trim() || t.area.trim() }, 'Area added for ' + p.name)) { t.link = ''; t.area = ''; t.label = ''; t.check = null; render(); }
+  if (await tmChange({ op: 'add', employee: p.name, link: t.link.trim(), area: t.area.trim(), label: t.label.trim() || t.area.trim() }, 'Area added for ' + p.name)) { arClear(t); render(); }
 };
 ACT['tm-remove'] = el => {
   const t = tmState();
@@ -588,6 +568,48 @@ ACT['tm-remove'] = el => {
   tmChange({ op: 'remove', employee: t.sel, id: el.dataset.id }, 'Removed ' + el.dataset.label);
 };
 ACT['tm-active'] = el => { const t = tmState(); tmChange({ op: 'active', employee: t.sel, id: el.dataset.id, active: el.checked }, el.checked ? 'Turned on' : 'Turned off - skipped until you turn it back on'); };
+
+
+// ---------- adding a market update area (My Team and New Hires use the same form) ----------
+const ALTOS_SEARCH = 'https://altos.re/r/6a599414-73b5-40dd-a2ca-ab394e0b984d';
+const ALTOS_RX = /^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i;
+const arState = scope => scope === 'tm' ? tmState() : (S.nh.ar || (S.nh.ar = { link: '', area: '', label: '', check: null, checking: false }));
+function areaSteps() {
+  return '<ol class="tm-steps"><li>Click <b>Search Altos</b> and look up the city or zip code.</li><li>Open the report and copy its link (the address bar, or <b>Share → Copy link</b>).</li><li>Paste the link below, then click <b>Add area</b>.</li></ol>' +
+    '<div class="row"><a class="btn" href="' + ALTOS_SEARCH + '" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Search Altos</a></div>';
+}
+function areaFields(scope) {
+  const st = arState(scope);
+  return '<label class="field">Altos report link<input type="text" inputmode="url" placeholder="https://altos.re/r/…" data-ar="' + scope + '.link" value="' + esc(st.link) + '"></label>' +
+    '<div id="ar-check-' + scope + '">' + arCheckHtml(st) + '</div>' +
+    '<div class="row" style="align-items:flex-end;flex-wrap:nowrap"><label class="field grow">City or zip<input type="text" data-ar="' + scope + '.area" value="' + esc(st.area) + '"></label>' +
+    '<label class="field grow">Shows on the graphic as<input type="text" data-ar="' + scope + '.label" value="' + esc(st.label) + '" placeholder="Same as city"></label></div>';
+}
+function arCheckHtml(st) {
+  const ck = st.check;
+  return st.checking ? '<div class="muted" style="font-size:13px">Checking the link…</div>' : ck ? (ck.ok ? '<div class="okbox">✓ This link opens <b>' + esc(ck.location) + '</b></div>' : '<div class="err">' + esc(ck.error) + '</div>') : '';
+}
+// updates the check message and fills in empty boxes without redrawing the page (so typing isn't interrupted)
+function arPaint(scope) {
+  const st = arState(scope), c = document.getElementById('ar-check-' + scope); if (c) c.innerHTML = arCheckHtml(st);
+  ['area', 'label'].forEach(k => { const el = document.querySelector('[data-ar="' + scope + '.' + k + '"]'); if (el && el !== document.activeElement && el.value !== st[k]) el.value = st[k]; });
+  const add = document.querySelector('[data-ar-add="' + scope + '"]'); if (add) add.disabled = !(st.link && st.area) || !!st.busy;
+}
+const arTimers = {};
+async function arCheck(scope) {
+  const st = arState(scope), link = st.link.trim();
+  if (!link) { st.check = null; arPaint(scope); return; }
+  if (!ALTOS_RX.test(link)) { st.check = { ok: false, error: 'Paste an Altos report link (it starts with https://altos.re/r/…).' }; arPaint(scope); return; }
+  st.checking = true; arPaint(scope);
+  try {
+    const r = await api('altos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link }) });
+    if (st.link.trim() !== link) return;
+    st.check = r;
+    if (r.ok) { if (!st.area) st.area = r.city || r.zip || ''; if (!st.label) st.label = (r.location || '').replace(/,\s*[A-Z]{2}\b.*$/, '').trim() || st.area; }
+  } catch (e) { st.check = null; }
+  st.checking = false; arPaint(scope);
+}
+function arClear(st) { st.link = ''; st.area = ''; st.label = ''; st.check = null; }
 
 // ---------- start ----------
 async function loadRequests() { try { S.reqs = await api('requests'); } catch (e) { S.reqs = { requests: [], newHires: [] }; } render(); }
