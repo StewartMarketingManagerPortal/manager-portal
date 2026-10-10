@@ -8,6 +8,7 @@ const BOARDS = {
   employees: ['Main Employee Sheet', 'EMPLOYEES_BOARD_ID'],
   requests: ['Marketing Request', 'REQUESTS_BOARD_ID'],
   areas: ['Market Areas', 'AREAS_BOARD_ID'],
+  newsletter: ['Newsletter Template', 'NEWSLETTER_BOARD_ID'],
 };
 const bid = (env, k) => boardId(env, BOARDS[k][0], BOARDS[k][1]);
 const json = (data, status) => new Response(JSON.stringify(data), { status: status || 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -31,6 +32,8 @@ export async function onRequest(ctx) {
     if (route === 'team' && m === 'GET') return json(await myTeam(env, me));
     if (route.startsWith('photo/') && m === 'GET') return await teamPhoto(env, me, route.split('/')[1]);
     if (route === 'areas' && m === 'POST') { const r = await changeArea(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
+    if (route === 'nlareas' && m === 'GET') return json({ options: await nlOptions(env) });
+    if (route === 'nlarea' && m === 'POST') { const r = await changeNl(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'altos' && m === 'POST') return json(await checkAltos((await request.json()).link));
     if (route === 'proof' && m === 'POST') { const r = await answerProof(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
@@ -244,6 +247,11 @@ async function submitNewHire(env, me, fd) {
     }
     forget('areas');
   } catch (e) { await addUpdate(env, itemId, 'Market areas could not be added to the Market Areas board: ' + escHtml(String(e.message || e))).catch(() => {}); }
+  // their monthly newsletter / event calendar area(s) go onto the Newsletter Template board
+  try {
+    const nl = (f.nlAreas || []).filter(a => a && a.header);
+    for (const a of nl) await nlAdd(env, { name, email: f.email, phone: f.phone, title: f.title, company: f.company, address1: f.address1, address2: f.address2 }, a.header, a.location, me.row.name);
+  } catch (e) { await addUpdate(env, itemId, 'Newsletter areas could not be added to the Newsletter Template board: ' + escHtml(String(e.message || e))).catch(() => {}); }
   forget('dir');
   return { ok: true, id: itemId, name };
 }
@@ -277,10 +285,12 @@ async function myTeam(env, me) {
   const b = await areasBoard(env);
   const areas = b ? await allAreas(env, b) : [];
   const photos = await headshots(env, team.map(p => p.id)).catch(() => ({}));
+  const nb = await nlBoard(env).catch(() => null), nlRows = nb ? await nlAll(env, nb).catch(() => []) : [];
   const out = team.map(p => ({ id: p.id, name: p.name, title: p.title, email: p.email, phone: p.phone, company: p.company, address1: p.address1, address2: p.address2,
     photo: photos[p.id] ? 'api/photo/' + p.id + '?v=' + photos[p.id].id : '',
-    areas: areas.filter(a => nk(a.employee) === nk(p.name) && (a.area || a.link)).sort((x, y) => (x.label || x.area).localeCompare(y.label || y.area)) }));
-  return { team: out, areasReady: !!b, altosSearch: ALTOS_SEARCH };
+    areas: areas.filter(a => nk(a.employee) === nk(p.name) && (a.area || a.link)).sort((x, y) => (x.label || x.area).localeCompare(y.label || y.area)),
+    nl: nlRows.filter(r => nk(r.name) === nk(p.name) && r.header).map(r => ({ id: r.id, header: r.header, location: r.location })).sort((x, y) => x.header.localeCompare(y.header)) }));
+  return { team: out, areasReady: !!b, nlReady: !!nb, nlOptions: nb ? nlOptionsFrom(nlRows) : [], altosSearch: ALTOS_SEARCH };
 }
 async function changeArea(env, me, body) {
   const who = teamOf(me).find(p => nk(p.name) === nk(body.employee));
@@ -366,4 +376,64 @@ async function teamPhoto(env, me, id) {
   const buf = await r.arrayBuffer();
   try { await cache.put(ck2, new Response(buf, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
   return new Response(buf, { headers: head });
+}
+
+// ---------- newsletter / event calendar areas: the "Newsletter Template" board (one row per person per area) ----------
+// "header" is the area's title (e.g. SAN BERNARDINO EVENTS) - everyone with the same header shares that area's events.
+async function nlBoard(env) {
+  const id = await cached('nlBoard', 300e3, async () => { try { return await bid(env, 'newsletter'); } catch (e) { return ''; } });
+  if (!id) { forget('nlBoard'); return null; }
+  const cols = await columns(env, id);
+  const c = t => cols.byTitle[nk(t)];
+  if (!c('header')) return null;
+  return { id, cols, name: c('fullname'), header: c('header'), location: c('newsletter location') };
+}
+async function nlAll(env, b) {
+  return cached('nl', 60e3, async () => {
+    const ids = [b.name, b.header, b.location].filter(Boolean).map(c => c.id);
+    const items = await allItems(env, b.id, ids);
+    return items.filter(it => !SKIP(it.name)).map(it => {
+      const v = {}; it.column_values.forEach(cv => v[cv.id] = (cv.text || '').trim());
+      return { id: String(it.id), item: it.name, group: it.group && it.group.id, name: (b.name && v[b.name.id]) || it.name.trim(), header: (v[b.header.id] || '').toUpperCase(), location: b.location ? v[b.location.id] || '' : '' };
+    });
+  });
+}
+function nlOptionsFrom(rows) {
+  const m = {};
+  rows.forEach(r => { if (!r.header) return; const o = m[r.header] || (m[r.header] = { header: r.header, locations: {}, people: 0 }); o.people++; if (r.location) o.locations[r.location] = (o.locations[r.location] || 0) + 1; });
+  return Object.values(m).map(o => ({ header: o.header, people: o.people, location: Object.keys(o.locations).sort((a, b) => o.locations[b] - o.locations[a])[0] || '' })).sort((a, b) => a.header.localeCompare(b.header));
+}
+async function nlOptions(env) { const b = await nlBoard(env); return b ? nlOptionsFrom(await nlAll(env, b)) : []; }
+async function nlAdd(env, p, header, location, by) {
+  const b = await nlBoard(env); if (!b) throw new Error('The Newsletter Template board isn’t available.');
+  header = String(header || '').trim().toUpperCase(); location = String(location || '').trim();
+  if (!header) throw new Error('Pick an area.');
+  const rows = await nlAll(env, b);
+  if (rows.some(r => nk(r.name) === nk(p.name) && r.header === header)) return { already: true };
+  if (!location) { const o = nlOptionsFrom(rows).find(x => x.header === header); location = o ? o.location : ''; }
+  const fields = { fullname: p.name, header, 'newsletter location': location, email: p.email, phone: p.phone, title: p.title, company: p.company, address1: p.address1, address2: p.address2 };
+  Object.keys(fields).forEach(k => { if (!fields[k]) delete fields[k]; });
+  const { values } = buildValues(b.cols, fields);
+  const mine = rows.find(r => nk(r.name) === nk(p.name)), same = rows.find(r => r.header === header);
+  const id = await createItem(env, b.id, (mine || same || {}).group || null, mine ? mine.item : p.name, values);
+  if (by) await addUpdate(env, id, 'Added by ' + escHtml(by) + ' in the Manager Portal ' + today()).catch(() => {});
+  forget('nl');
+  return { id };
+}
+async function changeNl(env, me, body) {
+  const who = teamOf(me).find(p => nk(p.name) === nk(body.employee));
+  if (!who) return { error: 'You can only change areas for people on your team.' };
+  const b = await nlBoard(env);
+  if (!b) throw new Error('The Newsletter Template board isn’t available. Ask West Marketing.');
+  forget('nl');
+  if (body.op === 'add') {
+    const r = await nlAdd(env, who, body.header, body.location, me.row.name);
+    if (r.already) return { error: who.name + ' already has that area.' };
+  } else if (body.op === 'remove') {
+    const row = (await nlAll(env, b)).find(r => r.id === String(body.id) && nk(r.name) === nk(who.name));
+    if (!row) return { error: 'That area is no longer on ' + who.name + '’s list.' };
+    await gql(env, 'mutation($i:ID!){archive_item(item_id:$i){id}}', { i: row.id });
+  } else return { error: 'Unknown change.' };
+  forget('nl');
+  return { ok: true, team: (await myTeam(env, me)).team.find(p => p.id === who.id) };
 }

@@ -52,7 +52,7 @@ const CB_ICONS = {
 
 // ---------- state ----------
 const S = { me: null, reqs: null, busy: false, nh: null, rq: null, last: null };
-function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, looks: ['Modern Dark'], notes: '' }; }
+function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, looks: ['Modern Dark'], notes: '' }; }
 function freshRequest() { return { step: 1, state: 'California', type: null, other: '', projectName: '', who: 'pick', people: [], needBy: inDays(7), description: '', files: [], photos: [], x: {} }; }
 
 // ---------- routing ----------
@@ -167,7 +167,12 @@ function nhDetails(n) {
       '<button type="button" class="btn small" data-act="nh-area-del" data-i="' + i + '">Remove</button></div>').join('') + '</div>' : '') +
     (n.areas.length < 2 ? '<div class="small" style="color:var(--brand);font-weight:600">' + (n.areas.length ? 'Add 1 more area to continue.' : 'Add at least 2 areas to continue.') + '</div>' : '') +
     '<div class="tm-add" style="border-top:none;padding-top:0"><h3>Add an area</h3>' + areaSteps() + areaFields('nh') +
-    '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="nh-area-add" data-ar-add="nh"' + (arState('nh').link && arState('nh').area ? '' : ' disabled') + '>Add area</button></div></div></div></section>';
+    '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="nh-area-add" data-ar-add="nh"' + (arState('nh').link && arState('nh').area ? '' : ' disabled') + '>Add area</button></div></div></div>' +
+    '<div id="nh-nl" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Newsletter area <span class="muted" style="font-size:14px;font-weight:500">· at least 1</span></h2>' +
+    '<div class="muted2" style="font-size:14px;margin-top:4px">The area for their monthly newsletter / event calendar (local events plus a seasonal feature).</div></div>' +
+    (n.nlAreas.length ? '<div class="tm-areas">' + n.nlAreas.map((a, i) => '<div class="tm-area"><span class="grow"><b>' + esc(nlName(a.header)) + '</b>' + (a.location ? '<span class="small muted">' + esc(a.location) + '</span>' : '') + '</span>' +
+      '<button type="button" class="btn small" data-act="nh-nl-del" data-i="' + i + '">Remove</button></div>').join('') + '</div>' : '<div class="small" style="color:var(--brand);font-weight:600">Add their newsletter area to continue.</div>') +
+    nlForm('nh') + '</div></section>';
   h += '<section class="col2"><div class="card"><h2>Headshot</h2><div class="row" style="align-items:center;flex-wrap:nowrap">' +
     '<div class="headshot" id="headshot">' + headshotBox(n) + '</div>' +
     '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px" class="muted2">' + (n.photo ? '<span style="color:var(--green-text);font-weight:700">✓ ' + esc(n.photo.name) + '</span>' : '') +
@@ -231,7 +236,7 @@ function nhReview(n) {
     (n.photoUrl ? '<img class="av" style="width:84px;height:84px" src="' + n.photoUrl + '" alt="">' : '<span class="av" style="width:84px;height:84px;font-size:24px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span>') +
     '<div class="grow"><div style="font-size:24px;font-weight:800">' + esc(n.firstName + ' ' + n.lastName) + '</div><div style="color:var(--brand);font-weight:700">' + esc(nhTitle(n)) + '</div></div><a href="#" data-act="nh-step" data-step="1" style="font-weight:600;font-size:14px">Edit</a></div>' +
     line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) +
-    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 2) +
+    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Newsletter', n.nlAreas.map(a => nlName(a.header)).join(', ')) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 2) +
     '<label class="field" style="margin-top:10px">Anything else marketing should know? (optional)<textarea data-f="notes" rows="3">' + esc(n.notes) + '</textarea></label></section>';
   h += '<section class="col2"><div class="card"><h2>What happens next</h2><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7" class="muted2"><li>' + esc(n.firstName || 'They') + ' is added to the Main Employee Sheet and your team.</li>' +
     '<li>Marketing removes the photo background and builds the package' + (n.looks.length > 1 ? ' in both looks' : ' in ' + esc(n.looks[0])) + '.</li><li>Everything lands on the Employee Marketing Portal.</li></ol></div>' +
@@ -375,6 +380,7 @@ ACT['nh-next'] = () => {
     if (miss.length) { miss.forEach(k => { const el = document.querySelector('[data-f=' + k + ']'); if (el) el.classList.add('bad'); }); toast('Please fill in the highlighted fields.'); return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.email)) { toast('That email doesn’t look right.'); return; }
     if (n.areas.length < 2) { toast('Add at least 2 market update areas.'); const el = document.getElementById('nh-areas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (!n.nlAreas.length) { toast('Add their newsletter area.'); const el = document.getElementById('nh-nl'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   }
   if (n.step === 2 && !n.looks.length) return toast('Pick at least one look.');
   n.step++; render(); window.scrollTo(0, 0);
@@ -389,7 +395,7 @@ ACT['nh-submit'] = async () => {
   try {
     const fd = new FormData();
     fd.append('fields', JSON.stringify({ firstName: n.firstName, lastName: n.lastName, title: nhTitle(n), company: n.company, address1: a.address1, address2: a.address2, phone: fmtPhone(n.phone), email: n.email,
-      startDate: n.startDate, show: n.show, areas: n.areas, looks: n.looks, notes: n.notes }));
+      startDate: n.startDate, show: n.show, areas: n.areas, nlAreas: n.nlAreas, looks: n.looks, notes: n.notes }));
     if (n.photo) fd.append('photo', n.photo, n.photo.name);
     await api('newhire', { method: 'POST', body: fd });
     S.last = { first: n.firstName, selfServe: S.me.selfServe };
@@ -448,6 +454,7 @@ document.addEventListener('input', e => {
   const t = e.target, d = t.dataset;
   if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther|address1|address2/.test(d.f)) refreshPreview(); }
   if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); if (d.r === 'needBy') updateSummaryDate(); }
+  if (d.nlf && t.tagName === 'INPUT') { const [sc, k] = d.nlf.split('.'); nlfState(sc)[k] = t.value; const st = nlfState(sc), b = document.querySelector('[data-act=' + sc + '-nl-add]'); if (b) b.disabled = !(st.header === '__other' ? st.other.trim() : st.header); return; }
   if (d.tm === 'q') { const t = tmState(); t.q = e.target.value; document.getElementById('tm-list').innerHTML = tmList(t); return; }
   if (d.ar) {
     const [scope, k] = d.ar.split('.'), st = arState(scope); st[k] = e.target.value;
@@ -459,6 +466,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target, d = t.dataset;
+  if (d.nlf && t.tagName === 'SELECT') { const [sc, k] = d.nlf.split('.'); const st = nlfState(sc); st[k] = t.value; st.loc = ''; render(); return; }
   if (d.f && (t.tagName === 'SELECT')) { S.nh[d.f] = t.value; render(); }
   if (d.f === 'phone' && S.nh) { S.nh.phone = t.value = fmtPhone(t.value); refreshPreview(); }
   if (d.show) { S.nh.show[d.show] = t.checked; refreshPreview(); }
@@ -542,9 +550,68 @@ PAGES.team = () => {
         '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="tm-add" data-ar-add="tm"' + (t.link && t.area && !t.busy ? '' : ' disabled') + '>' + (t.busy ? '<span class="spin"></span> Saving…' : 'Add area') + '</button></div></div>';
     }
     h += '</section>';
+    // newsletter / event calendar areas
+    h += '<section class="card"><div><h2>Newsletter areas</h2><div class="sub" style="font-size:14px">Their monthly newsletter / event calendar - one for each area, with that area’s local events. Changes are picked up by the next monthly run.</div></div>';
+    if (!t.data.nlReady) h += '<div class="err">The Newsletter Template board isn’t available. Ask West Marketing.</div>';
+    else {
+      h += p.nl.length ? '<div class="tm-areas">' + p.nl.map(a => '<div class="tm-area"><span class="grow"><b>' + esc(nlName(a.header)) + '</b>' + (a.location ? '<span class="small muted">' + esc(a.location) + '</span>' : '') + '</span>' +
+        '<button type="button" class="btn small" data-act="tm-nl-remove" data-id="' + esc(a.id) + '" data-label="' + esc(nlName(a.header)) + '"' + (t.busy ? ' disabled' : '') + '>Remove</button></div>').join('') + '</div>'
+        : '<div class="empty" style="padding:16px">No newsletter area yet, so they don’t get a newsletter.</div>';
+      h += nlForm('tm');
+    }
+    h += '</section>';
   }
   h += '</div></div>';
   return h;
+};
+// ---------- newsletter area form (My Team and New Hires) ----------
+const nlName = h => String(h || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\s+Events$/i, '');
+function nlfState(scope) {
+  if (scope === 'tm') { const t = tmState(); return t.nlf || (t.nlf = { header: '', other: '', loc: '' }); }
+  return S.nh.nlf || (S.nh.nlf = { header: '', other: '', loc: '' });
+}
+function nlOpts(scope) {
+  if (scope === 'tm') return (tmState().data && tmState().data.nlOptions) || [];
+  if (!S.nlOpts && !S.nlOptsLoading) { S.nlOptsLoading = true; api('nlareas').then(r => { S.nlOpts = r.options || []; }).catch(() => { S.nlOpts = []; }).finally(() => { S.nlOptsLoading = false; if (route() === 'newhire') render(); }); }
+  return S.nlOpts || [];
+}
+function nlForm(scope) {
+  const st = nlfState(scope), opts = nlOpts(scope), sel = opts.find(o => o.header === st.header);
+  const busy = scope === 'tm' && tmState().busy;
+  const ok = st.header === '__other' ? st.other.trim() : st.header;
+  return '<div class="tm-add"' + (scope === 'nh' ? ' style="border-top:none;padding-top:0"' : '') + '><h3>Add a newsletter area</h3><div class="grid2">' +
+    '<label class="field">Area<select data-nlf="' + scope + '.header"><option value="">' + (opts.length || scope === 'tm' ? 'Choose…' : 'Loading…') + '</option>' +
+      opts.map(o => '<option value="' + esc(o.header) + '"' + (o.header === st.header ? ' selected' : '') + '>' + esc(nlName(o.header)) + (o.location ? ' · ' + esc(o.location) : '') + '</option>').join('') +
+      '<option value="__other"' + (st.header === '__other' ? ' selected' : '') + '>A different area…</option></select></label>' +
+    (st.header === '__other' ? '<label class="field">Area name<input type="text" data-nlf="' + scope + '.other" value="' + esc(st.other) + '" placeholder="e.g. Temecula Valley"></label>' : '') +
+    '<label class="field">Town(s)<input type="text" data-nlf="' + scope + '.loc" value="' + esc(st.loc) + '" placeholder="' + esc(sel && sel.location ? sel.location : 'e.g. Temecula, Murrieta') + '"></label></div>' +
+    (st.header === '__other' ? '<div class="small muted">A new area gets its own local events, found by West Marketing for the next month.</div>' : '') +
+    '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="' + scope + '-nl-add"' + (ok && !busy ? '' : ' disabled') + '>' + (busy ? '<span class="spin"></span> Saving…' : 'Add newsletter area') + '</button></div></div>';
+}
+function nlPicked(scope) {
+  const st = nlfState(scope);
+  const header = (st.header === '__other' ? st.other.trim() + (/\bevents$/i.test(st.other.trim()) ? '' : ' Events') : st.header).toUpperCase();
+  return { header, location: st.loc.trim() };
+}
+ACT['nh-nl-add'] = () => {
+  const n = S.nh, a = nlPicked('nh'); if (!a.header.trim()) return;
+  if (n.nlAreas.some(x => x.header === a.header)) return toast('That area is already added.');
+  if (!a.location) { const o = (S.nlOpts || []).find(x => x.header === a.header); a.location = o ? o.location : ''; }
+  n.nlAreas.push(a); n.nlf = null; render();
+};
+ACT['nh-nl-del'] = el => { S.nh.nlAreas.splice(+el.dataset.i, 1); render(); };
+ACT['tm-nl-add'] = async () => {
+  const t = tmState(), a = nlPicked('tm'); if (!a.header.trim()) return;
+  t.busy = true; render();
+  try { const r = await api('nlarea', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'add', employee: t.sel, header: a.header, location: a.location }) }); tmUpdate(r.team); t.nlf = null; toast('Newsletter area added for ' + t.sel); }
+  catch (e) { toast(e.message, 6000); } finally { t.busy = false; render(); }
+};
+ACT['tm-nl-remove'] = async el => {
+  const t = tmState();
+  if (!confirm('Remove ' + el.dataset.label + ' from ' + t.sel + '’s newsletter areas?')) return;
+  t.busy = true; render();
+  try { const r = await api('nlarea', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'remove', employee: t.sel, id: el.dataset.id }) }); tmUpdate(r.team); toast('Removed ' + el.dataset.label); }
+  catch (e) { toast(e.message, 6000); } finally { t.busy = false; render(); }
 };
 function tmUpdate(person) {
   const t = tmState(); if (!t.data || !person) return;
@@ -557,7 +624,7 @@ async function tmChange(body, msg) {
   finally { t.busy = false; render(); }
 }
 ACT['tm-reload'] = () => { const t = tmState(); t.err = ''; t.data = null; render(); };
-ACT['tm-sel'] = el => { const t = tmState(); t.sel = el.dataset.name; t.link = ''; t.area = ''; t.label = ''; t.check = null; render(); };
+ACT['tm-sel'] = el => { const t = tmState(); t.sel = el.dataset.name; t.nlf = null; t.link = ''; t.area = ''; t.label = ''; t.check = null; render(); };
 ACT['tm-add'] = async () => {
   const t = tmState(), p = t.data.team.find(x => x.name === t.sel); if (!p) return;
   if (await tmChange({ op: 'add', employee: p.name, link: t.link.trim(), area: t.area.trim(), label: t.label.trim() || t.area.trim() }, 'Area added for ' + p.name)) { arClear(t); render(); }
