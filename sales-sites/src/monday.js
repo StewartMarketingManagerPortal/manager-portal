@@ -217,12 +217,14 @@ async function websiteContent(env, p, uids, files) {
     else ok = ((raw.person && raw.person.persons_and_teams) || []).some(x => mine.has(String(x.id)));
     if (!ok) return;
     const group = nk((it.group && it.group.title) + ' ' + (v.category || ''));
-    const link = ['template link', 'search website', 'link', 'website'].map(t => { try { return JSON.parse((raw[t] || {}).value || 'null'); } catch (e) { return null; } }).find(x => x && x.url);
+    // a link from the link columns (or any column holding a web address)
+    let link = ['template link', 'search website', 'link', 'website'].map(t => { try { return JSON.parse((raw[t] || {}).value || 'null'); } catch (e) { return null; } }).find(x => x && x.url);
+    if (!link) { const m = Object.values(v).join(' ').match(/https?:\/\/[^\s,]+/); if (m) link = { url: m[0] }; }
     const desc = v.description || v.notes || '';
     const as = (it.assets || []);
     const pdf = as.find(a => extOf(a) === 'pdf') || as[0];
     if (/tool/.test(group) || (!/document|form/.test(group) && link && !pdf)) {
-      if (link) out.tools.push({ title: tidy(it.name), url: link.url, desc, app: /\bapp\b/i.test(it.name) });
+      out.tools.push({ title: tidy(it.name), url: link ? link.url : '', desc, app: /\bapp\b/i.test(it.name) });
     } else if (pdf) {
       out.docs.push({ title: tidy(it.name), file: asset(pdf, it.name, files) });
     }

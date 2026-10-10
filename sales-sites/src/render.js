@@ -93,7 +93,7 @@ export function sitePage(site, data, origin, sent) {
   if (web.tools.length) {
     s += '<section class="sec" id="tools"><div class="wrap"><div><div class="kicker">For real estate agents</div><h2>Stewart tools</h2></div><div class="row c2">' +
       web.tools.map(t => '<div class="tool"><span class="ico">' + (t.app ? I.app : I.search) + '</span><div class="txt"><h3>' + esc(t.title) + '</h3>' +
-        (t.desc ? '<p>' + esc(t.desc) + '</p>' : '') + '</div><a class="btn sm" href="' + esc(t.url) + '" target="_blank" rel="noopener">' + (t.app ? 'Get the app' : 'Open') + '</a></div>').join('') +
+        (t.desc ? '<p>' + esc(t.desc) + '</p>' : '') + '</div>' + (t.url ? '<a class="btn sm" href="' + esc(t.url) + '" target="_blank" rel="noopener">' + (t.app ? 'Get the app' : 'Open') + '</a>' : '<a class="btn sm" href="#contact">Ask ' + esc(fn) + '</a>') + '</div>').join('') +
       '</div></div></section>';
   }
   if (web.docs.length) {
