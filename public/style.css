@@ -189,6 +189,8 @@ nav.side .install { white-space: nowrap; font-size: 12.5px; padding: 10px 8px; g
 .tm-n { font-size: 12px; font-weight: 700; color: var(--muted2); background: var(--pill); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
 .tm-n.none { color: var(--brand); background: var(--brand-tint); }
 .tm-n svg { width: 13px; height: 13px; flex: none; }
+.tm-n.full { color: #1E6B41; background: #E3F4EA; }
+.tm-n.part { color: #B4530A; background: #FFEAD5; }
 .tm-n { display: inline-flex; align-items: center; gap: 5px; }
 .tm-chips { display: flex; gap: 6px; flex: none; }
 .tm-key { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); padding-top: 10px; border-top: 1px solid var(--line); }

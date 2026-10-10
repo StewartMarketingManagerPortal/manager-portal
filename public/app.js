@@ -515,8 +515,8 @@ function tmList(t) {
   return list.map(p => { const n = p.areas.filter(a => a.active).length, nl = (p.nl || []).length;
     return '<button type="button" class="tm-row' + (p.name === t.sel ? ' on' : '') + '" data-act="tm-sel" data-name="' + esc(p.name) + '">' + (p.photo ? '<span class="av tm-ph"><img src="' + esc(p.photo) + '" alt="" loading="lazy"></span>' : '<span class="av">' + esc(initials(p.name)) + '</span>') +
       '<span class="grow"><b>' + esc(p.name) + '</b><span>' + esc(p.title || '') + '</span></span>' +
-      '<span class="tm-chips"><span class="tm-n' + (n ? '' : ' none') + '" title="' + plural(n, 'market update area') + '">' + TM_IC.market + n + '</span>' +
-      '<span class="tm-n' + (nl ? '' : ' none') + '" title="' + plural(nl, 'newsletter area') + '">' + TM_IC.news + nl + '</span></span></button>'; }).join('');
+      '<span class="tm-chips"><span class="tm-n' + (!n ? ' none' : n === 1 ? ' part' : ' full') + '" title="' + plural(n, 'market update area') + '">' + TM_IC.market + n + '</span>' +
+      '<span class="tm-n' + (nl ? ' full' : ' none') + '" title="' + plural(nl, 'newsletter area') + '">' + TM_IC.news + nl + '</span></span></button>'; }).join('');
 }
 PAGES.team = () => {
   const t = tmState();
