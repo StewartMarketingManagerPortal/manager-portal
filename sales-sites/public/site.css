@@ -76,6 +76,12 @@ svg { flex: none; }
 .card .name { font-size: 15px; font-weight: 700; line-height: 1.35; min-height: 2.7em; }
 .card .btn { margin-top: auto; }
 .card.hidden { display: none; }
+/* rows that slide sideways on every screen (title tips) */
+.row.slide { display: flex; overflow-x: auto; gap: 20px; padding: 4px 0 14px; scroll-snap-type: x mandatory; scrollbar-color: #8F8B86 transparent; }
+.row.slide::-webkit-scrollbar { height: 8px; }
+.row.slide::-webkit-scrollbar-thumb { background: #8F8B86; border-radius: 4px; }
+.row.slide .card { flex: 0 0 calc((100% - 60px) / 4); scroll-snap-align: start; }
+@media (max-width: 1100px) { .row.slide .card { flex-basis: calc((100% - 40px) / 3); } }
 .row.open .card.hidden { display: flex; }
 
 .shot { position: relative; display: block; width: 100%; aspect-ratio: 4 / 5; border-radius: 16px; overflow: hidden; background: #111; box-shadow: var(--shadow); }

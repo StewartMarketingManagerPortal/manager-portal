@@ -181,17 +181,27 @@ async function portalContent(env, name, files, ids) {
   }));
   out.market.sort((a, b) => (b.kind === 'video') - (a.kind === 'video') || a.title.localeCompare(b.title));
   // one card per row: show a picture (or the PDF's first page), download the PDF when there is one
-  const card = r => {
+  // one card per file in a row (a row can hold several tips or flyers); a picture and a PDF with the same
+  // name become one card that shows the picture and downloads the PDF
+  const cards = r => {
     const as = r.it.assets || [];
-    const show = as.find(a => kindOf(extOf(a)) === 'image') || as.find(a => extOf(a) === 'pdf');
-    if (!show) return null;
-    const dl = as.find(a => extOf(a) === 'pdf') || show;
-    const title = tidy(r.it.name.split(r.employee).join('').replace(/^\s*[-–]\s*|\s*[-–]\s*$/g, ''));
-    return { title, date: r.date, show: asset(show, title, files), dl: asset(dl, title, files) };
+    const groups = new Map();
+    as.forEach(a => { const k = nk(String(a.name).replace(/\.[a-z0-9]+$/i, '')); (groups.get(k) || groups.set(k, []).get(k)).push(a); });
+    const rowTitle = tidy(r.it.name.split(r.employee).join('').replace(/^\s*[-–]\s*|\s*[-–]\s*$/g, ''));
+    const out2 = [];
+    groups.forEach(g => {
+      const show = g.find(a => kindOf(extOf(a)) === 'image') || g.find(a => extOf(a) === 'pdf');
+      if (!show) return;
+      const dl = g.find(a => extOf(a) === 'pdf') || show;
+      const fileTitle = tidy(String(show.name).replace(/\.[a-z0-9]+$/i, '').split(r.employee).join('').replace(/^\s*[-–]\s*|\s*[-–]\s*$/g, ''));
+      const title = groups.size === 1 ? rowTitle || fileTitle : fileTitle || rowTitle;
+      out2.push({ title, date: r.date, created: show.created_at || '', show: asset(show, title, files), dl: asset(dl, title, files) });
+    });
+    return out2;
   };
-  const newest = (a, b) => String(b.date).localeCompare(String(a.date));
-  out.tips = rows.filter(r => /title tip/i.test(r.category)).sort(newest).map(card).filter(Boolean).slice(0, 8);
-  out.flyers = rows.filter(r => /flyer/i.test(r.category)).sort(newest).map(card).filter(Boolean);
+  const newest = (a, b) => String(b.date).localeCompare(String(a.date)) || String(b.created).localeCompare(String(a.created));
+  out.tips = rows.filter(r => /title tip/i.test(r.category)).flatMap(cards).sort(newest).slice(0, 16);
+  out.flyers = rows.filter(r => /flyer/i.test(r.category)).flatMap(cards).sort(newest);
   return out;
 }
 

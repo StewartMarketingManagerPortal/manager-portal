@@ -4,7 +4,7 @@ const digits = s => String(s || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, 
 export const prettyPhone = s => { const d = digits(s); return d.length === 10 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : String(s || ''); };
 const first = n => String(n || '').trim().split(/\s+/)[0];
 const initials = n => String(n || '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-const ASSET_V = '4';
+const ASSET_V = '5';
 
 const I = {
   phone: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>',
@@ -109,8 +109,8 @@ export function sitePage(site, data, origin, sent) {
       '</div></div></section>';
   }
   if (portal.tips.length) {
-    s += '<section class="sec" id="tips"><div class="wrap"><div><div class="kicker">Learn something new</div><h2>Title tips</h2></div><div class="row c4">' +
-      portal.tips.slice(0, 4).map(t => '<div class="card">' + (t.show.kind === 'image'
+    s += '<section class="sec" id="tips"><div class="wrap"><div><div class="kicker">Learn something new</div><h2>Title tips</h2></div><div class="row c4 slide">' +
+      portal.tips.map(t => '<div class="card">' + (t.show.kind === 'image'
         ? '<a class="shot" href="' + fileUrl(base, t.show) + '" target="_blank" rel="noopener"><img src="' + fileUrl(base, t.show) + '" alt="Title tip: ' + esc(t.title) + '" loading="lazy"></a>'
         : preview(base, t.show, t.title, 'page')) + '<span class="name">' + esc(t.title) + '</span>' + dlBtn(base, t.dl) + '</div>').join('') +
       '</div></div></section>';
