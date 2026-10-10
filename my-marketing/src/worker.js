@@ -113,7 +113,7 @@ async function session(request, env) {
 
 // ---------- content ----------
 const IMG = /^(png|jpe?g|gif|webp)$/i, VID = /^(mp4|mov|m4v|webm)$/i;
-const ORDER = ['market update', 'title tips', 'flyers', 'new hire', 'social media', 'holiday', 'happy anniversary', 'anniversary', 'newsletter', 'photos'];
+const ORDER = ['market update', 'newsletter', 'title tips', 'flyers', 'new hire', 'social media', 'holiday', 'happy anniversary', 'anniversary', 'photos'];
 
 // underscores (from file names) become spaces, and stray ones at the ends go away
 const tidy = s => String(s || '').replace(/_+/g, ' ').replace(/\s{2,}/g, ' ').replace(/^[\s\-–]+|[\s\-–]+$/g, '').trim();
@@ -159,7 +159,8 @@ async function content(env, s) {
   const categories = Object.values(cats).sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
   pieces.sort((a, b) => (b.isNew - a.isNew) || String(b.date).localeCompare(String(a.date)) || a.title.localeCompare(b.title));
   const week = pieces.filter(x => /market update/i.test(x.category));
-  return { name: s.name, categories, pieces, week, board: p.name };
+  const newsletter = pieces.filter(x => /newsletter|event calendar/i.test(x.category));
+  return { name: s.name, categories, pieces, week, newsletter, board: p.name };
 }
 
 // ---------- files: streamed through here so only the right person can open them ----------

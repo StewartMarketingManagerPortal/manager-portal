@@ -35,6 +35,7 @@ const I = {
   info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>',
   film: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>',
   refresh: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
+  cal: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>',
   x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
 };
 function catIcon(name) {
@@ -42,7 +43,8 @@ function catIcon(name) {
   if (/video|reel/.test(n)) return I.film;
   if (/market/.test(n)) return I.chart;
   if (/tip/.test(n)) return I.bulb;
-  if (/flyer|newsletter/.test(n)) return I.doc;
+  if (/newsletter|calendar/.test(n)) return I.cal;
+  if (/flyer/.test(n)) return I.doc;
   if (/photo|brand|new hire/.test(n)) return I.person;
   return I.star;
 }
@@ -135,12 +137,17 @@ async function load(fresh) {
   S.loading = false; render();
 }
 // shorter names for some categories on the site (the monday board keeps its own names)
-const NAMES = [[/photos? (and|&)? ?personal branding/, 'Personal Branding']];
+const NAMES = [[/photos? (and|&)? ?personal branding/, 'Personal Branding'], [/newsletter/, 'Newsletter']];
 function rename(d) {
   const fix = n => { const m = NAMES.find(([re]) => re.test(nk(n).replace(/ +/g, ' ')) || re.test(String(n).toLowerCase())); return m ? m[1] : n; };
   (d.categories || []).forEach(c => c.name = fix(c.name));
   (d.pieces || []).forEach(p => p.category = fix(p.category));
   (d.week || []).forEach(p => p.category = fix(p.category));
+  // newsletter pictures are named "November 2026 Newsletter - San Diego County": show the area, keep the month aside
+  const MRX = new RegExp('(' + MONTHS.join('|') + ')\\s+\\d{4}', 'i');
+  const nlFix = p => { if (p._nl) return; const m = String(p.title).match(MRX); p.month = m ? m[1] : ''; const a = String(p.title).replace(/^.*?newsletter\s*[-·]\s*/i, '').trim(); if (a && a !== p.title) p.title = a; p._nl = 1; };
+  (d.pieces || []).filter(p => /newsletter/i.test(p.category)).forEach(nlFix);
+  (d.newsletter || []).forEach(p => { p.category = fix(p.category); const same = (d.pieces || []).find(x => x.id === p.id); if (same) { p.title = same.title; p.month = same.month; } else nlFix(p); });
   return d;
 }
 const pieces = () => (S.data && S.data.pieces) || [];
@@ -232,6 +239,18 @@ function homeHtml() {
       (vid ? '<a class="btn block" href="#p/' + esc(vid.id) + '">Open the video</a>' : '') + '</div></div></div></section>';
   }
 
+  // this month's newsletter / event calendar (one picture per area)
+  const nl = S.data.newsletter || [];
+  if (nl.length) {
+    const m = (nl.find(p => p.month) || {}).month || '';
+    const areas = nl.map(p => p.title).filter(Boolean);
+    const nlNew = nl.some(p => p.isNew);
+    h += '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">Your ' + esc(m ? m + ' ' : '') + 'newsletter</h2>' + (nlNew ? '<span class="badge">NEW</span>' : '') + '</div>' +
+      '<div class="sub">Local events plus this month’s homeowner tips' + (areas.length ? ' · ' + esc(areas.join(', ')) : '') + '</div>' +
+      '<div class="strip wide">' + nl.map(cardWithDownload).join('') + '</div>' +
+      '<button class="btn primary" style="margin-top:12px" data-share-nl="1">' + I.share + 'Share the newsletter</button></div></section>';
+  }
+
   const cats = S.data.categories || [];
   if (cats.length) {
     h += '<section class="blk"><div class="wrap"><h2 class="h">Browse</h2><div class="tiles">' + cats.map(c =>
@@ -239,8 +258,8 @@ function homeHtml() {
       '<span class="c">' + c.count + ' piece' + (c.count === 1 ? '' : 's') + (c.newCount ? ' · <em>' + c.newCount + ' new</em>' : '') + '</span></a>').join('') + '</div></div></section>';
   }
 
-  const fresh = all.filter(p => p.isNew && !/market/i.test(p.category));
-  const latestCat = cats.find(c => !/market/i.test(c.name));
+  const fresh = all.filter(p => p.isNew && !/market|newsletter/i.test(p.category));
+  const latestCat = cats.find(c => !/market|newsletter/i.test(c.name));
   const row = fresh.length ? fresh : latestCat ? inCat(latestCat.name) : [];
   if (row.length) {
     h += '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">' + (fresh.length ? 'New for you' : 'Latest ' + esc(latestCat.name.toLowerCase())) + '</h2>' +
@@ -425,12 +444,13 @@ document.addEventListener('keydown', e => {
   if (t.dataset && t.dataset.d != null && e.key === 'Backspace' && !t.value) { const prev = document.querySelector('.digits input[data-d="' + (+t.dataset.d - 1) + '"]'); if (prev) { prev.focus(); prev.value = ''; } }
 });
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-act],[data-share],[data-share-week],[data-go],[data-filter],[data-jump]');
+  const el = e.target.closest('[data-act],[data-share],[data-share-week],[data-share-nl],[data-go],[data-filter],[data-jump]');
   if (!el) return;
   const d = el.dataset;
   if (d.jump) { e.preventDefault(); const s = document.getElementById(d.jump); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if (d.share) { e.preventDefault(); const p = byId(d.share); if (p) share([p]); return; }
   if (d.shareWeek) { e.preventDefault(); share((S.data.week || []).slice()); return; }
+  if (d.shareNl) { e.preventDefault(); share((S.data.newsletter || []).slice()); return; }
   if (d.go) { go('p/' + d.go); return; }
   if (d.filter) { S.filter = d.filter; render(); return; }
   if (d.act === 'refresh') { doRefresh(); return; }
