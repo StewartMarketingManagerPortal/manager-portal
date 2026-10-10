@@ -289,7 +289,7 @@ async function myTeam(env, me) {
   const out = team.map(p => ({ id: p.id, name: p.name, title: p.title, email: p.email, phone: p.phone, company: p.company, address1: p.address1, address2: p.address2,
     photo: photos[p.id] ? 'api/photo/' + p.id + '?v=' + photos[p.id].id : '',
     areas: areas.filter(a => nk(a.employee) === nk(p.name) && (a.area || a.link)).sort((x, y) => (x.label || x.area).localeCompare(y.label || y.area)),
-    nl: nlRows.filter(r => nk(r.name) === nk(p.name) && r.header).map(r => ({ id: r.id, header: r.header, location: r.location })).sort((x, y) => x.header.localeCompare(y.header)) }));
+    nl: nlRows.filter(r => nk(r.name) === nk(p.name) && r.header).map(r => ({ id: r.id, header: r.header, location: r.location, active: r.active })).sort((x, y) => x.header.localeCompare(y.header)) }));
   return { team: out, areasReady: !!b, nlReady: !!nb, nlOptions: nb ? nlOptionsFrom(nlRows) : [], altosSearch: ALTOS_SEARCH };
 }
 async function changeArea(env, me, body) {
@@ -386,15 +386,15 @@ async function nlBoard(env) {
   const cols = await columns(env, id);
   const c = t => cols.byTitle[nk(t)];
   if (!c('header')) return null;
-  return { id, cols, name: c('fullname'), header: c('header'), location: c('newsletter location') };
+  return { id, cols, name: c('fullname'), header: c('header'), location: c('newsletter location'), active: c('active') };
 }
 async function nlAll(env, b) {
   return cached('nl', 60e3, async () => {
-    const ids = [b.name, b.header, b.location].filter(Boolean).map(c => c.id);
+    const ids = [b.name, b.header, b.location, b.active].filter(Boolean).map(c => c.id);
     const items = await allItems(env, b.id, ids);
     return items.filter(it => !SKIP(it.name)).map(it => {
       const v = {}; it.column_values.forEach(cv => v[cv.id] = (cv.text || '').trim());
-      return { id: String(it.id), item: it.name, group: it.group && it.group.id, name: (b.name && v[b.name.id]) || it.name.trim(), header: (v[b.header.id] || '').toUpperCase(), location: b.location ? v[b.location.id] || '' : '' };
+      return { id: String(it.id), item: it.name, group: it.group && it.group.id, name: (b.name && v[b.name.id]) || it.name.trim(), header: (v[b.header.id] || '').toUpperCase(), location: b.location ? v[b.location.id] || '' : '', active: !b.active ? true : b.active.type === 'checkbox' ? !!v[b.active.id] : !/^n/i.test(v[b.active.id] || '') };
     });
   });
 }
@@ -429,10 +429,21 @@ async function changeNl(env, me, body) {
   if (body.op === 'add') {
     const r = await nlAdd(env, who, body.header, body.location, me.row.name);
     if (r.already) return { error: who.name + ' already has that area.' };
-  } else if (body.op === 'remove') {
+  } else if (body.op === 'remove' || body.op === 'active') {
     const row = (await nlAll(env, b)).find(r => r.id === String(body.id) && nk(r.name) === nk(who.name));
     if (!row) return { error: 'That area is no longer on ' + who.name + '’s list.' };
-    await gql(env, 'mutation($i:ID!){archive_item(item_id:$i){id}}', { i: row.id });
+    if (body.op === 'remove') await gql(env, 'mutation($i:ID!){archive_item(item_id:$i){id}}', { i: row.id });
+    else {
+      // on / off lives in an "Active" column (made the first time it's needed); off = skipped by the monthly run
+      let col = b.active;
+      if (!col) {
+        const d = await gql(env, 'mutation($b:ID!){create_column(board_id:$b,title:"Active",column_type:text){id title type}}', { b: String(b.id) });
+        col = Object.assign({ settings: {} }, d.create_column); forget('cols:' + b.id);
+      }
+      const v = {}; v[col.id] = col.type === 'checkbox' ? (body.active ? { checked: 'true' } : null) : colValue(col, body.active ? 'Yes' : 'No');
+      await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v,create_labels_if_missing:true){id}}', { b: String(b.id), i: row.id, v: JSON.stringify(v) });
+      await addUpdate(env, row.id, (body.active ? 'Turned back on' : 'Turned off') + ' by ' + escHtml(me.row.name) + ' in the Manager Portal ' + today()).catch(() => {});
+    }
   } else return { error: 'Unknown change.' };
   forget('nl');
   return { ok: true, team: (await myTeam(env, me)).team.find(p => p.id === who.id) };

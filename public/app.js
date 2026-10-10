@@ -512,7 +512,7 @@ function tmList(t) {
   const list = (t.data ? t.data.team : []).filter(p => !t.q || (p.name + ' ' + (p.title || '') + ' ' + (p.address2 || '')).toLowerCase().includes(t.q.toLowerCase()));
   if (!t.data) return '<div class="empty"><span class="spin dark"></span></div>';
   if (!list.length) return '<div class="empty">' + (t.data.team.length ? 'Nobody matches.' : 'No one is linked to your team yet. Ask West Marketing.') + '</div>';
-  return list.map(p => { const n = p.areas.filter(a => a.active).length, nl = (p.nl || []).length;
+  return list.map(p => { const n = p.areas.filter(a => a.active).length, nl = (p.nl || []).filter(a => a.active !== false).length;
     return '<button type="button" class="tm-row' + (p.name === t.sel ? ' on' : '') + '" data-act="tm-sel" data-name="' + esc(p.name) + '">' + (p.photo ? '<span class="av tm-ph"><img src="' + esc(p.photo) + '" alt="" loading="lazy"></span>' : '<span class="av">' + esc(initials(p.name)) + '</span>') +
       '<span class="grow"><b>' + esc(p.name) + '</b><span>' + esc(p.title || '') + '</span></span>' +
       '<span class="tm-chips"><span class="tm-n' + (!n ? ' none' : n === 1 ? ' part' : ' full') + '" title="' + plural(n, 'market update area') + '">' + TM_IC.market + n + '</span>' +
@@ -559,7 +559,8 @@ PAGES.team = () => {
     h += '<section class="card"><div><h2>Newsletter areas</h2><div class="sub" style="font-size:14px">Their monthly newsletter / event calendar - one for each area, with that area’s local events. Changes are picked up by the next monthly run.</div></div>';
     if (!t.data.nlReady) h += '<div class="err">The Newsletter Template board isn’t available. Ask West Marketing.</div>';
     else {
-      h += p.nl.length ? '<div class="tm-areas">' + p.nl.map(a => '<div class="tm-area"><span class="grow"><b>' + esc(nlName(a.header)) + '</b>' + (a.location ? '<span class="small muted">' + esc(a.location) + '</span>' : '') + '</span>' +
+      h += p.nl.length ? '<div class="tm-areas">' + p.nl.map(a => '<div class="tm-area' + (a.active ? '' : ' off') + '"><span class="grow"><b>' + esc(nlName(a.header)) + '</b>' + (a.location ? '<span class="small muted">' + esc(a.location) + '</span>' : '') + (a.active ? '' : '<span class="tm-off">Off</span>') + '</span>' +
+        '<label class="tm-switch" title="' + (a.active ? 'Turn off (skipped in the monthly run)' : 'Turn back on') + '"><input type="checkbox" data-act="tm-nl-active" data-id="' + esc(a.id) + '"' + (a.active ? ' checked' : '') + (t.busy ? ' disabled' : '') + '><i></i>' + (a.active ? 'On' : 'Off') + '</label>' +
         '<button type="button" class="btn small" data-act="tm-nl-remove" data-id="' + esc(a.id) + '" data-label="' + esc(nlName(a.header)) + '"' + (t.busy ? ' disabled' : '') + '>Remove</button></div>').join('') + '</div>'
         : '<div class="empty" style="padding:16px">No newsletter area yet, so they don’t get a newsletter.</div>';
       h += nlForm('tm');
@@ -609,6 +610,12 @@ ACT['tm-nl-add'] = async () => {
   const t = tmState(), a = nlPicked('tm'); if (!a.header.trim()) return;
   t.busy = true; render();
   try { const r = await api('nlarea', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'add', employee: t.sel, header: a.header, location: a.location }) }); tmUpdate(r.team); t.nlf = null; toast('Newsletter area added for ' + t.sel); }
+  catch (e) { toast(e.message, 6000); } finally { t.busy = false; render(); }
+};
+ACT['tm-nl-active'] = async el => {
+  const t = tmState(), on = el.checked;
+  t.busy = true; render();
+  try { const r = await api('nlarea', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'active', employee: t.sel, id: el.dataset.id, active: on }) }); tmUpdate(r.team); toast(on ? 'Turned on' : 'Turned off - skipped until you turn it back on'); }
   catch (e) { toast(e.message, 6000); } finally { t.busy = false; render(); }
 };
 ACT['tm-nl-remove'] = async el => {
