@@ -29,6 +29,7 @@ export async function onRequest(ctx) {
     if (route === 'requests' && m === 'POST') return json(await submitRequest(env, me, await request.formData()));
     if (route === 'newhire' && m === 'POST') return json(await submitNewHire(env, me, await request.formData()));
     if (route === 'team' && m === 'GET') return json(await myTeam(env, me));
+    if (route.startsWith('photo/') && m === 'GET') return await teamPhoto(env, me, route.split('/')[1]);
     if (route === 'areas' && m === 'POST') { const r = await changeArea(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'altos' && m === 'POST') return json(await checkAltos((await request.json()).link));
     if (route === 'proof' && m === 'POST') { const r = await answerProof(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
@@ -264,7 +265,9 @@ async function myTeam(env, me) {
   const team = teamOf(me).slice().sort((a, b) => a.name.localeCompare(b.name));
   const b = await areasBoard(env);
   const areas = b ? await allAreas(env, b) : [];
+  const photos = await headshots(env, team.map(p => p.id)).catch(() => ({}));
   const out = team.map(p => ({ id: p.id, name: p.name, title: p.title, email: p.email, phone: p.phone, company: p.company, address1: p.address1, address2: p.address2,
+    photo: photos[p.id] ? 'api/photo/' + p.id + '?v=' + photos[p.id].id : '',
     areas: areas.filter(a => nk(a.employee) === nk(p.name) && (a.area || a.link)).sort((x, y) => (x.label || x.area).localeCompare(y.label || y.area)) }));
   return { team: out, areasReady: !!b, altosSearch: ALTOS_SEARCH };
 }
@@ -318,4 +321,38 @@ async function checkAltos(link) {
     const city = (loc.city || '').replace(/\b(\w)(\w*)/g, (a, b, c) => b + c.toLowerCase());
     return { ok: true, location: params.displayNameWithZip || loc.displayName || '', city, zip: loc.zip || '' };
   } catch (e) { return { ok: false, error: 'Couldn’t reach Altos to check the link.' }; }
+}
+
+// ---------- headshots: the cut-out copies the Marketing Tools app puts in the "Headshot Cutout" column ----------
+async function headshots(env, ids) {
+  const eb = await bid(env, 'employees');
+  const ec = await columns(env, eb);
+  const col = ec.byTitle[nk('Headshot Cutout')];
+  if (!col || !ids.length) return {};
+  const key = 'shots:' + ids.slice().sort().join(',').slice(0, 2000);
+  return cached(key, 40 * 60e3, async () => {
+    const out = {};
+    for (let i = 0; i < ids.length; i += 100) {
+      const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i,limit:100){id assets(column_ids:$c){id public_url created_at}}}', { i: ids.slice(i, i + 100).map(String), c: [col.id] });
+      (d.items || []).forEach(it => { const a = (it.assets || []).slice().sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0]; if (a) out[String(it.id)] = { id: String(a.id), url: a.public_url }; });
+    }
+    return out;
+  });
+}
+async function teamPhoto(env, me, id) {
+  id = String(id || '').replace(/\D/g, '');
+  if (!teamOf(me).some(p => String(p.id) === id) && !(me.row.self && String(me.row.self.id) === id)) return fail('Not found', 404);
+  const cache = caches.default;
+  let shots = await headshots(env, [id]);
+  if (!shots[id]) return fail('No headshot', 404);
+  const ck2 = new Request('https://manager-portal.cache/headshot/' + shots[id].id);
+  const hit = await cache.match(ck2);
+  const head = { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+  if (hit) return new Response(hit.body, { headers: head });
+  let r = await fetch(shots[id].url);
+  if (!r.ok) { forget('shots:' + id); shots = await headshots(env, [id]); if (!shots[id]) return fail('No headshot', 404); r = await fetch(shots[id].url); }
+  if (!r.ok) return fail('Could not load the headshot', 502);
+  const buf = await r.arrayBuffer();
+  try { await cache.put(ck2, new Response(buf, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
+  return new Response(buf, { headers: head });
 }

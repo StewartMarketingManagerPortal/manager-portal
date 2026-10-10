@@ -215,3 +215,36 @@ nav.side .install { white-space: nowrap; font-size: 12.5px; padding: 10px 8px; g
 .okbox { background: #E3F1E8; color: var(--green-text, #1B6B3C); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
 @media (max-width: 900px) { .tm { flex-direction: column; } .tm-side { flex: none; max-width: none; width: 100%; position: static; max-height: 360px; } }
 .err { background: var(--brand-tint); color: var(--problem); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.5; }
+
+/* contact block (like the one on their flyers) */
+.av.tm-ph { overflow: hidden; background: #E9E6E1; align-items: flex-end; }
+.av.tm-ph img { width: 115%; height: auto; display: block; margin-bottom: -18%; }
+.cblk { background: var(--card); border-radius: 18px; overflow: hidden; display: flex; flex-wrap: wrap; box-shadow: 0 6px 20px rgba(26,26,28,0.06); }
+.cblk-pic { flex: 0 0 250px; background: #ECE9E4; display: flex; align-items: flex-end; justify-content: center; min-height: 290px; padding-top: 18px; box-sizing: border-box; }
+.cblk-pic img { height: 272px; width: auto; max-width: 100%; object-fit: contain; object-position: bottom; display: block; }
+.cblk-ini { align-self: center; width: 120px; height: 120px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 40px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.cblk-txt { flex: 1 1 320px; min-width: 0; padding: 30px 34px 26px; display: flex; flex-direction: column; gap: 4px; position: relative; }
+.cblk-name { font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
+.cblk-title { font-size: 18px; font-weight: 500; color: #3A3836; }
+.cblk-co { font-size: 19px; font-weight: 800; margin-top: 12px; }
+.cblk-lines { display: flex; flex-direction: column; gap: 9px; margin: 10px 0 40px; font-size: 16px; font-weight: 500; }
+.cblk-lines a, .cblk-lines div { display: flex; align-items: flex-start; gap: 12px; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; line-height: 1.45; }
+.cblk-lines a:hover { color: var(--brand); }
+.cblk-lines svg { flex: none; margin-top: 1px; }
+.cblk-logo { width: 120px; height: auto; position: absolute; right: 30px; bottom: 24px; }
+@media (max-width: 700px) { .cblk-pic { flex-basis: 100%; min-height: 240px; } .cblk-pic img { height: 230px; } }
+
+/* the new hire live preview: the contact block, sized for the side panel */
+.cblock:has(.cblk.mini) { padding: 0; background: transparent; display: block; }
+.cblk.mini { box-shadow: none; border-radius: 12px; }
+.cblk.mini .cblk-pic { flex: 0 0 100%; min-height: 0; height: 170px; padding-top: 10px; }
+.cblk.mini .cblk-pic img { height: 160px; }
+.cblk.mini .cblk-pic img.raw { height: 160px; width: 160px; object-fit: cover; object-position: top; border-radius: 10px 10px 0 0; }
+.cblk.mini .cblk-ini { width: 84px; height: 84px; font-size: 28px; }
+.cblk.mini .cblk-txt { flex-basis: 100%; padding: 16px 18px 18px; gap: 2px; }
+.cblk.mini .cblk-name { font-size: 19px; }
+.cblk.mini .cblk-title { font-size: 14px; }
+.cblk.mini .cblk-co { font-size: 14px; margin-top: 8px; }
+.cblk.mini .cblk-lines { font-size: 13px; gap: 6px; margin: 6px 0 34px; }
+.cblk.mini .cblk-lines svg { width: 16px; height: 16px; }
+.cblk.mini .cblk-logo { width: 90px; right: 18px; bottom: 14px; }

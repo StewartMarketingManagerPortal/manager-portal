@@ -43,6 +43,13 @@ async function api(path, opts) {
   return j;
 }
 
+// red icons used in the contact blocks (same as on the flyers)
+const CB_ICONS = {
+  phone: '<svg width="20" height="20" viewBox="0 0 24 24" fill="#A30C33" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>',
+  mail: '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4.5" width="20" height="15" rx="1.5" fill="#A30C33"/><path d="M3 6l9 7 9-7" fill="none" stroke="#FFFFFF" stroke-width="1.6"/></svg>',
+  pin: '<svg width="20" height="20" viewBox="0 0 24 24" fill="#A30C33" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>',
+};
+
 // ---------- state ----------
 const S = { me: null, reqs: null, busy: false, nh: null, rq: null, last: null };
 function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title Guaranty Company', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], areaInput: '', looks: ['Modern Dark'], notes: '' }; }
@@ -179,10 +186,20 @@ function cutNote(n) {
   if (n.cutState === 'failed') return 'We couldn’t preview the cutout here, but marketing removes the background for you.';
   return 'Head and shoulders inside the guide. We remove the background for you.';
 }
+// the live preview: the same contact block the flyers (and My Team) use
 function cblock(n) {
-  return (n.photoUrl && n.show.headshot ? '<img class="av" src="' + n.photoUrl + '" alt="">' : '<span class="av">' + esc(initials(n.firstName + ' ' + n.lastName) || '?') + '</span>') +
-    '<div class="tx"><div class="nm">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</div><div class="tl">' + esc(nhTitle(n) || 'Title') + '</div><div>' + esc(n.company) + '</div>' +
-    (n.show.phone && n.phone ? '<div class="muted2">' + esc(fmtPhone(n.phone)) + '</div>' : '') + (n.show.email && n.email ? '<div class="muted2">' + esc(n.email) + '</div>' : '') + '</div>';
+  const name = (n.firstName + ' ' + n.lastName).trim();
+  const pic = n.show.headshot && n.cutUrl ? '<img src="' + n.cutUrl + '" alt="">' : n.show.headshot && n.photoUrl ? '<img class="raw" src="' + n.photoUrl + '" alt="">'
+    : '<span class="cblk-ini">' + esc(initials(name) || '?') + '</span>';
+  const ad = n.show.address ? nhAddress(n) : { address1: '', address2: '' };
+  const addr = [ad.address1, ad.address2].filter(Boolean).map(esc).join('<br>');
+  return '<div class="cblk mini"><div class="cblk-pic">' + pic + '</div><div class="cblk-txt">' +
+    '<div class="cblk-name">' + esc(name || 'Their name') + '</div><div class="cblk-title">' + esc(nhTitle(n) || 'Title') + '</div>' +
+    (n.company ? '<div class="cblk-co">' + esc(n.company) + '</div>' : '') + '<div class="cblk-lines">' +
+    (n.show.phone && n.phone ? '<div>' + CB_ICONS.phone + '<span>' + esc(fmtPhone(n.phone)) + '</span></div>' : '') +
+    (n.show.email && n.email ? '<div>' + CB_ICONS.mail + '<span>' + esc(n.email) + '</span></div>' : '') +
+    (addr ? '<div>' + CB_ICONS.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
+    '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></div>';
 }
 // (916) 555-0142 however it was typed; anything that isn't a 10-digit US number is left as typed
 function fmtPhone(v) { const d = String(v || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, ''); return d.length === 10 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : String(v || ''); }
@@ -419,7 +436,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => {
   const t = e.target, d = t.dataset;
-  if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther/.test(d.f)) refreshPreview(); }
+  if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther|address1|address2/.test(d.f)) refreshPreview(); }
   if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); if (d.r === 'needBy') updateSummaryDate(); }
   if (d.tm) {
     const t = tmState(); t[d.tm] = e.target.value;
@@ -442,7 +459,7 @@ document.addEventListener('change', e => {
     // preview cutout in the background; only the headshot box is redrawn, so typing elsewhere isn't disturbed
     Cutout.make(f).then(url => { if (n.photo !== f) return URL.revokeObjectURL(url); n.cutUrl = url; n.cutState = 'done'; })
       .catch(() => { if (n.photo === f) n.cutState = 'failed'; })
-      .finally(() => { const h = document.getElementById('headshot'), c = document.getElementById('cutnote'); if (h) h.innerHTML = headshotBox(n); if (c) c.innerHTML = cutNote(n); if (route() === 'newhire' && n.step > 1) render(); });
+      .finally(() => { const h = document.getElementById('headshot'), c = document.getElementById('cutnote'); if (h) h.innerHTML = headshotBox(n); if (c) c.innerHTML = cutNote(n); refreshPreview(); if (route() === 'newhire' && n.step > 1) render(); });
   }
   if (d.files) { addFiles(d.files, t.files); }
 });
@@ -475,7 +492,7 @@ function tmList(t) {
   if (!t.data) return '<div class="empty"><span class="spin dark"></span></div>';
   if (!list.length) return '<div class="empty">' + (t.data.team.length ? 'Nobody matches.' : 'No one is linked to your team yet. Ask West Marketing.') + '</div>';
   return list.map(p => { const n = p.areas.filter(a => a.active).length;
-    return '<button type="button" class="tm-row' + (p.name === t.sel ? ' on' : '') + '" data-act="tm-sel" data-name="' + esc(p.name) + '"><span class="av">' + esc(initials(p.name)) + '</span>' +
+    return '<button type="button" class="tm-row' + (p.name === t.sel ? ' on' : '') + '" data-act="tm-sel" data-name="' + esc(p.name) + '">' + (p.photo ? '<span class="av tm-ph"><img src="' + esc(p.photo) + '" alt="" loading="lazy"></span>' : '<span class="av">' + esc(initials(p.name)) + '</span>') +
       '<span class="grow"><b>' + esc(p.name) + '</b><span>' + esc(p.title || '') + '</span></span>' + (n ? '<span class="tm-n">' + plural(n, 'area') + '</span>' : '<span class="tm-n none">no areas</span>') + '</button>'; }).join('');
 }
 PAGES.team = () => {
@@ -490,10 +507,16 @@ PAGES.team = () => {
   h += '<div class="tm-main">';
   if (!p) h += '<section class="card"><div class="empty">' + (t.data ? 'Pick someone on the left.' : '<span class="spin dark"></span>') + '</div></section>';
   else {
-    const line = (k, v, href) => '<div class="tm-line"><span>' + k + '</span><b>' + (v ? (href ? '<a href="' + href + '">' + esc(v) + '</a>' : esc(v)) : '<span class="muted">—</span>') + '</b></div>';
-    h += '<section class="card"><div class="row" style="gap:18px;flex-wrap:nowrap"><span class="av tm-big">' + esc(initials(p.name)) + '</span><div><div style="font-size:24px;font-weight:800">' + esc(p.name) + '</div><div class="muted2">' + esc(p.title || '') + '</div></div></div>' +
-      '<div class="tm-lines">' + line('Phone', p.phone, p.phone ? 'tel:' + p.phone.replace(/[^\d+]/g, '') : '') + line('Email', p.email, p.email ? 'mailto:' + p.email : '') + line('Company', p.company) +
-      line('Office', [p.address1, p.address2].filter(Boolean).join(', ')) + '</div></section>';
+    // their contact block, laid out like the one on their flyers
+    const I = CB_ICONS;
+    const addr = [p.address1, p.address2].filter(Boolean).map(esc).join('<br>');
+    h += '<section class="cblk"><div class="cblk-pic">' + (p.photo ? '<img src="' + esc(p.photo) + '" alt="' + esc(p.name) + '">' : '<span class="cblk-ini">' + esc(initials(p.name)) + '</span>') + '</div>' +
+      '<div class="cblk-txt"><div class="cblk-name">' + esc(p.name) + '</div>' + (p.title ? '<div class="cblk-title">' + esc(p.title) + '</div>' : '') +
+      (p.company ? '<div class="cblk-co">' + esc(p.company) + '</div>' : '') + '<div class="cblk-lines">' +
+      (p.phone ? '<a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + I.phone + esc(p.phone) + '</a>' : '') +
+      (p.email ? '<a href="mailto:' + esc(p.email) + '">' + I.mail + esc(p.email) + '</a>' : '') +
+      (addr ? '<div>' + I.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
+      '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
     // market areas
     const ready = t.data.areasReady;
     h += '<section class="card"><div><h2>Market update areas</h2><div class="sub" style="font-size:14px">Each area gets its own weekly market snapshot graphic. Changes are picked up by the next weekly run.</div></div>';
