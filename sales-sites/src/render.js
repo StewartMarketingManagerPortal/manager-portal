@@ -151,14 +151,16 @@ export function teamPage(site, data, origin) {
     '<div class="eyebrow">' + esc(p.name) + (p.title ? ' · ' + esc(p.title) : '') + '</div><h1>Meet my team</h1>' +
     '<p>The people behind every closing. Reach any of us directly — we’re here to help you and your clients.</p></div>' +
     '<div class="side">' + popout(p, 'sm') + '</div></div></section>';
-  s += '<section class="people"><div class="wrap"><div class="row">' + team.map(m => {
+  // only people with a headshot, at most 8 (two rows of four)
+  const shown = team.filter(m => m.photo).slice(0, 8);
+  s += '<section class="people"><div class="wrap"><div class="row">' + shown.map(m => {
     const tel = digits(m.phone);
     return '<div class="member"><span class="ph">' + (m.photo ? '<img src="' + m.photo + '" alt="" loading="lazy">' : '<span class="initials">' + esc(initials(m.name)) + '</span>') + '</span>' +
       '<div class="body"><b>' + esc(m.name) + '</b>' + (m.title ? '<span class="t">' + esc(m.title) + '</span>' : '') +
       '<div class="btns">' + (tel ? '<a class="btn xs" href="tel:' + tel + '" aria-label="Call ' + esc(m.name) + '">Call</a>' : '') +
       (m.email ? '<a class="btn xs line" href="mailto:' + esc(m.email) + '" aria-label="Email ' + esc(m.name) + '">Email</a>' : '') + '</div></div></div>';
   }).join('') +
-    '<div class="member ask"><b>Not sure who to call?</b>Reach out to ' + esc(fn) + ' and ' + 'they’ll connect you with the right person.<a class="btn xs" href="' + base + '#contact" style="margin-top:4px">Contact ' + esc(fn) + '</a></div>' +
+    (shown.length >= 8 ? '' : '<div class="member ask"><b>Not sure who to call?</b>Reach out to ' + esc(fn) + ' and ' + 'they’ll connect you with the right person.<a class="btn xs" href="' + base + '#contact" style="margin-top:4px">Contact ' + esc(fn) + '</a></div>') +
     '</div></div></section></main>';
   s += footer(p, base, true);
   return shell({ title: 'Meet my team · ' + p.name, desc: 'Meet ' + p.name + '’s team at ' + (p.company || 'Stewart Title') + '.', body: s, bodyClass: 'team', url: origin + base + '/team' });
