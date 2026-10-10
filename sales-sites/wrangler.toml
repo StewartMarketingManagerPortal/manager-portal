@@ -1,0 +1,22 @@
+name = "stewart-west"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+# keep variables and secrets set in the Cloudflare dashboard (MONDAY_TOKEN) when deploying
+keep_vars = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# pages are built by the worker; only real files in public/ (styles, logos, photos) are served directly
+
+# contact-form spam limits live here (free on the Workers Free plan)
+[[durable_objects.bindings]]
+name = "LIMITS"
+class_name = "Limits"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Limits"]
+
+[observability]
+enabled = true
