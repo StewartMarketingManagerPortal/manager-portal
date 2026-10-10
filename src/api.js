@@ -7,6 +7,7 @@ const BOARDS = {
   managers: ['Manager Contacts', 'MANAGERS_BOARD_ID'],
   employees: ['Main Employee Sheet', 'EMPLOYEES_BOARD_ID'],
   requests: ['Marketing Request', 'REQUESTS_BOARD_ID'],
+  areas: ['Market Areas', 'AREAS_BOARD_ID'],
 };
 const bid = (env, k) => boardId(env, BOARDS[k][0], BOARDS[k][1]);
 const json = (data, status) => new Response(JSON.stringify(data), { status: status || 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -27,6 +28,9 @@ export async function onRequest(ctx) {
     if (route === 'requests' && m === 'GET') return json(await myRequests(env, me));
     if (route === 'requests' && m === 'POST') return json(await submitRequest(env, me, await request.formData()));
     if (route === 'newhire' && m === 'POST') return json(await submitNewHire(env, me, await request.formData()));
+    if (route === 'team' && m === 'GET') return json(await myTeam(env, me));
+    if (route === 'areas' && m === 'POST') { const r = await changeArea(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
+    if (route === 'altos' && m === 'POST') return json(await checkAltos((await request.json()).link));
     if (route === 'proof' && m === 'POST') { const r = await answerProof(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
@@ -230,4 +234,88 @@ async function submitNewHire(env, me, fd) {
   } catch (e) {}
   forget('dir');
   return { ok: true, id: itemId, name };
+}
+
+// ---------- My Team: the manager's team (view only) and their market update areas ----------
+// The areas live on the "Market Areas" board, which the Marketing Tools app on Kevin's Mac keeps in step with
+// Market Areas.csv - the list the weekly market update reads.
+const AREA_COLS = ['Employee', 'Area', 'Location Label', 'Altos Link', 'Active', 'Notes'];
+export const ALTOS_SEARCH = 'https://altos.re/r/6a599414-73b5-40dd-a2ca-ab394e0b984d';
+async function areasBoard(env) {
+  const id = await cached('areasBoard', 300e3, async () => { try { return await bid(env, 'areas'); } catch (e) { return ''; } });
+  if (!id) return null;
+  const cols = await columns(env, id);
+  const col = {}; AREA_COLS.forEach(t => { const c = cols.byTitle[nk(t)]; if (c) col[t] = c.id; });
+  if (AREA_COLS.some(t => !col[t])) return null;
+  return { id, col };
+}
+async function allAreas(env, b) {
+  return cached('areas', 60e3, async () => {
+    const items = await allItems(env, b.id, Object.values(b.col));
+    const title = {}; Object.keys(b.col).forEach(t => title[b.col[t]] = t);
+    return items.map(it => {
+      const o = { id: String(it.id) };
+      it.column_values.forEach(cv => { if (title[cv.id]) o[title[cv.id]] = (cv.text || '').trim(); });
+      return { id: o.id, employee: o.Employee || '', area: o.Area || '', label: o['Location Label'] || '', link: o['Altos Link'] || '', active: !/^n/i.test(o.Active || 'Yes'), notes: o.Notes || '' };
+    });
+  });
+}
+async function myTeam(env, me) {
+  const team = teamOf(me).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const b = await areasBoard(env);
+  const areas = b ? await allAreas(env, b) : [];
+  const out = team.map(p => ({ id: p.id, name: p.name, title: p.title, email: p.email, phone: p.phone, company: p.company, address1: p.address1, address2: p.address2,
+    areas: areas.filter(a => nk(a.employee) === nk(p.name) && (a.area || a.link)).sort((x, y) => (x.label || x.area).localeCompare(y.label || y.area)) }));
+  return { team: out, areasReady: !!b, altosSearch: ALTOS_SEARCH };
+}
+async function changeArea(env, me, body) {
+  const who = teamOf(me).find(p => nk(p.name) === nk(body.employee));
+  if (!who) return { error: 'You can only change areas for people on your team.' };
+  const b = await areasBoard(env);
+  if (!b) throw new Error('The Market Areas board isn’t set up yet. Ask West Marketing.');
+  forget('areas');
+  const areas = await allAreas(env, b);
+  const mine = areas.filter(a => nk(a.employee) === nk(who.name));
+  const when = today(), by = me.row.name;
+  const setVals = async (itemId, vals) => {
+    const v = {}; Object.keys(vals).forEach(t => v[b.col[t]] = String(vals[t]));
+    await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: String(itemId), v: JSON.stringify(v) });
+  };
+  if (body.op === 'add') {
+    const link = String(body.link || '').trim(), area = String(body.area || '').trim(), label = String(body.label || '').trim() || area;
+    if (!/^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i.test(link)) return { error: 'Paste an Altos report link (it starts with https://altos.re/r/…).' };
+    if (!area) return { error: 'Add the city or zip code.' };
+    if (mine.some(a => a.link === link)) return { error: who.name + ' already has that link.' };
+    for (const a of mine.filter(a => !a.area && !a.link)) await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: a.id });   // the empty "Needs areas" row
+    const v = {}; v[b.col.Employee] = who.name; v[b.col.Area] = area; v[b.col['Location Label']] = label; v[b.col['Altos Link']] = link; v[b.col.Active] = 'Yes';
+    v[b.col.Notes] = 'Added by ' + by + ' in the Manager Portal ' + when;
+    await createItem(env, b.id, null, who.name + ' - ' + area, v);
+  } else {
+    const a = mine.find(x => x.id === String(body.id));
+    if (!a) return { error: 'That area is no longer on ' + who.name + '’s list.' };
+    if (body.op === 'remove') await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: a.id });
+    else if (body.op === 'active') await setVals(a.id, { Active: body.active ? 'Yes' : 'No', Notes: (body.active ? 'Turned back on' : 'Turned off') + ' by ' + by + ' in the Manager Portal ' + when });
+    else return { error: 'Unknown change.' };
+  }
+  forget('areas');
+  return { ok: true, team: (await myTeam(env, me)).team.find(p => p.id === who.id) };
+}
+// reads an Altos report link to show which place it is (best effort - Altos may not always answer)
+async function checkAltos(link) {
+  link = String(link || '').trim();
+  if (!/^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i.test(link)) return { ok: false, error: 'That doesn’t look like an Altos report link.' };
+  try {
+    const r = await fetch(link, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', Accept: 'text/html' } });
+    const html = await r.text();
+    const m = html.match(/<script[^>]*application\/json[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) return { ok: false, error: 'Couldn’t read that report. Check the link opens in your browser.' };
+    const dec = m[1].replace(/&q;/g, '"').replace(/&s;/g, "'").replace(/&l;/g, '<').replace(/&g;/g, '>').replace(/&a;/g, '&');
+    const j = JSON.parse(dec);
+    let params = j.reportParameters || null;
+    if (!params) Object.keys(j).forEach(k => { const v = j[k]; if (v && v.u && /\/settings\?/.test(v.u)) params = v.b; });
+    if (!params || !params.report) return { ok: false, error: 'That report wasn’t found (the link may have expired).' };
+    const loc = params.report.location || {};
+    const city = (loc.city || '').replace(/\b(\w)(\w*)/g, (a, b, c) => b + c.toLowerCase());
+    return { ok: true, location: params.displayNameWithZip || loc.displayName || '', city, zip: loc.zip || '' };
+  } catch (e) { return { ok: false, error: 'Couldn’t reach Altos to check the link.' }; }
 }

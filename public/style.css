@@ -175,3 +175,43 @@ nav.side .install:hover { border-color: #fff; }
 .inst ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.5; color: #3A3836; }
 .inst .btn { align-self: stretch; margin-top: 6px; }
 nav.side .install { white-space: nowrap; font-size: 12.5px; padding: 10px 8px; gap: 6px; letter-spacing: -0.005em; } nav.side .install svg { flex: none; }
+
+/* ---------- my team ---------- */
+.tm { display: flex; gap: 20px; align-items: flex-start; }
+.tm-side { flex: 0 0 320px; max-width: 320px; padding: 18px; gap: 12px; position: sticky; top: 20px; max-height: calc(100vh - 140px); }
+.tm-list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.tm-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: none; background: transparent; padding: 8px; border-radius: 10px; font: inherit; color: var(--ink); cursor: pointer; min-height: 52px; }
+.tm-row:hover { background: #F7F6F4; }
+.tm-row.on { background: var(--brand-tint); }
+.tm-row .grow { min-width: 0; }
+.tm-row b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-row .grow span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-n { font-size: 12px; font-weight: 700; color: var(--muted2); background: var(--pill); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.tm-n.none { color: var(--brand); background: var(--brand-tint); }
+.tm-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.av.tm-big { width: 64px; height: 64px; font-size: 22px; background: var(--brand); color: #fff; }
+.tm-lines { display: flex; flex-direction: column; }
+.tm-line { display: flex; gap: 16px; padding: 11px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.tm-line span { width: 110px; flex: none; color: var(--muted); }
+.tm-line b { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.tm-areas { display: flex; flex-direction: column; }
+.tm-area { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.tm-area:first-child { border-top: none; }
+.tm-area .grow { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.tm-area b { font-size: 15px; }
+.tm-area .small { font-size: 13px; font-weight: 600; }
+.tm-area.off b { color: var(--muted); }
+.tm-off { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted2); background: var(--pill); border-radius: 6px; padding: 2px 7px; }
+.tm-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted2); cursor: pointer; }
+.tm-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.tm-switch i { width: 40px; height: 24px; border-radius: 999px; background: #CFCBC5; position: relative; transition: background .15s; }
+.tm-switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.tm-switch input:checked + i { background: var(--green); }
+.tm-switch input:checked + i::after { left: 19px; }
+.tm-switch input:focus-visible + i { outline: 2px solid var(--brand); outline-offset: 2px; }
+.tm-add { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 18px; }
+.tm-add h3 { margin: 0; font-size: 16px; }
+.tm-steps { margin: 0; padding-left: 20px; color: var(--muted2); font-size: 14px; line-height: 1.7; }
+.okbox { background: #E3F1E8; color: var(--green-text, #1B6B3C); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+@media (max-width: 900px) { .tm { flex-direction: column; } .tm-side { flex: none; max-width: none; width: 100%; position: static; max-height: 360px; } }
+.err { background: var(--brand-tint); color: var(--problem); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.5; }

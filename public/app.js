@@ -58,7 +58,7 @@ function nav() {
   const open = S.reqs ? S.reqs.requests.filter(x => !/complete/i.test(x.status)).length : 0;
   const link = (h, label, extra) => '<a class="nav ' + ((r === h || (h === 'newhire' && r === 'submitted') || (h === 'request' && r === 'sent')) ? 'on' : '') + '" href="#' + h + '">' + label + (extra ? '<span class="count">' + extra + '</span>' : '') + '</a>';
   return '<img class="logo" src="logo-light.png" alt="Stewart Title"><div class="tag">MANAGER PORTAL</div>' +
-    link('home', 'Home') + link('newhire', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
+    link('home', 'Home') + link('team', 'My Team') + link('newhire', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
     '<div class="me"><span class="av">' + esc(initials(me.name)) + '</span><span class="who"><b>' + esc(me.name) + '</b><span>' + (me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
     '<a href="/cdn-cgi/access/logout">Sign out</a></div>' +
     (!isInstalled() ? '<button class="install" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Install on this computer</button>' : '');
@@ -421,6 +421,13 @@ document.addEventListener('input', e => {
   const t = e.target, d = t.dataset;
   if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther/.test(d.f)) refreshPreview(); }
   if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); if (d.r === 'needBy') updateSummaryDate(); }
+  if (d.tm) {
+    const t = tmState(); t[d.tm] = e.target.value;
+    if (d.tm === 'q') { document.getElementById('tm-list').innerHTML = tmList(t); return; }
+    const add = document.querySelector('[data-act=tm-add]'); if (add) add.disabled = !(t.link && t.area) || t.busy;
+    if (d.tm === 'link') { clearTimeout(tmCheckTimer); t.check = null; tmCheckTimer = setTimeout(tmCheck, 700); }
+    return;
+  }
   if (d.actInput === 'teamsearch') { S.rq.search = t.value; document.getElementById('teamchips').innerHTML = teamChips(S.me.team, new Set(S.rq.people), t.value); }
 });
 document.addEventListener('change', e => {
@@ -454,6 +461,110 @@ function addFiles(key, list) {
 // only the preview box is redrawn while typing, so the field being typed in is never touched
 function refreshPreview() { const el = document.getElementById('cblock'); if (el && S.nh) el.innerHTML = cblock(S.nh); }
 function updateSummaryDate() { const b = [...document.querySelectorAll('aside .card .row')].find(r => r.textContent.startsWith('Needed by')); if (b) b.querySelector('b').textContent = nice(S.rq.needBy); }
+
+
+// ----- my team (view only, except market update areas) -----
+function tmState() { return S.tm || (S.tm = { data: null, err: '', q: '', sel: '', link: '', area: '', label: '', check: null, checking: false, busy: false }); }
+async function loadTeam() {
+  const t = tmState();
+  try { t.data = await api('team'); t.err = ''; } catch (e) { t.err = e.message; }
+  if (route() === 'team') render();
+}
+function tmList(t) {
+  const list = (t.data ? t.data.team : []).filter(p => !t.q || (p.name + ' ' + (p.title || '') + ' ' + (p.address2 || '')).toLowerCase().includes(t.q.toLowerCase()));
+  if (!t.data) return '<div class="empty"><span class="spin dark"></span></div>';
+  if (!list.length) return '<div class="empty">' + (t.data.team.length ? 'Nobody matches.' : 'No one is linked to your team yet. Ask West Marketing.') + '</div>';
+  return list.map(p => { const n = p.areas.filter(a => a.active).length;
+    return '<button type="button" class="tm-row' + (p.name === t.sel ? ' on' : '') + '" data-act="tm-sel" data-name="' + esc(p.name) + '"><span class="av">' + esc(initials(p.name)) + '</span>' +
+      '<span class="grow"><b>' + esc(p.name) + '</b><span>' + esc(p.title || '') + '</span></span>' + (n ? '<span class="tm-n">' + plural(n, 'area') + '</span>' : '<span class="tm-n none">no areas</span>') + '</button>'; }).join('');
+}
+PAGES.team = () => {
+  const t = tmState();
+  if (!t.data && !t.err) loadTeam();
+  let h = '<div class="head"><div><h1>My Team</h1><div class="sub">' + (S.me.admin ? 'Everyone on the Main Employee Sheet' : 'The people linked to you on the Manager Contacts board') + '. Details are view only - ask West Marketing to change them.</div></div></div>';
+  if (t.err) return h + '<div class="card"><div class="err">' + esc(t.err) + '</div><button class="btn" data-act="tm-reload">Try again</button></div>';
+  const team = t.data ? t.data.team : [];
+  if (!t.sel && team[0]) t.sel = team[0].name;
+  const p = team.find(x => x.name === t.sel);
+  h += '<div class="tm"><section class="card tm-side"><input type="search" placeholder="Search your team" data-tm="q" value="' + esc(t.q) + '"><div class="tm-list" id="tm-list">' + tmList(t) + '</div></section>';
+  h += '<div class="tm-main">';
+  if (!p) h += '<section class="card"><div class="empty">' + (t.data ? 'Pick someone on the left.' : '<span class="spin dark"></span>') + '</div></section>';
+  else {
+    const line = (k, v, href) => '<div class="tm-line"><span>' + k + '</span><b>' + (v ? (href ? '<a href="' + href + '">' + esc(v) + '</a>' : esc(v)) : '<span class="muted">—</span>') + '</b></div>';
+    h += '<section class="card"><div class="row" style="gap:18px;flex-wrap:nowrap"><span class="av tm-big">' + esc(initials(p.name)) + '</span><div><div style="font-size:24px;font-weight:800">' + esc(p.name) + '</div><div class="muted2">' + esc(p.title || '') + '</div></div></div>' +
+      '<div class="tm-lines">' + line('Phone', p.phone, p.phone ? 'tel:' + p.phone.replace(/[^\d+]/g, '') : '') + line('Email', p.email, p.email ? 'mailto:' + p.email : '') + line('Company', p.company) +
+      line('Office', [p.address1, p.address2].filter(Boolean).join(', ')) + '</div></section>';
+    // market areas
+    const ready = t.data.areasReady;
+    h += '<section class="card"><div><h2>Market update areas</h2><div class="sub" style="font-size:14px">Each area gets its own weekly market snapshot graphic. Changes are picked up by the next weekly run.</div></div>';
+    if (!ready) h += '<div class="err">Market areas aren’t connected yet. West Marketing needs to open the Marketing Tools app once to set this up.</div>';
+    else {
+      h += p.areas.length ? '<div class="tm-areas">' + p.areas.map(a => '<div class="tm-area' + (a.active ? '' : ' off') + '"><span class="grow"><b>' + esc(a.label || a.area) + '</b>' +
+        '<a class="small" href="' + esc(a.link) + '" target="_blank" rel="noopener">View report</a>' + (a.active ? '' : '<span class="tm-off">Off</span>') + '</span>' +
+        '<label class="tm-switch" title="' + (a.active ? 'Turn off (skipped in the weekly run)' : 'Turn back on') + '"><input type="checkbox" data-act="tm-active" data-id="' + esc(a.id) + '"' + (a.active ? ' checked' : '') + (t.busy ? ' disabled' : '') + '><i></i>' + (a.active ? 'On' : 'Off') + '</label>' +
+        '<button type="button" class="btn small" data-act="tm-remove" data-id="' + esc(a.id) + '" data-label="' + esc(a.label || a.area) + '"' + (t.busy ? ' disabled' : '') + '>Remove</button></div>').join('') + '</div>'
+        : '<div class="empty" style="padding:16px">No market areas yet.</div>';
+      const ck = t.check;
+      h += '<div class="tm-add"><h3>Add an area</h3>' +
+        '<ol class="tm-steps"><li>Click <b>Search Altos</b> and look up the city or zip code.</li><li>Open the report and copy its link (the address bar, or <b>Share → Copy link</b>).</li><li>Paste the link below, then click <b>Add area</b>.</li></ol>' +
+        '<div class="row"><a class="btn" href="' + esc(t.data.altosSearch) + '" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Search Altos</a></div>' +
+        '<label class="field">Altos report link<input type="text" inputmode="url" placeholder="https://altos.re/r/…" data-tm="link" value="' + esc(t.link) + '"></label>' +
+        '<div id="tm-check">' + tmCheckHtml(t) + '</div>' +
+        '<div class="row" style="align-items:flex-end;flex-wrap:nowrap"><label class="field grow">City or zip<input type="text" data-tm="area" value="' + esc(t.area) + '"></label>' +
+        '<label class="field grow">Shows on the graphic as<input type="text" data-tm="label" value="' + esc(t.label) + '" placeholder="Same as city"></label></div>' +
+        '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="tm-add"' + (t.link && t.area && !t.busy ? '' : ' disabled') + '>' + (t.busy ? '<span class="spin"></span> Saving…' : 'Add area') + '</button></div></div>';
+    }
+    h += '</section>';
+  }
+  h += '</div></div>';
+  return h;
+};
+function tmUpdate(person) {
+  const t = tmState(); if (!t.data || !person) return;
+  const i = t.data.team.findIndex(x => x.id === person.id); if (i >= 0) t.data.team[i] = person;
+}
+async function tmChange(body, msg) {
+  const t = tmState(); t.busy = true; render();
+  try { const r = await api('areas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); tmUpdate(r.team); toast(msg); return true; }
+  catch (e) { toast(e.message, 6000); return false; }
+  finally { t.busy = false; render(); }
+}
+let tmCheckTimer = null;
+function tmCheckHtml(t) {
+  const ck = t.check;
+  return t.checking ? '<div class="muted" style="font-size:13px">Checking the link…</div>' : ck ? (ck.ok ? '<div class="okbox">✓ This link opens <b>' + esc(ck.location) + '</b></div>' : '<div class="err">' + esc(ck.error) + '</div>') : '';
+}
+// checks the pasted link without redrawing the page (so typing isn't interrupted)
+function tmPaint() {
+  const t = tmState(), c = document.getElementById('tm-check'); if (c) c.innerHTML = tmCheckHtml(t);
+  ['area', 'label'].forEach(k => { const el = document.querySelector('[data-tm=' + k + ']'); if (el && el !== document.activeElement && el.value !== t[k]) el.value = t[k]; });
+  const add = document.querySelector('[data-act=tm-add]'); if (add) add.disabled = !(t.link && t.area) || t.busy;
+}
+async function tmCheck() {
+  const t = tmState(), link = t.link.trim();
+  if (!link) { t.check = null; tmPaint(); return; }
+  if (!/^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i.test(link)) { t.check = { ok: false, error: 'Paste an Altos report link (it starts with https://altos.re/r/…).' }; tmPaint(); return; }
+  t.checking = true; tmPaint();
+  try {
+    const r = await api('altos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link }) });
+    if (t.link.trim() !== link) return;
+    t.check = r;
+    if (r.ok) { if (!t.area) t.area = r.city || r.zip || ''; if (!t.label) t.label = (r.location || '').replace(/,\s*[A-Z]{2}\b.*$/, '').trim() || t.area; }
+  } catch (e) { t.check = null; }
+  t.checking = false; tmPaint();
+}
+ACT['tm-reload'] = () => { const t = tmState(); t.err = ''; t.data = null; render(); };
+ACT['tm-sel'] = el => { const t = tmState(); t.sel = el.dataset.name; t.link = ''; t.area = ''; t.label = ''; t.check = null; render(); };
+ACT['tm-add'] = async () => {
+  const t = tmState(), p = t.data.team.find(x => x.name === t.sel); if (!p) return;
+  if (await tmChange({ op: 'add', employee: p.name, link: t.link.trim(), area: t.area.trim(), label: t.label.trim() || t.area.trim() }, 'Area added for ' + p.name)) { t.link = ''; t.area = ''; t.label = ''; t.check = null; render(); }
+};
+ACT['tm-remove'] = el => {
+  const t = tmState();
+  if (!confirm('Remove ' + el.dataset.label + ' from ' + t.sel + '’s market areas?')) return;
+  tmChange({ op: 'remove', employee: t.sel, id: el.dataset.id }, 'Removed ' + el.dataset.label);
+};
+ACT['tm-active'] = el => { const t = tmState(); tmChange({ op: 'active', employee: t.sel, id: el.dataset.id, active: el.checked }, el.checked ? 'Turned on' : 'Turned off - skipped until you turn it back on'); };
 
 // ---------- start ----------
 async function loadRequests() { try { S.reqs = await api('requests'); } catch (e) { S.reqs = { requests: [], newHires: [] }; } render(); }
