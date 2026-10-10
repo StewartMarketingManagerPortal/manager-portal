@@ -188,6 +188,12 @@ nav.side .install { white-space: nowrap; font-size: 12.5px; padding: 10px 8px; g
 .tm-row .grow span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tm-n { font-size: 12px; font-weight: 700; color: var(--muted2); background: var(--pill); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
 .tm-n.none { color: var(--brand); background: var(--brand-tint); }
+.tm-n svg { width: 13px; height: 13px; flex: none; }
+.tm-n { display: inline-flex; align-items: center; gap: 5px; }
+.tm-chips { display: flex; gap: 6px; flex: none; }
+.tm-key { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); padding-top: 10px; border-top: 1px solid var(--line); }
+.tm-key .tm-n { padding: 3px 7px; }
+.tm-key .tm-n + .tm-n, .tm-key .tm-n:nth-of-type(2) { margin-left: 8px; }
 .tm-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
 .av.tm-big { width: 64px; height: 64px; font-size: 22px; background: var(--brand); color: #fff; }
 .tm-lines { display: flex; flex-direction: column; }

@@ -499,6 +499,9 @@ function updateSummaryDate() { const b = [...document.querySelectorAll('aside .c
 
 
 // ----- my team (view only, except market update areas) -----
+const TM_IC = {
+  market: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12l4-4 3 3 5-6"/></svg>',
+  news: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 7h12M5 1.5v3M11 1.5v3"/></svg>' };
 function tmState() { return S.tm || (S.tm = { data: null, err: '', q: '', sel: '', link: '', area: '', label: '', check: null, checking: false, busy: false }); }
 async function loadTeam() {
   const t = tmState();
@@ -509,9 +512,11 @@ function tmList(t) {
   const list = (t.data ? t.data.team : []).filter(p => !t.q || (p.name + ' ' + (p.title || '') + ' ' + (p.address2 || '')).toLowerCase().includes(t.q.toLowerCase()));
   if (!t.data) return '<div class="empty"><span class="spin dark"></span></div>';
   if (!list.length) return '<div class="empty">' + (t.data.team.length ? 'Nobody matches.' : 'No one is linked to your team yet. Ask West Marketing.') + '</div>';
-  return list.map(p => { const n = p.areas.filter(a => a.active).length;
+  return list.map(p => { const n = p.areas.filter(a => a.active).length, nl = (p.nl || []).length;
     return '<button type="button" class="tm-row' + (p.name === t.sel ? ' on' : '') + '" data-act="tm-sel" data-name="' + esc(p.name) + '">' + (p.photo ? '<span class="av tm-ph"><img src="' + esc(p.photo) + '" alt="" loading="lazy"></span>' : '<span class="av">' + esc(initials(p.name)) + '</span>') +
-      '<span class="grow"><b>' + esc(p.name) + '</b><span>' + esc(p.title || '') + '</span></span>' + (n ? '<span class="tm-n">' + plural(n, 'area') + '</span>' : '<span class="tm-n none">no areas</span>') + '</button>'; }).join('');
+      '<span class="grow"><b>' + esc(p.name) + '</b><span>' + esc(p.title || '') + '</span></span>' +
+      '<span class="tm-chips"><span class="tm-n' + (n ? '' : ' none') + '" title="' + plural(n, 'market update area') + '">' + TM_IC.market + n + '</span>' +
+      '<span class="tm-n' + (nl ? '' : ' none') + '" title="' + plural(nl, 'newsletter area') + '">' + TM_IC.news + nl + '</span></span></button>'; }).join('');
 }
 PAGES.team = () => {
   const t = tmState();
@@ -521,7 +526,7 @@ PAGES.team = () => {
   const team = t.data ? t.data.team : [];
   if (!t.sel && team[0]) t.sel = team[0].name;
   const p = team.find(x => x.name === t.sel);
-  h += '<div class="tm"><section class="card tm-side"><input type="search" placeholder="Search your team" data-tm="q" value="' + esc(t.q) + '"><div class="tm-list" id="tm-list">' + tmList(t) + '</div></section>';
+  h += '<div class="tm"><section class="card tm-side"><input type="search" placeholder="Search your team" data-tm="q" value="' + esc(t.q) + '"><div class="tm-list" id="tm-list">' + tmList(t) + '</div><div class="tm-key"><span class="tm-n">' + TM_IC.market + '</span>Market update<span class="tm-n">' + TM_IC.news + '</span>Newsletter</div></section>';
   h += '<div class="tm-main">';
   if (!p) h += '<section class="card"><div class="empty">' + (t.data ? 'Pick someone on the left.' : '<span class="spin dark"></span>') + '</div></section>';
   else {
