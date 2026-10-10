@@ -513,7 +513,7 @@ PAGES.team = () => {
     h += '<section class="cblk"><div class="cblk-pic">' + (p.photo ? '<img src="' + esc(p.photo) + '" alt="' + esc(p.name) + '">' : '<span class="cblk-ini">' + esc(initials(p.name)) + '</span>') + '</div>' +
       '<div class="cblk-txt"><div class="cblk-name">' + esc(p.name) + '</div>' + (p.title ? '<div class="cblk-title">' + esc(p.title) + '</div>' : '') +
       (p.company ? '<div class="cblk-co">' + esc(p.company) + '</div>' : '') + '<div class="cblk-lines">' +
-      (p.phone ? '<a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + I.phone + esc(p.phone) + '</a>' : '') +
+      (p.phone ? '<a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + I.phone + esc(fmtPhone(p.phone)) + '</a>' : '') +
       (p.email ? '<a href="mailto:' + esc(p.email) + '">' + I.mail + esc(p.email) + '</a>' : '') +
       (addr ? '<div>' + I.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
       '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
