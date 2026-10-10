@@ -120,7 +120,7 @@ async function profile(env, me) {
     team: teamOf(me).map(pub).sort((a, b) => a.name.localeCompare(b.name)),
     offices: Object.values(offices).sort((a, b) => (a.address2 + a.address1).localeCompare(b.address2 + b.address1)),
     titles: Object.keys(titles).sort(),
-    companies: ['Stewart Title Guaranty Company', 'Stewart Title & Trust of Tucson'],
+    companies: ['Stewart Title of California, Inc.', 'Stewart Title & Trust of Tucson'],
     selfServe: env.SELF_SERVE === '1',
   };
 }
