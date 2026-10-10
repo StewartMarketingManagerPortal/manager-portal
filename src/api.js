@@ -242,8 +242,8 @@ async function submitNewHire(env, me, fd) {
 const AREA_COLS = ['Employee', 'Area', 'Location Label', 'Altos Link', 'Active', 'Notes'];
 export const ALTOS_SEARCH = 'https://altos.re/r/6a599414-73b5-40dd-a2ca-ab394e0b984d';
 async function areasBoard(env) {
-  const id = await cached('areasBoard', 300e3, async () => { try { return await bid(env, 'areas'); } catch (e) { return ''; } });
-  if (!id) return null;
+  let id = await cached('areasBoard', 300e3, async () => { try { return await bid(env, 'areas'); } catch (e) { return ''; } });
+  if (!id) { forget('areasBoard'); forget('board:Market Areas'); return null; }   // not made yet: look again next time
   const cols = await columns(env, id);
   const col = {}; AREA_COLS.forEach(t => { const c = cols.byTitle[nk(t)]; if (c) col[t] = c.id; });
   if (AREA_COLS.some(t => !col[t])) return null;
