@@ -303,26 +303,100 @@ PAGES.submitted = () => {
 
 // ----- marketing requests -----
 function typeByKey(state, key) { if (key === 'other') return OTHER; for (const [, list] of TYPES[state]) { const t = list.find(x => x.key === key); if (t) return t; } return null; }
-PAGES.request = () => {
-  const q = S.rq || (S.rq = freshRequest());
-  return q.step === 1 ? rqTypes(q) : rqDetails(q);
-};
-function rqTypes(q) {
-  const t = q.type ? typeByKey(q.state, q.type) : null;
-  let h = '<div class="head"><div><h1>Request marketing</h1><div class="sub">What do you need? Most projects are ready within 7 days.</div></div><ol class="steps"><li class="on"><span>1</span>Project type</li><li><span>2</span>Details + submit</li></ol></div>';
-  h += '<section class="card" style="flex-direction:row;flex-wrap:wrap;align-items:center;gap:16px 24px;padding:20px 22px"><div class="grow" style="min-width:220px"><h2>Which state is this for?</h2><div class="muted2" style="font-size:14px;margin-top:4px">Project types change with the state.</div></div>' +
-    '<div class="row" role="group" aria-label="State">' + ['California', 'Arizona'].map(s => '<button type="button" class="state" aria-pressed="' + (q.state === s) + '" data-act="state" data-state="' + s + '"><i></i>' + s + '</button>').join('') + '</div></section>';
-  TYPES[q.state].forEach(([g, list]) => {
-    h += '<section style="display:flex;flex-direction:column;gap:10px"><div class="cardlabel">' + g + '</div><div class="typegrid">' + list.map(x =>
-      '<button type="button" class="type" aria-pressed="' + (q.type === x.key) + '" data-act="type" data-type="' + x.key + '"><b>' + x.name + '</b><span>' + x.sub + '</span></button>').join('') + '</div></section>';
-  });
-  const oth = q.type === 'other';
-  h += '<section style="display:flex;flex-direction:column;gap:10px"><div class="cardlabel">Something else</div>' +
-    '<div class="card" style="border:2px solid ' + (oth ? 'var(--brand)' : 'transparent') + ';padding:16px;gap:14px"><button type="button" class="type" style="padding:0;border:none;min-height:0" aria-pressed="' + oth + '" data-act="type" data-type="other"><b>Something else</b><span>Don’t see what you need? Describe it.</span></button>' +
-    (oth ? '<label class="field">What do you need?<textarea data-r="other" rows="4" placeholder="e.g. A one-page handout for our realtor breakfast with our rate info and a QR code to the sign-up page">' + esc(q.other) + '</textarea></label>' : '') + '</div></section>';
-  h += '<div class="bar"><div class="grow" style="min-width:220px"><div class="t">' + (t ? esc(t.name) : 'Pick a project type') + '</div><div class="d">' + (t ? 'Next we’ll ask ' + (t.kind === 'class' || t.kind === 'classce' ? 'for the class name, date, location and instructor.' : t.kind === 'property' ? 'for the property, date and time, and photos.' : 'who it’s for, when you need it, and for any files.') : q.state + ' options') + '</div></div>' +
-    '<button type="button" class="btn primary" data-act="rq-next" ' + (t ? '' : 'disabled') + '>Next: details →</button></div>';
+PAGES.request = () => rqPage(S.rq || (S.rq = freshRequest()));
+// ---------- Marketing request: one page, three numbered sections ----------
+const RQ_IC = {
+  doc: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>', half: '<rect x="4" y="7" width="16" height="10" rx="1.5"/><path d="M8 11h8"/>', post: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M14 9h4v4h-4z"/>',
+  card: '<rect x="3" y="7" width="18" height="11" rx="2"/><path d="M7 11h6M7 14h4"/>', cls: '<path d="M3 8l9-4 9 4-9 4z"/><path d="M7 10v5c3 2 7 2 10 0v-5"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/>', sq: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M5 18l5-5 4 4 2-2 3 3"/>',
+  story: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10 6h4"/>', fb: '<rect x="3" y="5" width="18" height="10" rx="2"/><circle cx="8" cy="17" r="3"/>', mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  blast: '<path d="M4 12l16-7-5 16-3-6z"/><path d="M12 15l8-10"/>', sig: '<path d="M3 17c3 0 4-8 7-8s1 8 4 8 3-4 5-4"/><path d="M3 21h18"/>', photo: '<circle cx="12" cy="13" r="4"/><path d="M4 7h4l2-3h4l2 3h4v13H4z"/>',
+  qr: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3"/>', other: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17h.01"/>',
+  home: '<path d="M3 11l9-8 9 8v10H3z"/><path d="M9 21v-6h6v6"/>', clip: '<path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>' };
+const rqIc = (k, s) => '<svg viewBox="0 0 24 24" width="' + (s || 22) + '" height="' + (s || 22) + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (RQ_IC[k] || RQ_IC.doc) + '</svg>';
+// short names + icon for each type tile (the monday label stays as it is)
+const RQ_SHOW = { flyer: ['doc', 'Flyer', 'Full page'], halfflyer: ['half', 'Half-page flyer', '8.5 × 5.5'], postcard: ['post', 'Postcard', '4 × 6'], bizcard: ['card', 'Business cards', '3.5 × 2'],
+  class: ['cls', 'Class flyer', 'Workshop / seminar'], classce: ['cls', 'Class flyer · CE', 'Continuing education'], event: ['cal', 'Event promotion', 'Flyer, post + email'], video: ['video', 'Video', 'Event or promo'],
+  square: ['sq', 'Social post', 'Square'], story: ['story', 'Story / reel', 'Vertical'], fbcover: ['fb', 'Facebook cover', 'Header'], emailtpl: ['mail', 'Email template', 'Reusable'], eblast: ['blast', 'E-blast', 'One-time send'],
+  sig: ['sig', 'Signature', 'Email signature'], photo: ['photo', 'Edit a photo', 'Headshot / fix'], qr: ['qr', 'QR code', 'To any page'], broker: ['home', 'Broker open', 'Flyer'], openhouse: ['home', 'Open house', 'Flyer'],
+  headshot: ['photo', 'Update headshot', 'New photo'], other: ['other', 'Something else', 'Describe it'] };
+const rqShow = t => RQ_SHOW[t.key] && !(t.key === 'class' && t.name.indexOf('non-CE') >= 0) ? RQ_SHOW[t.key] : t.key === 'class' ? ['cls', 'Class flyer · non-CE', 'Workshop / seminar'] : ['doc', t.name, t.sub];
+const rqNum = (n, title, sub, state) => '<div class="rq-sh"><span class="rq-n' + (state === 'done' ? ' done' : '') + '">' + (state === 'done' ? '✓' : n) + '</span><div><h2>' + title + '</h2>' + (sub ? '<div class="small muted">' + sub + '</div>' : '') + '</div></div>';
+function rqPage(q) {
+  const t = q.type ? typeByKey(q.state, q.type) : null, me = S.me;
+  let h = '<div class="head"><div><h1>Request marketing</h1><div class="sub">Tell us what you need - most projects are ready within 7 days.</div></div>' +
+    '<div class="rq-state"><span>For</span><div class="seg" role="group" aria-label="State">' + ['California', 'Arizona'].map(s => '<button type="button" aria-pressed="' + (q.state === s) + '" data-act="state" data-state="' + s + '">' + s + '</button>').join('') + '</div></div></div>';
+  h += '<div class="cols"><div class="col3" style="display:flex;flex-direction:column;gap:16px">';
+  // 1 · how can we help
+  if (!t) {
+    h += '<section class="card">' + rqNum(1, 'How can we help you?', 'Pick one - the next questions change to fit it.') +
+      TYPES[q.state].concat([['', [OTHER]]]).map(([g, list]) => '<div class="rq-group">' + (g ? '<div class="rq-gl">' + esc(g) + '</div>' : '') + '<div class="rq-tiles">' + list.map(x => { const [i, n, s] = rqShow(x);
+        return '<button type="button" class="rq-tile" data-act="type" data-type="' + x.key + '">' + rqIc(i) + '<span><b>' + esc(n) + '</b><small>' + esc(s) + '</small></span></button>'; }).join('') + '</div></div>').join('') + '</section>' +
+      '<section class="card rq-locked">' + rqNum(2, 'Details') + '</section><section class="card rq-locked">' + rqNum(3, 'Who it’s for and when') + '</section>';
+  } else {
+    const [, n, s] = rqShow(t);
+    h += '<section class="card rq-picked">' + rqNum(1, esc(n), esc(t.sub && t.sub !== s ? t.sub : s) + ' · ' + q.state, 'done') + '<button type="button" class="btn small" data-act="rq-change">Change</button></section>';
+    h += '<section class="card">' + rqNum(2, t.kind.startsWith('class') ? 'About the class' : t.kind === 'property' ? 'About the property' : t.kind === 'event' ? 'About the event' : t.kind === 'other' ? 'What do you need?' : 'About the project') + '<div class="grid2">' + rqFields(q, t) + '</div>' +
+      (t.kind === 'class' || t.kind === 'classce' || t.kind === 'event' || t.kind === 'property' ? '<div class="row" style="gap:10px 26px">' +
+        (t.kind !== 'property' ? rqCheck('It has a sponsor', 'Sponsor') : '') + (t.kind !== 'event' ? rqCheck('Also make a social post', 'Social Media Post') : '') + '</div>' +
+        (q.x.Sponsor === 'Yes' ? '<div class="grid2">' + rfld('Sponsor information', 'x.Sponsor Information', { area: 1, rows: 2, ph: 'Who, their logo, anything that must appear' }) + '</div>' : '') : '') +
+      (t.kind === 'property' ? '<div class="field">Property photos <span class="hint">· the best ones first</span>' + rqAttach('photos', 'Add photos', 'JPG or PNG') + '</div>' : '') + '</section>';
+    // 3 · who + when
+    const team = me.team, sel = new Set(q.people), std = inDays(7);
+    h += '<section class="card">' + rqNum(3, 'Who it’s for and when') +
+      '<div class="field">Whose name and photo go on it<div class="seg">' + [['me', 'Just me'], ['team', me.admin ? 'Everyone (all)' : 'My whole team'], ['pick', 'Pick people']].map(([k, l]) => '<button type="button" aria-pressed="' + (q.who === k) + '" data-act="who" data-who="' + k + '">' + l + '</button>').join('') + '</div>' +
+      (q.who === 'pick' ? '<div class="rq-pick">' + team.filter(p => sel.has(p.id)).map(p => '<button type="button" class="chip" aria-pressed="true" data-act="person" data-id="' + p.id + '">' + esc(p.name) + ' ×</button>').join('') +
+        '<input type="search" data-act-input="teamsearch" placeholder="' + (team.length ? (sel.size ? 'Add someone…' : 'Type a name…') : 'No one is linked to your team yet') + '" value="' + esc(q.search || '') + '" aria-label="Add someone"></div>' +
+        '<div class="chips" id="teamchips">' + rqSuggest(team, sel, q.search) + '</div>' : '') + '</div>' +
+      '<div class="field">Needed by<div class="row" style="gap:8px"><button type="button" class="chip" aria-pressed="' + (q.needBy === std && !q.pickDate) + '" data-act="rq-std">Standard · ' + esc(nice(std)) + '</button>' +
+        '<button type="button" class="chip" aria-pressed="' + !!(q.pickDate || q.needBy !== std) + '" data-act="rq-pickdate">' + (q.needBy !== std ? esc(nice(q.needBy)) : 'Pick a date') + '</button>' +
+        (q.pickDate || q.needBy !== std ? '<input type="date" data-r="needBy" value="' + esc(q.needBy) + '" min="' + iso(new Date()) + '" style="max-width:200px">' : '') + '</div>' +
+        (q.needBy < std ? '<span class="hint" style="color:var(--brand)">Sooner than 7 days - we’ll do our best and let you know.</span>' : '') + '</div>' +
+      rqAttach('files', 'Attach files', 'optional - logos, photos, an old flyer you liked') + '</section>';
+  }
+  h += '</div>';
+  h += rqSummary(q, t) + '</div>';
   return h;
+}
+function rqSummary(q, t) {
+  const me = S.me;
+  const rows = [['Project', t ? rqShow(t)[1] + (rqName(q, t) ? ' · ' + rqName(q, t) : '') : '']];
+  if (t && (t.kind.startsWith('class') || t.kind === 'event' || t.kind === 'property')) rows.push([t.kind === 'property' ? 'Showing' : t.kind === 'event' ? 'Event' : 'Class', [nice(q.x['Event Date']), (q.x.Location || '').split(',').slice(-1)[0].trim()].filter(Boolean).join(' · ')]);
+  rows.push(['For', t ? whoLabel(q) : '']);
+  const extras = [q.x['Social Media Post'] === 'Yes' ? 'Social post' : '', q.x.Sponsor === 'Yes' ? 'Sponsor' : '', (q.files.length + q.photos.length) ? plural(q.files.length + q.photos.length, 'file') : ''].filter(Boolean);
+  if (extras.length) rows.push(['Extras', extras.join(', ')]);
+  rows.push(['Needed by', nice(q.needBy)]);
+  return '<aside class="col2 rq-side"><div class="preview" style="gap:14px"><div class="cardlabel" style="color:var(--navmuted)">Your request</div>' +
+    rows.map(([k, v]) => '<div class="rq-sum"><span>' + k + '</span><b' + (v ? '' : ' class="dim"') + '>' + esc(v || '—') + '</b></div>').join('') +
+    '<button type="button" class="btn primary" data-act="rq-submit" ' + (!t || S.busy ? 'disabled' : '') + '>' + (S.busy ? '<span class="spin"></span> Sending…' : 'Submit request') + '</button>' +
+    '<div class="small" style="color:var(--border);line-height:1.5">You’ll get an email with your reference number, then another when your proof is ready to approve.</div></div></aside>';
+}
+function rqFields(q, t) {
+  const k = t.kind;
+  if (k === 'class' || k === 'classce') return rfld('Class name', 'x.Course Name', { full: 1, ph: 'e.g. Estate Planning 101' }) + rfld('Date', 'x.Event Date', { type: 'date' }) + rfld('Time', 'x.Event Time', { ph: '10:30 AM – 12:00 PM' }) +
+    rfld('Location', 'x.Location', { full: 1, ph: 'Street address, city' }) + rfld('Instructor', 'x.Instructor Name') + rfld('Cost', 'x.Cost', { ph: 'Free' }) + (k === 'classce' ? rfld('Credit hours', 'x.Credited Hours', { ph: '3' }) : '') +
+    rfld('What should it say? <span class="hint">· what it covers, anything it must include</span>', 'description', { area: 1, ph: 'e.g. Covers trusts vs. wills and avoiding probate. Lunch provided - RSVP by Nov 10.' });
+  if (k === 'event') return rfld('Event name', 'x.Course Name', { full: 1 }) + rfld('Date', 'x.Event Date', { type: 'date' }) + rfld('Time', 'x.Event Time') + rfld('Location', 'x.Location', { full: 1, ph: 'Street address, city' }) +
+    rfld('What should it say?', 'description', { area: 1, ph: 'What’s happening, who it’s for, RSVP details…' });
+  if (k === 'property') return rfld('Property address', 'x.Location', { full: 1 }) + rfld('Date', 'x.Event Date', { type: 'date' }) + rfld('Time', 'x.Event Time', { ph: '1:00 – 4:00 PM' }) +
+    rfld('Listing agent', 'x.Agent info', { area: 1, rows: 2, ph: 'Name, brokerage, phone, email' }) + rfld('Anything else it should say?', 'description', { area: 1, rows: 2 });
+  if (k === 'other') return rfld('Tell us what you need', 'other', { area: 1, rows: 4, ph: 'e.g. A one-page handout for our realtor breakfast with our rate info and a QR code to the sign-up page' }) +
+    rfld('Give it a short name', 'projectName', { full: 1, ph: 'e.g. Realtor breakfast handout' });
+  return rfld('Project name', 'projectName', { full: 1, ph: 'e.g. Spring buyer seminar flyer' }) +
+    rfld('What should it say?', 'description', { area: 1, ph: 'The headline, key points, who it’s for - anything it must include.' });
+}
+const rqName = (q, t) => String(q.x['Course Name'] || q.projectName || (t.kind === 'property' ? q.x.Location || '' : '')).trim();
+function rqCheck(label, key) { return '<label class="check"><input type="checkbox" data-act="rq-yn" data-k="' + key + '"' + (S.rq.x[key] === 'Yes' ? ' checked' : '') + '> ' + label + '</label>'; }
+function rqAttach(key, title, sub) {
+  const files = S.rq[key];
+  return '<label class="rq-attach" data-drop="' + key + '">' + rqIc('clip', 18) + '<span><b>' + title + '</b> <span class="muted">· ' + sub + '</span></span><span class="rq-plus">＋</span><input type="file" multiple data-files="' + key + '" hidden' + (key === 'photos' ? ' accept="image/*"' : '') + '></label>' +
+    files.map((f, i) => '<div class="file"><b>' + esc((f.name.split('.').pop() || '').toUpperCase()) + '</b><span>' + esc(f.name) + '</span><span class="muted" style="flex:none">' + (f.size / 1048576).toFixed(1) + ' MB</span><button type="button" data-act="file-del" data-k="' + key + '" data-i="' + i + '" aria-label="Remove ' + esc(f.name) + '">×</button></div>').join('');
+}
+function rqSuggest(team, sel, search) {
+  const s = String(search || '').toLowerCase().trim();
+  if (!s) return '';
+  const list = team.filter(p => !sel.has(p.id) && p.name.toLowerCase().includes(s)).slice(0, 12);
+  return list.length ? list.map(p => '<button type="button" class="chip" aria-pressed="false" data-act="person" data-id="' + p.id + '">+ ' + esc(p.name) + '</button>').join('') : '<span class="small muted">No one on your team matches.</span>';
 }
 function rfld(label, key, o) {
   o = o || {}; const q = S.rq; const val = key.startsWith('x.') ? (q.x[key.slice(2)] || '') : (q[key] || '');
@@ -330,38 +404,6 @@ function rfld(label, key, o) {
   return '<label class="field' + (o.full ? ' full' : '') + '">' + label + '<input type="' + (o.type || 'text') + '" data-r="' + key + '" value="' + esc(val) + '"' + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') + '></label>';
 }
 function yesNo(label, key) { const v = S.rq.x[key] || 'No'; return '<div class="field">' + label + '<div class="seg">' + ['No', 'Yes'].map(o => '<button type="button" aria-pressed="' + (v === o) + '" data-act="yn" data-k="' + key + '" data-v="' + o + '">' + o + '</button>').join('') + '</div></div>'; }
-function rqDetails(q) {
-  const t = typeByKey(q.state, q.type);
-  const me = S.me;
-  let h = '<div class="head"><div><div class="eyebrow"><a href="#" data-act="rq-back" style="font-weight:600">Request marketing</a> › ' + q.state + ' › ' + esc(t.name) + '</div><h1 style="margin-top:4px">' +
-    (t.kind.startsWith('class') ? 'Tell us about the class' : t.kind === 'property' ? 'Tell us about the property' : 'Tell us about the project') + '</h1></div>' +
-    '<ol class="steps"><li class="done"><span>✓</span>Project type</li><li class="on"><span>2</span>Details + submit</li></ol></div>';
-  const team = me.team;
-  const sel = new Set(q.people);
-  h += '<div class="cols"><div class="col3"><section class="card"><h2>The project</h2><div class="grid2">' + rfld('Project name', 'projectName', { full: 1, ph: 'e.g. Estate Planning 101 workshop flyer' }) +
-    '<div class="field full"><div class="row" style="justify-content:space-between"><span>Who is it for</span><span class="hint">' + (me.admin ? 'Everyone on the Main Employee Sheet' : 'Your team on the Manager Contacts board · ' + plural(team.length, 'person', 'people')) + '</span></div>' +
-    '<div class="seg">' + [['pick', 'Pick people'], ['team', me.admin ? 'Whole team (all)' : 'My whole team'], ['me', 'Just me']].map(([k, l]) => '<button type="button" aria-pressed="' + (q.who === k) + '" data-act="who" data-who="' + k + '">' + l + '</button>').join('') + '</div>' +
-    (q.who === 'pick' ? (team.length > 30 ? '<input type="search" data-act-input="teamsearch" placeholder="Search ' + team.length + ' people" value="' + esc(q.search || '') + '">' : '') +
-      '<div class="chips" id="teamchips">' + teamChips(team, sel, q.search) + '</div>' : '') + '</div>' +
-    rfld('Needed by', 'needBy', { type: 'date' }) + '<div class="field"><span>&nbsp;</span><span class="hint" style="padding-top:12px">Standard turnaround is 7 days.</span></div>' +
-    rfld(t.kind === 'other' ? 'Anything else we should know?' : 'Description', 'description', { area: 1, ph: 'What should it say? Who is it for? Anything it must include?' }) + '</div></section>';
-  if (t.kind === 'class' || t.kind === 'classce') h += '<section class="card"><h2>Class details</h2><div class="grid2">' + rfld('Course name', 'x.Course Name', { full: 1 }) + rfld('Course description', 'x.Course Description', { area: 1 }) +
-    rfld('Instructor', 'x.Instructor Name') + rfld('Date', 'x.Event Date', { type: 'date' }) + rfld('Time', 'x.Event Time', { ph: '10:30 AM – 12:00 PM' }) + rfld('Cost', 'x.Cost', { ph: 'Free' }) +
-    rfld('Location', 'x.Location', { full: 1, ph: 'Street address, city' }) + (t.kind === 'classce' ? rfld('Credit hours', 'x.Credited Hours', { ph: '3' }) : '') +
-    yesNo('Sponsored?', 'Sponsor') + (q.x.Sponsor === 'Yes' ? rfld('Sponsor information', 'x.Sponsor Information', { area: 1, rows: 2 }) : '') + yesNo('Also make a social post?', 'Social Media Post') + '</div></section>';
-  if (t.kind === 'property') h += '<section class="card"><h2>' + esc(t.name) + ' details</h2><div class="grid2">' + rfld('Property address', 'x.Location', { full: 1 }) + rfld('Date', 'x.Event Date', { type: 'date' }) + rfld('Time', 'x.Event Time', { ph: '1:00 – 4:00 PM' }) +
-    rfld('Listing agent info', 'x.Agent info', { area: 1, rows: 2, ph: 'Name, brokerage, phone, email' }) + yesNo('Also make a social post?', 'Social Media Post') + '</div>' + dropZone('photos', 'Property photos', 'JPG or PNG — the best ones first') + '</section>';
-  if (t.kind === 'event') h += '<section class="card"><h2>Event details</h2><div class="grid2">' + rfld('Event name', 'x.Course Name', { full: 1 }) + rfld('Date', 'x.Event Date', { type: 'date' }) + rfld('Time', 'x.Event Time') +
-    rfld('Location', 'x.Location', { full: 1 }) + yesNo('Sponsored?', 'Sponsor') + (q.x.Sponsor === 'Yes' ? rfld('Sponsor information', 'x.Sponsor Information', { area: 1, rows: 2 }) : '') + '</div></section>';
-  h += '<section class="card"><h2>Examples and files <span class="muted" style="font-size:14px;font-weight:500">· optional</span></h2>' + dropZone('files', 'Drop files here or browse', 'Logos, photos, an old flyer you liked — PDF, JPG, PNG or Word') + '</section></div>';
-  const forLabel = whoLabel(q);
-  h += '<aside class="col2"><div class="card" style="gap:10px;font-size:14px"><div class="cardlabel">Summary</div>' +
-    [['Type', t.name], ['State', q.state], ['Requested by', me.name], ['For', forLabel || '—'], ['Needed by', nice(q.needBy)]].map(([k, v]) => '<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><span class="muted">' + k + '</span><b style="text-align:right">' + esc(v) + '</b></div>').join('') + '</div>' +
-    '<div class="preview"><div style="font-size:16px;font-weight:700">Ready to send?</div><button type="button" class="btn primary" data-act="rq-submit" ' + (S.busy ? 'disabled' : '') + '>' + (S.busy ? '<span class="spin"></span> Sending…' : 'Submit request') + '</button>' +
-    '<div class="small" style="color:var(--border);line-height:1.5">You’ll get a confirmation email with your reference number, then another when your proof is ready to approve.</div></div>' +
-    '<a href="#" data-act="rq-back" style="font-weight:600">← Change project type</a></aside></div>';
-  return h;
-}
 function teamChips(team, sel, search) {
   const s = String(search || '').toLowerCase();
   const list = team.filter(p => sel.has(p.id) || !s || p.name.toLowerCase().includes(s));
@@ -467,13 +509,19 @@ ACT.type = el => { S.rq.type = el.dataset.type; render(); if (S.rq.type === 'oth
 ACT['rq-next'] = () => { const q = S.rq; if (q.type === 'other' && !q.other.trim()) { toast('Tell us what you need.'); return; } if (!q.projectName && q.type === 'other') q.projectName = q.other.split(/[.\n]/)[0].slice(0, 60); q.step = 2; render(); window.scrollTo(0, 0); };
 ACT['rq-back'] = (el, e) => { e.preventDefault(); S.rq.step = 1; render(); };
 ACT.who = el => { S.rq.who = el.dataset.who; render(); };
-ACT.person = el => { const q = S.rq, id = el.dataset.id; q.people = q.people.includes(id) ? q.people.filter(x => x !== id) : q.people.concat([id]); el.setAttribute('aria-pressed', q.people.includes(id)); updateSummary(); };
+ACT.person = el => { const q = S.rq, id = el.dataset.id; const adding = !q.people.includes(id); q.people = adding ? q.people.concat([id]) : q.people.filter(x => x !== id); if (adding) q.search = ''; render(); const i = document.querySelector('[data-act-input=teamsearch]'); if (i && adding) i.focus(); };
+ACT['rq-change'] = () => { S.rq.type = null; render(); };
+ACT['rq-std'] = () => { S.rq.needBy = inDays(7); S.rq.pickDate = false; render(); };
+ACT['rq-pickdate'] = () => { S.rq.pickDate = true; render(); const d = document.querySelector('[data-r=needBy]'); if (d) { d.focus(); try { d.showPicker(); } catch (e) {} } };
+ACT['rq-yn'] = el => { S.rq.x[el.dataset.k] = el.checked ? 'Yes' : 'No'; render(); };
 ACT.yn = el => { S.rq.x[el.dataset.k] = el.dataset.v; render(); };
 ACT['file-del'] = el => { S.rq[el.dataset.k].splice(+el.dataset.i, 1); render(); };
 ACT['rq-another'] = () => { S.rq = freshRequest(); };
 ACT['rq-submit'] = async () => {
   const q = S.rq, t = typeByKey(q.state, q.type), me = S.me;
-  if (!q.projectName.trim()) { const el = document.querySelector('[data-r=projectName]'); if (el) { el.classList.add('bad'); el.focus(); } return toast('Give the project a name.'); }
+  if (q.type === 'other' && !String(q.other || '').trim()) { const el = document.querySelector('[data-r=other]'); if (el) { el.classList.add('bad'); el.focus(); } return toast('Tell us what you need.'); }
+  if (!q.projectName.trim()) q.projectName = rqName(q, t) || (q.type === 'other' ? String(q.other).split(/[.\n]/)[0].slice(0, 60) : '');
+  if (!q.projectName.trim()) { const el = document.querySelector('[data-r=projectName],[data-r="x.Course Name"],[data-r="x.Location"]'); if (el) { el.classList.add('bad'); el.focus(); } return toast(t.kind.startsWith('class') ? 'Add the class name.' : t.kind === 'event' ? 'Add the event name.' : t.kind === 'property' ? 'Add the property address.' : 'Give the project a name.'); }
   if (q.who === 'pick' && !q.people.length) return toast('Pick who it’s for (or choose Just me).');
   const forPeople = q.who === 'me' ? [{ name: me.name, email: me.email }] : q.who === 'team' ? [] : me.team.filter(p => q.people.includes(p.id)).map(p => ({ name: p.name, email: p.email }));
   const extra = {};
@@ -513,7 +561,7 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   const t = e.target, d = t.dataset;
   if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther|address1|address2/.test(d.f)) refreshPreview(); }
-  if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); if (d.r === 'needBy') updateSummaryDate(); }
+  if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); rqRefreshSide(); }
   if (d.nlf && t.tagName === 'INPUT') { const [sc, k] = d.nlf.split('.'); nlfState(sc)[k] = t.value; const st = nlfState(sc), b = document.querySelector('[data-act=' + sc + '-nl-add]'); if (b) b.disabled = !(st.header === '__other' ? st.other.trim() : st.header); return; }
   if (d.bq && S.nh) { const b = bioState(S.nh); if (d.bq === 'paste') b.paste = t.value; else if (d.bq === 'text') { b.text = t.value; const nx = document.querySelector('[data-act=nh-next]'); if (nx) nx.disabled = !t.value.trim(); } else b.q[d.bq] = t.value; return; }
   if (d.tm === 'q') { const t = tmState(); t.q = e.target.value; document.getElementById('tm-list').innerHTML = tmList(t); return; }
@@ -523,10 +571,11 @@ document.addEventListener('input', e => {
     arPaint(scope);
     return;
   }
-  if (d.actInput === 'teamsearch') { S.rq.search = t.value; document.getElementById('teamchips').innerHTML = teamChips(S.me.team, new Set(S.rq.people), t.value); }
+  if (d.actInput === 'teamsearch') { S.rq.search = t.value; document.getElementById('teamchips').innerHTML = rqSuggest(S.me.team, new Set(S.rq.people), t.value); }
 });
 document.addEventListener('change', e => {
   const t = e.target, d = t.dataset;
+  if (d.r === 'needBy' && S.rq && route() === 'request') { S.rq.pickDate = true; render(); return; }
   if (d.nlf && t.tagName === 'SELECT') { const [sc, k] = d.nlf.split('.'); const st = nlfState(sc); st[k] = t.value; st.loc = ''; render(); return; }
   if (d.f && (t.tagName === 'SELECT')) { S.nh[d.f] = t.value; render(); }
   if (d.f === 'phone' && S.nh) { S.nh.phone = t.value = fmtPhone(t.value); refreshPreview(); }
@@ -556,6 +605,8 @@ function addFiles(key, list) {
 }
 // only the preview box is redrawn while typing, so the field being typed in is never touched
 function refreshPreview() { const el = document.getElementById('cblock'); if (el && S.nh) el.innerHTML = cblock(S.nh); }
+// keeps the dark summary panel current while typing (without redrawing the form)
+function rqRefreshSide() { const a = document.querySelector('.rq-side'), q = S.rq; if (!a || !q || !q.type) return; a.outerHTML = rqSummary(q, typeByKey(q.state, q.type)); }
 function updateSummaryDate() { const b = [...document.querySelectorAll('aside .card .row')].find(r => r.textContent.startsWith('Needed by')); if (b) b.querySelector('b').textContent = nice(S.rq.needBy); }
 
 

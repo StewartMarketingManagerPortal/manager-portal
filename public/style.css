@@ -280,3 +280,27 @@ select:disabled { opacity: .6; cursor: default; }
 .bio .bt { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
 .bio .bw { font-size: 12px; color: var(--muted); }
 @media (max-width: 900px) { .bios { grid-template-columns: 1fr; } }
+
+/* marketing request: one page, numbered sections */
+.rq-state { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--muted2); font-size: 14px; }
+.rq-sh { display: flex; align-items: center; gap: 12px; } .rq-sh h2 { margin: 0; }
+.rq-n { width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex: none; }
+.rq-n.done { background: var(--green-tint); color: var(--green-text); }
+.rq-group { display: flex; flex-direction: column; gap: 8px; }
+.rq-gl { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.rq-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.rq-tile { display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; color: inherit; background: #F7F6F4; border: 1.5px solid transparent; border-radius: 12px; padding: 10px 12px; cursor: pointer; min-height: 52px; }
+.rq-tile:hover { border-color: var(--field); background: #fff; }
+.rq-tile svg { color: var(--brand); flex: none; }
+.rq-tile b { display: block; font-size: 14px; } .rq-tile small { display: block; font-size: 12px; color: var(--muted); }
+.rq-locked { opacity: .55; }
+.rq-picked { flex-direction: row; align-items: center; justify-content: space-between; }
+.rq-pick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: 1.5px solid var(--field); border-radius: 12px; padding: 8px; }
+.rq-pick input { border: none; flex: 1; min-width: 160px; min-height: 36px; outline: none; font: inherit; background: transparent; }
+.rq-attach { display: flex; align-items: center; gap: 12px; border: 1.5px dashed var(--field); border-radius: 12px; padding: 12px 14px; font-size: 14px; cursor: pointer; }
+.rq-attach svg { color: var(--brand); flex: none; } .rq-attach.over { border-color: var(--brand); background: var(--brand-tint); }
+.rq-plus { margin-left: auto; font-size: 20px; color: var(--brand); font-weight: 700; }
+.rq-side { position: sticky; top: 20px; align-self: flex-start; }
+.rq-sum { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--navtext); }
+.rq-sum b { color: #fff; text-align: right; } .rq-sum b.dim { color: var(--navmuted); font-weight: 600; }
+@media (max-width: 900px) { .rq-side { position: static; } .rq-picked { flex-wrap: wrap; } }
