@@ -77,7 +77,7 @@ function render() {
   const app = $('#app');
   if (!S.data) { app.innerHTML = S.loading ? '<div class="boot"><span class="spin"></span></div>' : signinHtml(); afterSignin(); return; }
   const r = route();
-  const fn = { home: homeHtml, c: catHtml, p: pieceHtml, search: searchHtml }[r.page] || homeHtml;
+  const fn = { home: homeHtml, c: catHtml, p: pieceHtml, search: searchHtml, make: window.makeHtml, film: window.filmHtml, rec: window.recHtml, review: window.reviewHtml }[r.page] || homeHtml;
   app.innerHTML = fn(r.arg);
   hydrate();
 }
@@ -158,7 +158,7 @@ const catByslug = s => ((S.data && S.data.categories) || []).find(c => slug(c.na
 // ================= shared pieces =================
 function tabs(active) {
   const cats = S.data.categories || [];
-  const allCats = [['home', 'Home']].concat(cats.map(c => ['c/' + slug(c.name), c.name]));
+  const allCats = [['home', 'Home']].concat(cats.map(c => ['c/' + slug(c.name), c.name])).concat([['make', 'Make a video']]);
   // computers: menu across the top
   const desk = '<header class="topbar"><div class="wrap"><img class="logo" src="logo-light.png" alt="Stewart Title"><nav aria-label="Main">' +
     allCats.map(([h, l]) => '<a href="#' + h + '" class="' + (active === h ? 'on' : '') + '">' + esc(l) + '</a>').join('') + '</nav>' +
@@ -172,7 +172,7 @@ function tabs(active) {
     '<div class="dwho"><span class="avatar">' + esc(initials(S.data.name)) + '</span><span><b>' + esc(S.data.name) + '</b><span>My Marketing</span></span></div>' +
     '<div class="dlinks">' + link('home', 'Home', I.home) +
     cats.map(c => link('c/' + slug(c.name), c.name, catIcon(c.name), c.newCount ? '<span class="dnew">' + c.newCount + ' new</span>' : '')).join('') +
-    link('search', 'Search', I.search) + '<button class="dl-refresh" data-act="refresh">' + '<span class="mi">' + I.refresh + '</span><span class="ml">Check for new pieces</span></button></div>' +
+    link('make', 'Make a video', I.film) + link('search', 'Search', I.search) + '<button class="dl-refresh" data-act="refresh">' + '<span class="mi">' + I.refresh + '</span><span class="ml">Check for new pieces</span></button></div>' +
     '<div class="dfoot"><button class="btn block" data-act="signout">Sign out</button><span>Questions? Contact the West Marketing team.</span></div></nav>';
   return { top: desk + phone, bottom: '' };
 }
@@ -258,6 +258,7 @@ function homeHtml() {
       '<span class="c">' + c.count + ' piece' + (c.count === 1 ? '' : 's') + (c.newCount ? ' · <em>' + c.newCount + ' new</em>' : '') + '</span></a>').join('') + '</div></div></section>';
   }
 
+  h += '<section class="blk"><div class="wrap"><a class="vhome" href="#make"><span class="vic">' + I.film + '</span><span><b>Make a video</b><span>Record one of our scripts on your phone. We’ll turn it into a finished video for you.</span></span><span class="vchev">' + I.next + '</span></a></div></section>';
   const fresh = all.filter(p => p.isNew && !/market|newsletter/i.test(p.category));
   const latestCat = cats.find(c => !/market|newsletter/i.test(c.name));
   const row = fresh.length ? fresh : latestCat ? inCat(latestCat.name) : [];
@@ -418,6 +419,7 @@ function hydrate() {
   if (r.page === 'home' && S.data.week) setTimeout(() => prefetch(S.data.week), 1500);
   const cq = $('#cq'); if (cq && S.q) { cq.focus(); cq.setSelectionRange(cq.value.length, cq.value.length); }
   const sq = $('#sq'); if (sq) sq.focus();
+  if (window.vAfterRender) vAfterRender();
 }
 document.addEventListener('submit', e => {
   e.preventDefault();

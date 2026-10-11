@@ -1,6 +1,6 @@
 // My Marketing: each employee signs in with the email on their monday.com guest account,
 // gets a code in the monday app, and sees only the pieces assigned to them on the Employee Marketing Portal board.
-import { nk, boardMembers, userByEmail, allowed, itemsFor, notify, forget } from './monday.js';
+import { nk, gql, cached, boardMembers, userByEmail, allowed, itemsFor, notify, forget, boardByName } from './monday.js';
 
 const DAY = 86400e3;
 const CODE_MINUTES = 10;
@@ -36,6 +36,8 @@ async function route(request, env, ctx, url) {
     if (url.searchParams.get('fresh')) forget('items:' + s.uid);
     return json(await content(env, s));
   }
+  if (method === 'GET' && path === '/api/scripts') return json(await scripts(env, s));
+  if (method === 'POST' && path === '/api/video') return uploadVideo(request, env, s, url);
   const m = path.match(/^\/api\/file\/(\d+)$/);
   if (method === 'GET' && m) return file(request, env, ctx, s, m[1], url.searchParams.get('dl') === '1');
   return fail(404, 'Not found');
@@ -195,6 +197,65 @@ async function file(request, env, ctx, s, assetId, download) {
     return new Response(b1, { status: 200, headers: head });
   }
   return new Response(up.body, { status: up.status, headers: head });
+}
+
+// ---------- Make a video: scripts to record, and the phone recordings people send in ----------
+const SCRIPTS_BOARD = 'Video Scripts', UPLOADS_BOARD = 'Phone Video Uploads';
+const MAX_UPLOAD = 95 * 1024 * 1024;   // Cloudflare takes up to 100 MB in one request
+async function scripts(env, s) {
+  const list = await cached('scripts', 600e3, async () => {
+    const b = await boardByName(env, SCRIPTS_BOARD);
+    if (!b) return [];
+    const d = await gql(env, 'query($b:[ID!]){boards(ids:$b){items_page(limit:500){items{id name column_values{id text}}}}}', { b: [b.id] });
+    return d.boards[0].items_page.items.map(it => {
+      const v = {}; it.column_values.forEach(c => v[c.id] = c.text || '');
+      return { id: String(it.id), name: it.name.trim(), text: (v[b.cols.Script] || '').trim(), secs: Number(v[b.cols.Seconds]) || 0, active: !/^n/i.test(v[b.cols.Active] || 'Yes') };
+    }).filter(x => x.active && x.text).sort((a, b) => a.name.localeCompare(b.name));
+  });
+  // which ones this person has already sent in
+  let filmed = [];
+  try {
+    filmed = await cached('filmed:' + s.uid, 60e3, async () => {
+      const u = await boardByName(env, UPLOADS_BOARD);
+      if (!u || !u.cols.Email) return [];
+      const d = await gql(env, 'query($b:ID!,$c:String!,$v:[String]!){items_page_by_column_values(board_id:$b,limit:200,columns:[{column_id:$c,column_values:$v}]){items{column_values(ids:["' + u.cols.Script + '"]){text}}}}',
+        { b: u.id, c: u.cols.Email, v: [s.email] });
+      return d.items_page_by_column_values.items.map(it => (it.column_values[0] || {}).text || '');
+    });
+  } catch (e) {}
+  return { scripts: list, filmed };
+}
+async function uploadVideo(request, env, s, url) {
+  const script = String(url.searchParams.get('script') || '').trim().slice(0, 200);
+  if (!script) return fail(400, 'Which script is this for?');
+  const len = Number(request.headers.get('Content-Length') || 0);
+  if (len > MAX_UPLOAD) return fail(413, 'That video is too long to send. Keep it under 3 minutes and try again.');
+  const type = String(request.headers.get('Content-Type') || 'video/mp4').split(';')[0];
+  const ext = /webm/.test(type) ? 'webm' : /quicktime/.test(type) ? 'mov' : 'mp4';
+  const body = await request.arrayBuffer();
+  if (body.byteLength < 10000) return fail(400, 'The recording came through empty. Please record it again.');
+  if (body.byteLength > MAX_UPLOAD) return fail(413, 'That video is too long to send. Keep it under 3 minutes and try again.');
+  const b = await boardByName(env, UPLOADS_BOARD);
+  if (!b || !b.cols.Video) return fail(500, 'Video uploads aren’t set up yet. Ask West Marketing.');
+  const vals = {};
+  if (b.cols.Person) vals[b.cols.Person] = s.name;
+  if (b.cols.Email) vals[b.cols.Email] = s.email;
+  if (b.cols.Script) vals[b.cols.Script] = script;
+  if (b.cols.Status) vals[b.cols.Status] = 'New';
+  if (b.cols.Uploaded) vals[b.cols.Uploaded] = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const it = (await gql(env, 'mutation($b:ID!,$n:String!,$v:JSON!){create_item(board_id:$b,item_name:$n,column_values:$v){id}}', { b: b.id, n: s.name + ' - ' + script, v: JSON.stringify(vals) })).create_item;
+  const fd = new FormData();
+  fd.append('query', 'mutation ($file: File!) { add_file_to_column (item_id: ' + it.id + ', column_id: "' + b.cols.Video + '", file: $file) { id } }');
+  const name = (s.name + ' - ' + script).replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.' + ext;
+  fd.append('variables[file]', new File([body], name, { type }));
+  const r = await fetch('https://api.monday.com/v2/file', { method: 'POST', headers: { Authorization: env.MONDAY_TOKEN, 'API-Version': '2024-10' }, body: fd });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.errors || j.error_message || !(j.data && j.data.add_file_to_column)) {
+    console.error('upload failed', r.status, JSON.stringify(j).slice(0, 400));
+    return fail(502, 'The video didn’t finish sending. Please try again.');
+  }
+  forget('filmed:' + s.uid);
+  return json({ ok: true });
 }
 
 // ---------- sign-in codes and rate limits ----------

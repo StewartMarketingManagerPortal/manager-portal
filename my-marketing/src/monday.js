@@ -105,3 +105,20 @@ export async function notify(env, uid, targetId, text) {
   await gql(env, 'mutation($u:ID!,$t:ID!,$x:String!){create_notification(user_id:$u,target_id:$t,text:$x,target_type:Project){text}}',
     { u: String(uid), t: String(targetId), x: text });
 }
+
+// a board found by name (and its columns by title) - used for the video scripts and phone uploads boards
+export async function boardByName(env, name) {
+  return cached('board:' + name, 3600e3, async () => {
+    let id = '';
+    for (let page = 1; page < 40 && !id; page++) {
+      const d = await gql(env, 'query($p:Int){boards(limit:200,page:$p,state:active){id name}}', { p: page });
+      if (!d.boards.length) break;
+      const b = d.boards.find(x => nk(x.name) === nk(name));
+      if (b) id = String(b.id);
+    }
+    if (!id) return null;
+    const d = await gql(env, 'query($b:[ID!]){boards(ids:$b){columns{id title type}}}', { b: [id] });
+    const cols = {}; d.boards[0].columns.forEach(c => { cols[c.title] = c.id; });
+    return { id, cols };
+  });
+}
