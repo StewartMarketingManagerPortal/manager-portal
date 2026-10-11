@@ -67,7 +67,7 @@ async function onbLoad(force) {
   catch (e) { OB.err = e.message; OB.list = OB.list || []; }
   OB.loading = false;
   if (!S.reqs) loadRequests();
-  if (route() === 'onboard' || route() === 'team') render();
+  if (route() === 'onboard' || route() === 'team' || route() === 'home') render();
 }
 const onbPost = body => api('onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 function onbSave(h) {
@@ -280,3 +280,23 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && OB.mail) {
 // called by the New Hire form after it's sent from an onboarding
 function onbMarkSent(id) { const h = onbHire(id); if (!h) return; const D = h.data = h.data || {}; D.d = D.d || {}; D.d.mkt = onbToday(); onbSave(h); }
 window.onbMarkSent = onbMarkSent;
+
+// Home page: everyone being onboarded right now
+function onbHomeCard() {
+  if (!OB.list) { onbLoad(); return ''; }
+  const act = OB.list.filter(h => !(h.data || {}).fin);
+  if (!act.length) return '';
+  const today = new Date(iso(new Date()) + 'T12:00:00');
+  return '<section class="card hob"><div class="row" style="justify-content:space-between;align-items:center"><h2>Onboarding</h2><span class="row" style="gap:14px"><a href="#onboard" style="font-size:14px;font-weight:600">See all</a><a class="btn hob-add" href="#onboard">+ Onboard a new hire</a></span></div><div>' +
+    act.map(h => {
+      const t = onbTotals(h), nx = ONB_STEPS.find(x => { const c = onbCount(h, x); return c.done < c.total; });
+      const d = h.start ? Math.round((new Date(h.start + 'T12:00:00') - today) / 864e5) : null;
+      const when = d == null ? '' : d > 0 ? plural(d, 'day') + ' to day 1' : d === 0 ? 'Starts today' : 'Day ' + (1 - d);
+      return '<a class="hob-row" href="#onboard/' + esc(h.id) + '"><span class="ob-av">' + esc(initials(h.name)) + '</span><span class="grow"><b>' + esc(h.name) + '</b><small>' +
+        esc([h.title, h.start ? (d != null && d < 0 ? 'started ' : 'starts ') + nice(h.start) : '', S.me.admin && h.managerEmail !== S.me.email ? h.manager : ''].filter(Boolean).join(' · ')) + '</small></span>' +
+        (nx ? '<span class="hob-next">Next: ' + esc(nx.t) + '</span>' : '<span class="hob-next ok">Ready to complete</span>') +
+        '<span class="hob-p"><span class="ob-bar"><i style="width:' + Math.round(t.done / Math.max(1, t.total) * 100) + '%"></i></span><small><b>' + t.done + '</b> of ' + t.total + ' done</small></span>' +
+        '<span class="hob-days' + (d != null && d >= 0 && d <= 10 ? ' soon' : '') + '">' + esc(when) + '</span><span class="hob-go">›</span></a>';
+    }).join('') + '</div></section>';
+}
+window.onbHomeCard = onbHomeCard;

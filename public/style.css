@@ -397,3 +397,17 @@ select:disabled { opacity: .6; cursor: default; }
 .nh-inv { grid-column: 1 / -1; background: var(--brand-tint); border: 1.5px solid #EFCDD5; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .nh-inv b { font-size: 15px; } .nh-inv small { color: var(--muted2); font-size: 13px; line-height: 1.45; }
 .nh-opt { font-size: 11px; font-weight: 700; color: var(--muted); background: #fff; border-radius: 6px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
+
+.hob h2 { margin: 0; }
+.hob-add { min-height: 38px; padding: 7px 14px; font-size: 14px; }
+.hob-row { display: flex; align-items: center; gap: 14px; padding: 12px 6px; border-top: 1px solid var(--line); text-decoration: none; color: var(--ink); border-radius: 10px; }
+.hob-row:first-child { border-top: none; }
+.hob-row:hover { background: var(--paper); }
+.hob-row b { display: block; font-size: 15px; } .hob-row small { color: var(--muted); font-size: 13px; }
+.hob-p { width: 190px; flex: none; } .hob-p .ob-bar { margin: 0 0 4px; } .hob-p small { font-size: 12px; } .hob-p small b { display: inline; font-size: 12px; }
+.hob-next { flex: none; font-size: 12.5px; font-weight: 700; color: var(--brand); background: var(--brand-tint); border-radius: 999px; padding: 5px 11px; white-space: nowrap; }
+.hob-next.ok { color: var(--green-text); background: var(--green-tint); }
+.hob-days { flex: none; font-size: 12.5px; font-weight: 700; color: var(--muted2); width: 110px; text-align: right; }
+.hob-days.soon { color: #8A5A00; }
+.hob-go { color: var(--muted); font-size: 20px; }
+@media (max-width: 1100px) { .hob-p, .hob-next { display: none; } }
