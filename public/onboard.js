@@ -97,18 +97,20 @@ PAGES.onboard = () => {
     (days != null ? ' · ' + (days > 0 ? plural(days, 'day') + ' until day 1' : days === 0 ? 'starts today' : 'day ' + (1 - days)) : '') + '</div></div><ol class="ob-steps">' +
     ONB_STEPS.map((x, i) => {
       const c = onbCount(h, x), all = c.done === c.total, left = c.total - c.done;
-      return '<li class="' + (x === s ? 'on ' : '') + (all ? 'done ' : '') + (x.mkt ? 'mkt' : '') + '"><a href="#onboard/' + esc(h.id) + '/' + x.k + '"><span class="ob-n">' + (all ? OB_CK : i + 1) + '</span><span class="ob-tx"><b>' + esc(x.t) + '</b><small>' + esc(x.when(h)) + '</small></span>' +
+      return '<li class="' + (x === s ? 'on ' : '') + (all ? 'done ' : '') + (x.mkt ? 'mkt' : '') + '"><a ' + onbHref(h, x.k) + '><span class="ob-n">' + (all ? OB_CK : i + 1) + '</span><span class="ob-tx"><b>' + esc(x.t) + '</b><small>' + esc(x.when(h)) + '</small></span>' +
         '<span class="ob-cc">' + (all ? '<i class="ok" title="All done">' + OB_CK + '</i>' : (c.done ? '<i class="ok" title="' + c.done + ' done">' + c.done + '</i>' : '') + '<i class="left" title="' + left + ' to go">' + left + '</i>') + '</span></a></li>';
     }).join('') + '</ol></aside><section class="ob-main">' + onbStep(h, s) + '</section></div>';
   if (OB.mail) out += onbMailBox(h);
   return out;
 };
+// Marketing setup goes straight to the New Hire form (filled in) until it's been sent
+function onbHref(h, k) { return k === 'mkt' && !onbSent(h) ? 'href="#" data-act="ob-nh"' : 'href="#onboard/' + esc(h.id) + '/' + k + '"'; }
 function onbFirstOpen(h) { return ONB_STEPS.find(x => { const c = onbCount(h, x); return c.done < c.total; }) || ONB_STEPS[0]; }
 function onbStep(h, s) {
   const i = ONB_STEPS.indexOf(s), nx = ONB_STEPS[i + 1], first = h.name.split(' ')[0];
   const D = (h.data = h.data || {}), done = D.d || {}, mailed = D.m || {};
-  const foot = '<div class="row ob-foot">' + (i ? '<a class="btn" href="#onboard/' + esc(h.id) + '/' + ONB_STEPS[i - 1].k + '">‹ ' + esc(ONB_STEPS[i - 1].t) + '</a>' : '<span></span>') +
-    (nx ? '<a class="btn" href="#onboard/' + esc(h.id) + '/' + nx.k + '">Next: ' + esc(nx.t) + ' ›</a>' : '<span class="small muted">That’s the last step.</span>') + '</div>';
+  const foot = '<div class="row ob-foot">' + (i ? '<a class="btn" ' + onbHref(h, ONB_STEPS[i - 1].k) + '>‹ ' + esc(ONB_STEPS[i - 1].t) + '</a>' : '<span></span>') +
+    (nx ? '<a class="btn" ' + onbHref(h, nx.k) + '>Next: ' + esc(nx.t) + ' ›</a>' : '<span class="small muted">That’s the last step.</span>') + '</div>';
   if (s.mkt) {
     const sent = onbSent(h);
     return '<div class="card ob-mkt"><div class="ob-eyebrow">Step ' + (i + 1) + ' of ' + ONB_STEPS.length + ' · West Marketing</div><h2>Set ' + esc(first) + ' up with marketing</h2>' +
