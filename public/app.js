@@ -170,14 +170,14 @@ function nhDetails(n) {
     nhInviteBox(n) +
     '<div class="field">Show on their materials<div class="row" style="gap:4px 24px">' + [['phone', 'Phone'], ['email', 'Email'], ['address', 'Office address'], ['headshot', 'Headshot']].map(([k, l]) =>
       '<label class="check"><input type="checkbox" data-show="' + k + '" ' + (n.show[k] ? 'checked' : '') + '> ' + l + '</label>').join('') + '</div></div>' +
-    '<div id="nh-areas" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Market update areas <span class="muted" style="font-size:14px;font-weight:500">· at least 2</span></h2>' +
+    '<div id="nh-areas" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Market update areas <span class="muted" style="font-size:14px;font-weight:500">· at least 2 required</span></h2>' +
     '<div class="muted2" style="font-size:14px;margin-top:4px">The cities or zip codes they work. They’ll get a weekly market snapshot graphic for each one.</div></div>' +
     (n.areas.length ? '<div class="tm-areas">' + n.areas.map((a, i) => '<div class="tm-area"><span class="grow"><b>' + esc(a.label || a.area) + '</b><a class="small" href="' + esc(a.link) + '" target="_blank" rel="noopener">View report</a></span>' +
       '<button type="button" class="btn small" data-act="nh-area-del" data-i="' + i + '">Remove</button></div>').join('') + '</div>' : '') +
     (n.areas.length < 2 ? '<div class="small" style="color:var(--brand);font-weight:600">' + (n.areas.length ? 'Add 1 more area to continue.' : 'Add at least 2 areas to continue.') + '</div>' : '') +
     '<div class="tm-add" style="border-top:none;padding-top:0"><h3>Add an area</h3>' + areaSteps() + areaFields('nh') +
     '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="nh-area-add" data-ar-add="nh"' + (arState('nh').link && arState('nh').area ? '' : ' disabled') + '>Add area</button></div></div></div>' +
-    '<div id="nh-nl" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Newsletter area <span class="muted" style="font-size:14px;font-weight:500">· at least 1</span></h2>' +
+    '<div id="nh-nl" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Newsletter area <span class="muted" style="font-size:14px;font-weight:500">· at least 1 required</span></h2>' +
     '<div class="muted2" style="font-size:14px;margin-top:4px">The area for their monthly newsletter / event calendar (local events plus a seasonal feature).</div></div>' +
     (n.nlAreas.length ? '<div class="tm-areas">' + n.nlAreas.map((a, i) => '<div class="tm-area"><span class="grow"><b>' + esc(nlName(a.header)) + '</b>' + (a.location ? '<span class="small muted">' + esc(a.location) + '</span>' : '') + '</span>' +
       '<button type="button" class="btn small" data-act="nh-nl-del" data-i="' + i + '">Remove</button></div>').join('') + '</div>' : '<div class="small" style="color:var(--brand);font-weight:600">Add their newsletter area to continue.</div>') +
