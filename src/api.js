@@ -33,6 +33,7 @@ export async function onRequest(ctx) {
     if (route === 'team' && m === 'GET') return json(await myTeam(env, me));
     if (route.startsWith('photo/') && m === 'GET') return await teamPhoto(env, me, route.split('/')[1]);
     if (route === 'areas' && m === 'POST') { const r = await changeArea(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
+    if (route.startsWith('remote/')) { if (!me.row.admin) return fail('The Marketing Tools remote is for West Marketing only.', 403); const r = await remoteRoute(env, me, route.slice(7), m, request); if (r instanceof Response) return r; return json(r, r.error ? 400 : 200); }
     if (route.startsWith('viewas/') && m === 'GET') { const r = await viewAsLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route.startsWith('content/') && m === 'GET') { const r = await teamContent(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route.startsWith('asset/') && m === 'GET') return await teamAsset(env, me, route.split('/')[1], route.split('/')[2], new URL(request.url).searchParams.get('dl'));
@@ -693,4 +694,50 @@ async function viewAsLink(env, me, id) {
   const body = b64u(enc.encode(JSON.stringify({ uid, name: who.name, by: me.email, exp: Date.now() + 5 * 60e3 })));
   const sig = b64u(await crypto.subtle.sign('HMAC', key, enc.encode(body)));
   return { url: (env.MY_MARKETING_URL || MY_MARKETING) + '/api/viewas?t=' + body + '.' + sig };
+}
+
+// ---------- Marketing Tools phone remote (portal admins only) ----------
+// The Mac app writes its status to the "Marketing Tools Remote" board every 15 seconds and picks up requests from it.
+const RM_ACTIONS = { 'video.build': 'Build video', 'video.remove': 'Remove video', 'hire.make': 'Set up new hire', 'person.refresh': 'Refresh pieces', 'portal.invite': 'Portal invite', 'portal.add': 'Add to portal', 'dist.mark': 'West Marketing All' };
+async function rmBoard(env) {
+  const id = await cached('rmBoard', 600e3, async () => { try { return await boardId(env, 'Marketing Tools Remote', 'REMOTE_BOARD_ID'); } catch (e) { return ''; } });
+  if (!id) { forget('rmBoard'); forget('board:Marketing Tools Remote'); return null; }
+  const cols = await columns(env, id), col = {};
+  ['Kind', 'State', 'Payload', 'By', 'Result'].forEach(t => { const c = cols.byTitle[nk(t)]; if (c) col[t] = c.id; });
+  return { id, col };
+}
+async function remoteRoute(env, me, sub, m, request) {
+  const b = await rmBoard(env);
+  if (sub === 'status' && m === 'GET') {
+    if (!b) return { waiting: true };
+    const items = await allItems(env, b.id, Object.values(b.col));
+    const rows = items.map(it => { const v = {}; it.column_values.forEach(c => v[c.id] = c.text || ''); return { id: String(it.id), name: it.name, kind: v[b.col.Kind], state: v[b.col.State], payload: v[b.col.Payload], by: v[b.col.By], result: v[b.col.Result], created: it.created_at }; });
+    const beat = Number((rows.find(r => r.name === 'beat') || {}).payload || 0);
+    const parts = rows.filter(r => r.kind === 'data').sort((x, y) => Number(x.name.split(':')[1]) - Number(y.name.split(':')[1]));
+    let data = null;
+    if (parts.length) { const first = parts[0].payload, bar = first.indexOf('|'), n = Number(first.slice(0, bar)); if (parts.length >= n) { try { data = JSON.parse(first.slice(bar + 1) + parts.slice(1, n).map(x => x.payload).join('')); } catch (e) {} } }
+    const commands = rows.filter(r => r.kind === 'command').sort((x, y) => Number(y.id) - Number(x.id)).slice(0, 12).map(r => ({ id: r.id, title: r.name, state: r.state, result: r.result, by: r.by, created: r.created }));
+    return { beat, now: Date.now(), data, commands };
+  }
+  if (sub === 'command' && m === 'POST') {
+    if (!b || !b.col.Kind) return { error: 'The remote isn’t set up yet. Open Marketing Tools on the Mac once.' };
+    const body = await request.json().catch(() => ({}));
+    if (!RM_ACTIONS[body.action]) return { error: 'Unknown request.' };
+    const args = body.args && typeof body.args === 'object' ? body.args : {};
+    const vals = {}; vals[b.col.Kind] = 'command'; vals[b.col.State] = 'New'; vals[b.col.By] = me.email;
+    vals[b.col.Payload] = { text: JSON.stringify({ action: body.action, args }).slice(0, 1900) };
+    const name = RM_ACTIONS[body.action] + (args.name ? ' · ' + String(args.name).slice(0, 60) : args.who ? ' · ' + String(args.who).slice(0, 60) : '');
+    const id = await createItem(env, b.id, null, name, vals);
+    return { ok: true, id: String(id) };
+  }
+  const v = sub.match(/^video\/(\d+)$/);
+  if (v && m === 'GET') {
+    const d = await gql(env, 'query($i:[ID!]){items(ids:$i){board{name} assets{id name file_extension public_url}}}', { i: [v[1]] });
+    const it = d.items[0];
+    if (!it || nk(it.board.name) !== nk('Phone Video Uploads')) return { error: 'Video not found.' };
+    const a = (it.assets || []).find(x => /\.(mp4|mov|m4v|webm)$/i.test(x.name)) || it.assets[0];
+    if (!a || !a.public_url) return { error: 'Video not found.' };
+    return Response.redirect(a.public_url, 302);
+  }
+  return { error: 'Not found' };
 }

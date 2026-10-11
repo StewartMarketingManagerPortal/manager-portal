@@ -1,0 +1,182 @@
+// Marketing Tools · phone remote. Reads the Mac's status (through the Manager Portal) and sends it requests.
+// The Mac app does the work; this page only shows what's going on and asks for things.
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+const plural = (n, w) => n + ' ' + (n === 1 ? w : w + 's');
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const R = { st: null, err: '', loading: false, sheet: null, q: '' };
+
+async function api(path, opts) {
+  const r = await fetch('/api/' + path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || 'Something went wrong (' + r.status + ')');
+  return j;
+}
+async function load() {
+  if (R.loading) return; R.loading = true;
+  try { R.st = await api('remote/status'); R.err = ''; } catch (e) { R.err = e.message; }
+  R.loading = false;
+  // don't interrupt a playing video or someone typing
+  const v = document.querySelector('video'), f = document.activeElement;
+  if ((v && !v.paused) || (f && /INPUT|TEXTAREA/.test(f.tagName))) return;
+  render();
+}
+function toast(msg, bad) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const el = document.createElement('div'); el.className = 'toast' + (bad ? ' bad' : ''); el.innerHTML = '<i></i><span>' + esc(msg) + '</span>';
+  document.body.appendChild(el); setTimeout(() => el.remove(), 4500);
+}
+async function send(action, args, msg) {
+  try { await api('remote/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, args }) }); toast(msg || 'Sent to your Mac'); setTimeout(load, 1500); }
+  catch (e) { toast(e.message, true); }
+}
+
+// ---------- status helpers ----------
+const D = () => (R.st && R.st.data) || {};
+function macState() {
+  const s = R.st; if (!s || !s.beat) return { k: 'off', t: 'Waiting for your Mac' };
+  const age = (s.now || Date.now()) - s.beat;
+  if (age < 90e3) return { k: 'ok', t: 'Your Mac is ready' };
+  if (age < 15 * 60e3) return { k: 'late', t: 'Mac checked in ' + Math.round(age / 60e3) + ' min ago' };
+  return { k: 'off', t: 'Mac is asleep or Marketing Tools is closed · requests will wait' };
+}
+const ago = t => { const m = Math.round((Date.now() - t) / 60e3); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' hr ago' : MON[new Date(t).getMonth()] + ' ' + new Date(t).getDate(); };
+const today = () => { const d = new Date(); return MON[d.getMonth()] + ' ' + d.getDate(); };
+const pstPill = s => s === 'ok' ? '<span class="pill ok">On portal</span>' : s === 'wait' ? '<span class="pill w">Invited</span>' : s === 'account' ? '<span class="pill b">Has login</span>' : s === 'none' ? '<span class="pill no">Not on portal</span>' : '';
+const distOf = note => /^on the list/i.test(note) ? 'on' : /^requested/i.test(note) ? 'req' : 'none';
+const distPill = s => s === 'on' ? '<span class="pill ok">On WM All</span>' : s === 'req' ? '<span class="pill w">Requested</span>' : '<span class="pill no">Not on WM All</span>';
+const stateWord = s => /^new$/i.test(s) ? ['g', 'Waiting for Mac'] : /taken|running/i.test(s) ? ['w', 'Working'] : /done/i.test(s) ? ['ok', 'Done'] : /problem/i.test(s) ? ['no', 'Problem'] : ['g', s || '…'];
+
+// ---------- pages ----------
+const route = () => (location.hash || '#home').slice(1).split('/');
+window.addEventListener('hashchange', () => { R.sheet = null; render(); window.scrollTo(0, 0); });
+const IC = {
+  home: '<path d="M3 11l9-8 9 8v10H3z"/><path d="M9 21v-6h6v6"/>', video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/>',
+  hires: '<circle cx="10" cy="8" r="4"/><path d="M3 21c1-4 4-6 7-6s6 2 7 6"/><path d="M19 8v6M16 11h6"/>', people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.5-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16.5 14.6c2.6.2 4.4 1.9 5 5.4"/>',
+};
+const svg = k => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + IC[k] + '</svg>';
+function nav(on) {
+  const c = D().c || {};
+  const t = (k, label, n) => '<a href="#' + k + '" class="' + (on === k ? 'on' : '') + '">' + svg(k) + label + (n ? '<span class="n">' + n + '</span>' : '') + '</a>';
+  return '<nav class="nav">' + t('home', 'Home') + t('video', 'Video', c.inbox) + t('hires', 'New Hires', c.hires) + t('people', 'People') + '</nav>';
+}
+function render() {
+  const [pg, arg] = route();
+  if (!R.st) { $('#app').innerHTML = R.err ? '<div class="body"><div class="card">' + esc(R.err) + '</div><button class="btn" onclick="load()">Try again</button></div>' : '<div class="boot"><span class="spin"></span></div>'; return; }
+  const f = { home: home, video: arg != null ? videoOne : videoList, hires: arg != null ? hireOne : hireList, people: arg != null ? personOne : peopleList }[pg] || home;
+  $('#app').innerHTML = f(arg) + nav(pg) + (R.sheet ? R.sheet() : '');
+}
+
+function home() {
+  const d = D(), c = d.c || {}, m = macState(), now = new Date();
+  const hr = now.getHours(), first = (d.who || '').split(' ')[0];
+  let h = '<div class="top"><img src="/logo-light.png" alt="Stewart Title"><div class="t">MARKETING TOOLS · REMOTE</div><h1>' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + (first ? ', ' + esc(first) : '') + '</h1>' +
+    '<p>' + DAYS[now.getDay()] + ', ' + MON[now.getMonth()] + ' ' + now.getDate() + '</p><div class="mac ' + (m.k === 'ok' ? '' : m.k) + '"><i></i>' + esc(m.t) + '</div></div><div class="body">';
+  if (!R.st.data) h += '<div class="card"><b>Not connected yet</b><div class="note" style="margin-top:6px">Open Marketing Tools on your Mac. It connects to this remote within about 15 seconds.</div></div>';
+  if (d.job) h += '<div class="card"><div class="lbl">Running now</div><div style="margin-top:8px"><b style="font-size:14.5px">' + esc(d.job.t) + '</b><div class="note">' + esc(d.job.l) + ' · step ' + d.job.s + ' of ' + d.job.n + '</div><div class="bar"><i style="width:' + (d.job.p != null ? d.job.p : Math.round((d.job.s - 1) / d.job.n * 100)) + '%"></i></div></div></div>';
+  const tile = (n, label, href, red) => '<a class="tile' + (red && n ? ' red' : '') + '" href="' + href + '"><b>' + (n == null ? '–' : n) + '</b><span>' + label + '</span></a>';
+  h += '<div class="tiles">' + tile(c.inbox, 'Videos in the inbox', '#video', true) + tile(c.hires, 'New hires pending', '#hires') + tile(c.req, 'New marketing requests', '#home') + tile(c.noPortal, 'Not on the portal', '#people') + '</div>';
+  if (d.last) h += '<div class="card"><div class="lbl">Last finished</div><div class="row"><div class="g"><b>' + esc(d.last.t) + '</b><small>' + ago(d.last.f) + (d.last.bad ? ' · ' + plural(d.last.bad, 'problem') : d.last.stop ? ' · stopped' : '') + '</small></div><span class="pill ' + (d.last.bad || d.last.stop ? 'no">Problem' : 'ok">Done') + '</span></div></div>';
+  const cmds = R.st.commands || [];
+  if (cmds.length) h += '<div class="card reqs"><div class="lbl">Your requests</div>' + cmds.slice(0, 6).map(x => { const [k, w] = stateWord(x.state); return '<div class="row"><div class="g"><b>' + esc(x.title) + '</b><small>' + esc(x.result || ago(Date.parse(x.created))) + '</small></div><span class="pill ' + k + '">' + w + '</span></div>'; }).join('') + '</div>';
+  return h + '</div>';
+}
+
+// video
+function videoList() {
+  const L = D().inbox || [];
+  let h = '<div class="hd"><h2>Video inbox</h2><div class="sub">' + plural(L.length, 'clip') + ' waiting to be built</div></div><div class="body">';
+  if (!L.length) return h + '<div class="empty">The inbox is empty.</div></div>';
+  return h + '<div class="card list">' + L.map((c, i) => '<a class="row" href="#video/' + i + '"><span class="av">' + esc(initials(c.who || '?')) + '</span><span class="g"><b>' + esc(c.who || 'Who’s this?') + '</b><small>' + esc(c.topic) + ' · ' + (c.phone ? 'phone' : 'studio') + '</small></span><span class="pill ' + (c.k === 'ready' ? 'ok' : 'w') + '">' + esc(c.lab) + '</span></a>').join('') + '</div></div>';
+}
+function videoOne(i) {
+  const c = (D().inbox || [])[+i]; if (!c) return '<div class="hd"><a class="back" href="#video">‹ Video inbox</a><h2>Gone</h2></div><div class="body"><div class="empty">That clip isn’t in the inbox any more.</div></div>';
+  let h = '<div class="hd"><a class="back" href="#video">‹ Video inbox</a><h2>' + esc(c.who || 'Who’s this?') + '</h2><div class="sub">' + esc(c.topic) + ' · ' + (c.phone ? 'phone upload' : 'studio clip') + '</div></div><div class="body">';
+  h += c.phone && c.item ? '<video class="vid" src="/api/remote/video/' + esc(c.item) + '" controls playsinline preload="metadata"></video>' : '<div class="novid">' + (c.phone ? 'This one can only be watched on the Mac.' : 'Studio clip (' + c.mb + ' MB) · watch it on the Mac') + '</div>';
+  h += '<div class="card"><div class="row"><div class="g"><b>' + (c.k === 'ready' ? 'Ready to build' : c.k === 'setup' ? 'Needs setup on the Mac' : 'Pick who’s in it on the Mac') + '</b><small>' + esc(c.shoot) + '</small></div><span class="pill ' + (c.k === 'ready' ? 'ok' : 'w') + '">' + esc(c.lab) + '</span></div></div>';
+  h += '<button class="btn p" data-a="vbuild" data-i="' + i + '"' + (c.k === 'ready' ? '' : ' disabled') + '>Build video</button>';
+  h += '<button class="btn" data-a="vremove" data-i="' + i + '">' + (c.phone ? 'Remove + reshoot' : 'Remove from the inbox') + '</button></div>';
+  return h;
+}
+
+// new hires
+function hireList() {
+  const L = D().hires || [];
+  let h = '<div class="hd"><h2>New hires</h2><div class="sub">Marketing Setup = Pending · one at a time</div></div><div class="body">';
+  if (!L.length) return h + '<div class="empty">Nobody is pending.</div></div>';
+  return h + '<div class="card list">' + L.map((p, i) => '<a class="row" href="#hires/' + i + '"><span class="av">' + esc(initials(p.n)) + '</span><span class="g"><b>' + esc(p.n) + '</b><small>' + esc(p.t || '') + '</small></span>' + (p.ps && p.ps !== 'ok' ? pstPill(p.ps) : '') + '<span class="chev">›</span></a>').join('') + '</div></div>';
+}
+function hireOne(i) {
+  const p = (D().hires || [])[+i]; if (!p) return '<div class="hd"><a class="back" href="#hires">‹ New hires</a><h2>Gone</h2></div><div class="body"><div class="empty">They’re not pending any more.</div></div>';
+  let h = '<div class="hd"><a class="back" href="#hires">‹ New hires</a><h2>' + esc(p.n) + '</h2><div class="sub">' + esc(p.t || '') + '</div></div><div class="body">';
+  h += '<div class="card"><div class="lbl">Day-one package</div><div class="row"><div class="g"><b>' + (p.photo ? 'Headshot ready' : 'No headshot yet') + '</b><small>New hire package, title tips, flyers' + (p.areas ? ', market update (' + plural(p.areas, 'area') + ')' : '') + ', upload to the portal</small></div><span class="pill ' + (p.photo ? 'ok">✓' : 'w">No photo') + '</span></div></div>';
+  h += accessCard(p.n, p.ps, p.pe, p.d);
+  h += '<button class="btn p" data-a="hmake" data-n="' + esc(p.n) + '">Make everything + upload</button><div class="note" style="text-align:center">Marks them Done on the board when finished. Runs on your Mac.</div></div>';
+  return h;
+}
+function accessCard(name, ps, pe, note) {
+  const ds = distOf(note || ''), N = esc(name);
+  let h = '<div class="card"><div class="row"><div class="g"><b>Employee Marketing Portal</b><small>' + esc(pe || (ps === 'none' ? 'Not invited yet' : '')) + '</small></div>' + pstPill(ps) + '</div>';
+  if (ps === 'none' || ps === 'wait') h += '<button class="btn" style="margin:4px 0 8px" data-a="pinvite" data-n="' + N + '" data-e="' + esc(pe || '') + '">' + (ps === 'wait' ? 'Resend invite' : 'Send invite') + '</button>';
+  if (ps === 'account') h += '<button class="btn" style="margin:4px 0 8px" data-a="padd" data-n="' + N + '">Add to portal</button>';
+  h += '<div class="row"><div class="g"><b>West Marketing All</b><small>' + esc(ds === 'none' ? 'Not requested yet' : note.split(' · ')[0]) + '</small></div>' + distPill(ds) + '</div>';
+  h += ds === 'on' ? '' : '<div class="btns" style="margin-top:4px">' + (ds === 'req' ? '<button class="btn" data-a="dconfirm" data-n="' + N + '" data-note="' + esc(note) + '">✓ On the list</button><button class="btn" data-a="dmail" data-n="' + N + '">Resend email</button>' : '<button class="btn" data-a="dmail" data-n="' + N + '">Send email</button><button class="btn" data-a="dalready" data-n="' + N + '">Already on it</button>') + '</div>';
+  return h + '</div>';
+}
+
+// people
+function peopleList() {
+  const L = D().people || [], q = R.q.toLowerCase().trim();
+  const hits = L.map((p, i) => [p, i]).filter(([p]) => !q || (p[0] + ' ' + p[1]).toLowerCase().includes(q)).slice(0, 60);
+  return '<div class="hd"><h2>People</h2><div class="sub">' + plural(L.length, 'person') + ' on the Main Employee Sheet</div></div><div class="body"><input class="search" type="search" placeholder="Search name or title" value="' + esc(R.q) + '" data-q>' +
+    '<div class="card list" id="plist">' + (hits.length ? hits.map(([p, i]) => '<a class="row" href="#people/' + i + '"><span class="av">' + esc(initials(p[0])) + '</span><span class="g"><b>' + esc(p[0]) + '</b><small>' + esc(p[1]) + '</small></span>' + (p[2] && p[2] !== 'ok' ? pstPill(p[2]) : '') + '<span class="chev">›</span></a>').join('') : '<div class="empty">Nobody matches.</div>') + '</div></div>';
+}
+function personOne(i) {
+  const p = (D().people || [])[+i]; if (!p) return '<div class="hd"><a class="back" href="#people">‹ People</a></div>';
+  const hire = (D().hires || []).find(h => h.n === p[0]);
+  let h = '<div class="hd"><a class="back" href="#people">‹ People</a><h2>' + esc(p[0]) + '</h2><div class="sub">' + esc(p[1]) + '</div></div><div class="body">';
+  h += accessCard(p[0], p[2], p[4], hire ? hire.d : p[3] === 'on' ? 'On the list' : p[3] === 'req' ? 'Requested' : '');
+  h += '<button class="btn p" data-a="prefresh" data-n="' + esc(p[0]) + '">Refresh their pieces</button><div class="note" style="text-align:center">Remakes their new hire package, title tips, flyers and market update with what’s on the board now, and uploads them. Use it after a title, phone or headshot change.</div></div>';
+  return h;
+}
+
+// ---------- sheets (confirm / type something) ----------
+function sheet(html) { R.sheet = () => '<div class="sheet" data-a="close"><div class="in">' + html + '</div></div>'; render(); const f = document.querySelector('.sheet input,.sheet textarea'); if (f) f.focus(); }
+function confirmSheet(title, text, ok, run) { R.run = run; sheet('<h3>' + esc(title) + '</h3><div class="note">' + esc(text) + '</div><button class="btn p" data-a="ok">' + esc(ok) + '</button><button class="btn" data-a="close">Cancel</button>'); }
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]'); if (!el) return;
+  const a = el.dataset.a, d = D();
+  if (a === 'close') { if (e.target === el || el.tagName === 'BUTTON') { R.sheet = null; render(); } return; }
+  if (a === 'ok') { const f = R.run; R.sheet = null; render(); if (f) f(); return; }
+  if (a === 'vbuild') { const c = d.inbox[+el.dataset.i]; return confirmSheet('Build this video?', (c.who || '') + ' · ' + c.topic + '. Takes about 5 minutes on your Mac. Both sizes go to their 10_Videos folder.', 'Build video', () => send('video.build', { path: c.path, who: c.who + ' · ' + c.topic }, 'Sent to your Mac · building ' + c.topic)); }
+  if (a === 'vremove') {
+    const c = d.inbox[+el.dataset.i]; R.run = null;
+    sheet('<h3>Remove this clip?</h3><div class="note">It comes out of the inbox and is kept in 3_Built › Removed for 30 days.</div>' +
+      (c.phone ? '<label class="check"><input type="checkbox" id="rs" checked> Ask ' + esc((c.who || 'them').split(' ')[0]) + ' to reshoot it</label><label class="field">What to fix (they’ll see this)<textarea id="rn" rows="3" placeholder="For example: The room is too dark. Face a window and try again."></textarea></label>' : '') +
+      '<button class="btn p" data-a="vremove-go" data-i="' + el.dataset.i + '">Remove</button><button class="btn" data-a="close">Cancel</button>');
+    return;
+  }
+  if (a === 'vremove-go') { const c = d.inbox[+el.dataset.i], rs = $('#rs'), rn = $('#rn'); R.sheet = null; render(); return send('video.remove', { path: c.path, reshoot: !!(rs && rs.checked), note: rn ? rn.value.trim() : '', who: c.who + ' · ' + c.topic }, 'Sent to your Mac · removing the clip'); }
+  if (a === 'hmake') { const n = el.dataset.n; return confirmSheet('Set up ' + n + '?', 'Makes their headshot, folders, new hire package, title tips, flyers and market update, uploads everything to the portal, and marks them Done. Runs on your Mac and takes a while.', 'Make everything + upload', () => send('hire.make', { name: n }, 'Sent to your Mac · setting up ' + n)); }
+  if (a === 'prefresh') { const n = el.dataset.n; return confirmSheet('Refresh ' + n + '’s pieces?', 'Remakes their pieces with what’s on the board now and uploads them. Runs on your Mac.', 'Refresh their pieces', () => send('person.refresh', { name: n }, 'Sent to your Mac · refreshing ' + n)); }
+  if (a === 'pinvite') { const n = el.dataset.n; sheet('<h3>Invite ' + esc(n) + '</h3><label class="field">Personal email<input type="email" id="pe" value="' + esc(el.dataset.e || '') + '" placeholder="The one they’ll check" autocomplete="off"></label><div class="note">monday.com emails them an invite and they’re added to the portal board right away.</div><button class="btn p" data-a="pinvite-go" data-n="' + esc(n) + '">Send invite</button><button class="btn" data-a="close">Cancel</button>'); return; }
+  if (a === 'pinvite-go') { const n = el.dataset.n, em = ($('#pe').value || '').trim(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return toast('That email doesn’t look right.', true); R.sheet = null; render(); return send('portal.invite', { name: n, email: em }, 'Sent to your Mac · inviting ' + n); }
+  if (a === 'padd') { const n = el.dataset.n; return confirmSheet('Add ' + n + ' to the portal?', 'They already have a monday.com login. This adds them to the portal board and puts them on their rows.', 'Add to portal', () => send('portal.add', { name: n }, 'Sent to your Mac · adding ' + n)); }
+  if (a === 'dmail') {
+    // the email opens right here on the phone; then the Mac marks it requested
+    const n = el.dataset.n, p = (d.people || []).find(x => x[0] === n) || [n, ''], me = (d.who || '').trim();
+    const body = 'Hi,\n\nPlease add our new team member to the West Marketing All distribution list:\n\n' + [n, p[1], p[5]].filter(Boolean).join('\n') + '\n\nThank you' + (me ? ',\n' + me : '');
+    location.href = 'mailto:' + encodeURIComponent(d.dto || '').replace(/%40/g, '@') + '?subject=' + encodeURIComponent('Please add ' + n + ' to the West Marketing All distribution list') + '&body=' + encodeURIComponent(body);
+    setTimeout(() => confirmSheet('Did you send it?', 'Mark ' + n + ' as requested for West Marketing All.', 'Mark as requested', () => send('dist.mark', { name: n, note: 'Requested ' + today() + (d.dto ? ' · ' + d.dto : '') }, 'Marked as requested')), 900);
+    return;
+  }
+  if (a === 'dconfirm' || a === 'dalready') { const n = el.dataset.n, by = (d.who || '').split(' ')[0], req = String(el.dataset.note || '').split(' · ')[0]; return send('dist.mark', { name: n, note: 'On the list · ' + (a === 'dconfirm' ? 'confirmed ' : 'marked ') + today() + (by ? ' by ' + by : '') + (a === 'dconfirm' && /^requested/i.test(req) ? ' · ' + req.replace(/^Requested/, 'requested') : '') }, n + ' marked on West Marketing All'); }
+});
+document.addEventListener('input', e => { if (e.target.hasAttribute && e.target.hasAttribute('data-q')) { R.q = e.target.value; const pos = e.target.selectionStart; render(); const s = $('[data-q]'); if (s) { s.focus(); s.setSelectionRange(pos, pos); } } });
+
+load();
+setInterval(() => { if (document.visibilityState === 'visible' && !R.sheet) load(); }, 10000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
