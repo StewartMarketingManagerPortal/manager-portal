@@ -215,9 +215,14 @@ async function submitNewHire(env, me, fd) {
   if (!name) throw new Error('First and last name are required.');
   const eb = await bid(env, 'employees');
   let ec = await columns(env, eb);
-  // the bio goes in a long-text "Bio" column (made the first time it's needed)
-  if (f.bio && !ec.byTitle[nk('Bio')]) {
-    try { await gql(env, 'mutation($b:ID!){create_column(board_id:$b,title:"Bio",column_type:long_text){id}}', { b: String(eb) }); forget('cols:' + eb); ec = await columns(env, eb); } catch (e) {}
+  // the "About Me" text goes in a long-text "About Me" column (made the first time; an older "Bio" column is renamed)
+  if (f.bio && !ec.byTitle[nk('About Me')]) {
+    try {
+      const old = ec.byTitle[nk('Bio')];
+      if (old) await gql(env, 'mutation($b:ID!,$c:String!){change_column_title(board_id:$b,column_id:$c,title:"About Me"){id}}', { b: String(eb), c: old.id });
+      else await gql(env, 'mutation($b:ID!){create_column(board_id:$b,title:"About Me",column_type:long_text){id}}', { b: String(eb) });
+      forget('cols:' + eb); ec = await columns(env, eb);
+    } catch (e) {}
   }
   const show = f.show || {};
   const fields = {
@@ -225,7 +230,7 @@ async function submitNewHire(env, me, fd) {
     phone: show.phone === false ? '' : f.phone,
     address1: show.address === false ? '' : f.address1, address2: show.address === false ? '' : f.address2,
     'Marketing Setup': 'Pending', 'Package Look': (f.looks || []).join(', '), 'Requested By': me.email,
-    'Start Date': f.startDate, Bio: f.bio, 'Market Areas': (f.areas || []).map(a => typeof a === 'string' ? a : (a.label || a.area)).join(', '), 'Notes for Marketing': f.notes,
+    'Start Date': f.startDate, 'About Me': f.bio, 'Market Areas': (f.areas || []).map(a => typeof a === 'string' ? a : (a.label || a.area)).join(', '), 'Notes for Marketing': f.notes,
   };
   const { values, missing } = buildValues(ec, fields);
   const itemId = await createItem(env, eb, null, name, values);
@@ -509,10 +514,10 @@ async function teamAsset(env, me, itemId, assetId, dl) {
 const BIO_MODEL = 'claude-sonnet-5-5';
 const BIO_STYLES = { write: ['Warm', 'Polished', 'Short', 'Conversational', 'Community-focused', 'Straightforward'], clean: ['Cleaned up', 'Polished', 'Short', 'Warm', 'Straightforward'] };
 async function writeBios(env, me, b) {
-  if (!env.ANTHROPIC_API_KEY) return { error: 'Bios aren’t switched on yet (the Claude API key is missing in Cloudflare). Ask West Marketing.' };
+  if (!env.ANTHROPIC_API_KEY) return { error: 'About Me writing isn’t switched on yet (the Claude API key is missing in Cloudflare). Ask West Marketing.' };
   // a few per manager per hour is plenty; this stops runaway clicking
   const k = 'bios:' + me.email, used = await cached(k, 3600e3, async () => ({ n: 0 }));
-  if (used.n >= 40) return { error: 'That’s a lot of bios this hour - try again a little later.' };
+  if (used.n >= 40) return { error: 'That’s a lot of writing this hour - try again a little later.' };
   used.n++;
   const mode = b.mode === 'clean' ? 'clean' : 'write', have = (b.have || []).slice(0, 8).map(String);
   const count = Math.min(2, Math.max(1, Number(b.count) || 2));
@@ -523,7 +528,7 @@ async function writeBios(env, me, b) {
   let task;
   if (mode === 'clean') {
     const text = String(b.text || '').trim().slice(0, 3000);
-    if (text.length < 20) return { error: 'Paste their bio first.' };
+    if (text.length < 20) return { error: 'Paste their About Me first.' };
     task = 'Here is a bio the new hire already has:\n<bio>\n' + text + '\n</bio>\n\nWrite ' + count + ' cleaned-up version(s). Fix spelling, grammar, capitals and flow, use their full name, and keep it professional and friendly. ' +
       'Keep ALL of their facts and do not add any new facts, numbers, awards or claims. Keep about the same length unless the style says otherwise.';
   } else {
@@ -539,7 +544,7 @@ async function writeBios(env, me, b) {
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: BIO_MODEL, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.error) return { error: 'Claude couldn’t write the bios right now (' + ((j.error && j.error.message) || r.status) + '). Try again in a moment.' };
+  if (!r.ok || j.error) return { error: 'Claude couldn’t write it right now (' + ((j.error && j.error.message) || r.status) + '). Try again in a moment.' };
   const text = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
   let out = null; try { out = JSON.parse((text.match(/\{[\s\S]*\}/) || [''])[0]); } catch (e) {}
   const bios = ((out && out.bios) || []).map((x, i) => ({ style: String(x.style || styles[i] || 'Option'), text: String(x.text || '').trim() })).filter(x => x.text).slice(0, count);

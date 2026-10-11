@@ -133,9 +133,9 @@ function reqList(list) {
 PAGES.newhire = () => {
   const n = S.nh || (S.nh = freshNewHire());
   if (window.Cutout) Cutout.load().catch(() => {});
-  const steps = ['Details + photo', 'Bio', 'Choose a look', 'Review'];
-  let h = '<div class="head"><div><h1>' + (n.step === 2 ? (n.firstName ? esc(n.firstName) + '’s' : 'Their') + ' bio' : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 4 ? 'Review and submit' : 'Add a new hire') + '</h1><div class="sub">' +
-    (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Used on their website and marketing pieces. Answer a few questions or paste one they have.' : n.step === 3 ? 'Pick one, or both to get every piece in dark and light.' : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
+  const steps = ['Details + photo', 'About Me', 'Choose a look', 'Review'];
+  let h = '<div class="head"><div><h1>' + (n.step === 2 ? 'About ' + (n.firstName ? esc(n.firstName) : 'them') : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 4 ? 'Review and submit' : 'Add a new hire') + '</h1><div class="sub">' +
+    (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Their About Me, used on their website and marketing pieces. Answer a few questions or paste one they have.' : n.step === 3 ? 'Pick one, or both to get every piece in dark and light.' : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
     '<ol class="steps" aria-label="Steps">' + steps.map((s, i) => '<li class="' + (i + 1 === n.step ? 'on' : i + 1 < n.step ? 'done' : '') + '"><span>' + (i + 1 < n.step ? '✓' : i + 1) + '</span>' + s + '</li>').join('') + '</ol></div>';
   if (n.step === 1) h += nhDetails(n); else if (n.step === 2) h += nhBio(n); else if (n.step === 3) h += nhLooks(n); else h += nhReview(n);
   return h;
@@ -180,7 +180,7 @@ function nhDetails(n) {
     '<label class="btn small" style="align-self:flex-start">' + (n.photo ? 'Replace photo' : 'Upload photo') + '<input type="file" accept="image/*" data-file="photo" hidden></label></div></div></div>' +
     '<div class="preview"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock" id="cblock">' + cblock(n) + '</div>' +
     '<div class="small" style="color:var(--border)">This is how their details appear on flyers and the email signature.</div></div></section></div>';
-  h += '<div class="row" style="justify-content:space-between"><a href="#home" style="font-weight:600">Cancel</a><button type="button" class="btn primary" data-act="nh-next">Next: their bio →</button></div>';
+  h += '<div class="row" style="justify-content:space-between"><a href="#home" style="font-weight:600">Cancel</a><button type="button" class="btn primary" data-act="nh-next">Next: About Me →</button></div>';
   return h;
 }
 function headshotBox(n) {
@@ -220,7 +220,7 @@ function lookSample(n, cls) {
     '<span class="s-sig"><span class="av" style="width:34px;height:34px;font-size:10px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span><span><b style="font-size:11px">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</b><br>' + esc(nhTitle(n) || 'Title') + '<br>' + esc(fmtPhone(n.phone)) + '</span></span>' +
     '<span class="s-ban">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + ' · Stewart Title</span></span>';
 }
-// ---------- bio step: Claude writes 2 to start, "Show 2 more" up to twice (6 in all) ----------
+// ---------- About Me step (was "bio"): Claude writes 2 to start, "Show 2 more" up to twice (6 in all) ----------
 const BIO_Q = [['years', 'Years in title & escrow', '12'], ['areas', 'Areas they serve', 'Riverside, Corona, Temecula'], ['known', 'What they’re known for / specialties', 'Smooth closings, new construction, investors', 1],
   ['langs', 'Languages', 'English, Spanish'], ['before', 'Before Stewart (optional)', 'Escrow officer at a builder’s in-house escrow'], ['personal', 'A personal touch (optional)', 'Mom of two, coaches youth soccer, loves hiking', 1]];
 function bioState(n) {
@@ -231,11 +231,11 @@ const nhBioText = n => (n.bio && n.bio.text) || '';
 function nhBio(n) {
   const b = bioState(n), write = b.mode === 'write';
   let h = '<div class="cols"><section class="card col3" style="gap:18px">' +
-    '<div class="seg" role="group" aria-label="How to make the bio"><button type="button" aria-pressed="' + write + '" data-act="bio-mode" data-m="write">Write one for me</button><button type="button" aria-pressed="' + !write + '" data-act="bio-mode" data-m="clean">I have a bio</button></div>';
+    '<div class="seg" role="group" aria-label="How to make the About Me"><button type="button" aria-pressed="' + write + '" data-act="bio-mode" data-m="write">Write one for me</button><button type="button" aria-pressed="' + !write + '" data-act="bio-mode" data-m="clean">I have one</button></div>';
   if (write) h += '<div class="muted2" style="font-size:14px">Answer a few questions and Claude writes options to pick from. Short answers are fine.</div><div class="grid2">' +
     BIO_Q.map(([k, l, ph, full]) => '<label class="field"' + (full ? ' style="grid-column:1/-1"' : '') + '>' + l + '<input type="text" data-bq="' + k + '" value="' + esc(b.q[k] || '') + '" placeholder="' + esc(ph) + '"></label>').join('') + '</div>';
-  else h += '<label class="field">Paste their bio<textarea rows="5" data-bq="paste" placeholder="Paste the bio they already use…">' + esc(b.paste) + '</textarea></label>';
-  h += '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="bio-go"' + (b.busy ? ' disabled' : '') + '>' + (b.busy && !b.opts.length ? '<span class="spin"></span> Writing…' : '✦ ' + (b.opts.length ? 'Start over' : write ? 'Write bios' : 'Clean it up')) + '</button></div>';
+  else h += '<label class="field">Paste their About Me<textarea rows="5" data-bq="paste" placeholder="Paste the About Me or bio they already use…">' + esc(b.paste) + '</textarea></label>';
+  h += '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="bio-go"' + (b.busy ? ' disabled' : '') + '>' + (b.busy && !b.opts.length ? '<span class="spin"></span> Writing…' : '✦ ' + (b.opts.length ? 'Start over' : write ? 'Write options' : 'Clean it up')) + '</button></div>';
   if (b.err) h += '<div class="err">' + esc(b.err) + '</div>';
   if (b.opts.length) {
     h += '<div style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div class="row" style="justify-content:space-between"><h2>Pick one</h2>' +
@@ -244,8 +244,8 @@ function nhBio(n) {
       '<label class="field">' + (b.pick >= 0 ? 'Edit the one you picked (optional)' : 'Pick one above - or type your own here') + '<textarea rows="5" data-bq="text">' + esc(b.text) + '</textarea></label></div>';
   }
   h += '</section><section class="col2"><div class="preview"><div class="cardlabel" style="color:var(--navmuted)">How it works</div>' +
-    '<ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7;color:var(--navtext)">' + (write ? '<li>Answer the questions.</li><li>Claude writes 2 bios in different styles.</li>' : '<li>Paste the bio they have.</li><li>Claude tidies the spelling, grammar and flow - it keeps their facts and adds nothing new.</li>') +
-    '<li>Not quite right? <b>Show 2 more</b> (up to 6 in all).</li><li>Pick one and edit it if you like. A bio is needed to continue.</li></ol></div></section></div>';
+    '<ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7;color:var(--navtext)">' + (write ? '<li>Answer the questions.</li><li>Claude writes 2 versions in different styles.</li>' : '<li>Paste the one they have.</li><li>Claude tidies the spelling, grammar and flow - it keeps their facts and adds nothing new.</li>') +
+    '<li>Not quite right? <b>Show 2 more</b> (up to 6 in all).</li><li>Pick one and edit it if you like. An About Me is needed to continue.</li></ol></div></section></div>';
   h += '<div class="row" style="justify-content:space-between"><a href="#" data-act="nh-back" style="font-weight:600">← Back</a><button type="button" class="btn primary" data-act="nh-next" ' + (nhBioText(n).trim() ? '' : 'disabled') + '>Next: choose a look →</button></div>';
   return h;
 }
@@ -285,7 +285,7 @@ function nhReview(n) {
     (n.photoUrl ? '<img class="av" style="width:84px;height:84px" src="' + n.photoUrl + '" alt="">' : '<span class="av" style="width:84px;height:84px;font-size:24px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span>') +
     '<div class="grow"><div style="font-size:24px;font-weight:800">' + esc(n.firstName + ' ' + n.lastName) + '</div><div style="color:var(--brand);font-weight:700">' + esc(nhTitle(n)) + '</div></div><a href="#" data-act="nh-step" data-step="1" style="font-weight:600;font-size:14px">Edit</a></div>' +
     line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) +
-    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Newsletter', n.nlAreas.map(a => nlName(a.header)).join(', ')) + line('Bio', nhBioText(n).length > 140 ? nhBioText(n).slice(0, 140) + '…' : nhBioText(n), 2) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 3) +
+    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Newsletter', n.nlAreas.map(a => nlName(a.header)).join(', ')) + line('About Me', nhBioText(n).length > 140 ? nhBioText(n).slice(0, 140) + '…' : nhBioText(n), 2) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 3) +
     '<label class="field" style="margin-top:10px">Anything else marketing should know? (optional)<textarea data-f="notes" rows="3">' + esc(n.notes) + '</textarea></label></section>';
   h += '<section class="col2"><div class="card"><h2>What happens next</h2><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7" class="muted2"><li>' + esc(n.firstName || 'They') + ' is added to the Main Employee Sheet and your team.</li>' +
     '<li>Marketing removes the photo background and builds the package' + (n.looks.length > 1 ? ' in both looks' : ' in ' + esc(n.looks[0])) + '.</li><li>Everything lands on the Employee Marketing Portal.</li></ol></div>' +
@@ -415,9 +415,9 @@ const ACT = {};
 ACT['bio-mode'] = el => { const b = bioState(S.nh); if (b.mode === el.dataset.m) return; b.mode = el.dataset.m; b.opts = []; b.pick = -1; b.more = 0; b.err = ''; render(); };
 ACT['bio-go'] = () => {
   const b = bioState(S.nh);
-  if (b.mode === 'clean' && b.paste.trim().length < 20) return toast('Paste their bio first.');
+  if (b.mode === 'clean' && b.paste.trim().length < 20) return toast('Paste their About Me first.');
   if (b.mode === 'write' && ['years', 'areas', 'known', 'langs'].filter(k => String(b.q[k] || '').trim()).length < 2) return toast('Answer at least a couple of the questions first.');
-  if (b.opts.length && b.text && !confirm('Start over? The bios below will be replaced.')) return;
+  if (b.opts.length && b.text && !confirm('Start over? The options below will be replaced.')) return;
   bioAsk(false);
 };
 ACT['bio-more'] = () => { if (bioState(S.nh).more < 2) bioAsk(true); };
@@ -441,7 +441,7 @@ ACT['nh-next'] = () => {
     if (n.areas.length < 2) { toast('Add at least 2 market update areas.'); const el = document.getElementById('nh-areas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (!n.nlAreas.length) { toast('Add their newsletter area.'); const el = document.getElementById('nh-nl'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   }
-  if (n.step === 2 && !nhBioText(n).trim()) return toast('Pick a bio (or write your own in the box) to continue.');
+  if (n.step === 2 && !nhBioText(n).trim()) return toast('Pick an About Me (or write your own in the box) to continue.');
   if (n.step === 3 && !n.looks.length) return toast('Pick at least one look.');
   n.step++; render(); window.scrollTo(0, 0);
 };
