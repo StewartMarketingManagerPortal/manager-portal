@@ -54,10 +54,10 @@ const CB_ICONS = {
 const S = { me: null, reqs: null, busy: false, nh: null, rq: null, last: null };
 // optional: invite them to monday.com as a guest on the Employee Marketing Portal
 function nhInviteBox(n) {
-  return '<div class="nh-inv"><b>Invite to the Employee Marketing Portal <span class="nh-opt">Optional</span></b>' +
+  return '<div class="nh-inv"><b>Invite to the Employee Marketing Portal</b>' +
     '<label class="field" style="margin:0">Personal email<input type="email" data-f="portalEmail" value="' + esc(n.portalEmail || '') + '" placeholder="The email they’ll check before day 1"></label>' +
     '<label class="check"><input type="checkbox" data-act="nh-invite" ' + (n.invite !== false ? 'checked' : '') + '> Send the monday.com invite when I submit</label>' +
-    '<small>They’re added to the portal board as a guest right away, so their announcement and flyers are waiting when they accept. Leave it blank to skip.</small></div>';
+    '<small>They’re added to the portal board as a guest right away, so their announcement and flyers are waiting when they accept.</small></div>';
 }
 function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, bio: null, looks: ['Modern Dark'], notes: '' }; }
 function freshRequest() { return { step: 1, state: 'California', type: null, other: '', projectName: '', who: 'pick', people: [], needBy: inDays(7), description: '', files: [], photos: [], x: {} }; }
