@@ -88,7 +88,7 @@ function recHtml(id) {
 async function recStart(id) {
   const chip = $('#vchip');
   try {
-    REC.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, audio: { echoCancellation: true, noiseSuppression: true } });
+    REC.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: isComputer() ? 1920 : 1280 }, height: { ideal: isComputer() ? 1080 : 720 }, frameRate: { ideal: 30 } }, audio: { echoCancellation: true, noiseSuppression: true } });
   } catch (e) {
     chip.textContent = 'Allow the camera and microphone for this site to record.'; chip.classList.add('bad'); return;
   }
