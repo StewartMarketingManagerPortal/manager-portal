@@ -393,3 +393,7 @@ select:disabled { opacity: .6; cursor: default; }
 .ob-av.done { background: var(--green); }
 .ob-team .ob-bar { margin: 0; }
 .ob-hire .small { flex: none; }
+
+.nh-inv { grid-column: 1 / -1; background: var(--brand-tint); border: 1.5px solid #EFCDD5; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.nh-inv b { font-size: 15px; } .nh-inv small { color: var(--muted2); font-size: 13px; line-height: 1.45; }
+.nh-opt { font-size: 11px; font-weight: 700; color: var(--muted); background: #fff; border-radius: 6px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }

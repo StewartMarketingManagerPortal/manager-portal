@@ -52,6 +52,13 @@ const CB_ICONS = {
 
 // ---------- state ----------
 const S = { me: null, reqs: null, busy: false, nh: null, rq: null, last: null };
+// optional: invite them to monday.com as a guest on the Employee Marketing Portal
+function nhInviteBox(n) {
+  return '<div class="nh-inv"><b>Invite to the Employee Marketing Portal <span class="nh-opt">Optional</span></b>' +
+    '<label class="field" style="margin:0">Personal email<input type="email" data-f="portalEmail" value="' + esc(n.portalEmail || '') + '" placeholder="The email they’ll check before day 1"></label>' +
+    '<label class="check"><input type="checkbox" data-act="nh-invite" ' + (n.invite !== false ? 'checked' : '') + '> Send the monday.com invite when I submit</label>' +
+    '<small>They’re added to the portal board as a guest right away, so their announcement and flyers are waiting when they accept. Leave it blank to skip.</small></div>';
+}
 function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, bio: null, looks: ['Modern Dark'], notes: '' }; }
 function freshRequest() { return { step: 1, state: 'California', type: null, other: '', projectName: '', who: 'pick', people: [], needBy: inDays(7), description: '', files: [], photos: [], x: {} }; }
 
@@ -160,6 +167,7 @@ function nhDetails(n) {
     (n.office && n.office !== '__new' && me.offices[+n.office] ? '<span class="hint">' + esc(me.offices[+n.office].address1 + ', ' + me.offices[+n.office].address2) + '</span>' : '') + '</label>' +
     (n.office === '__new' ? fld('Street address', 'address1', n.address1, { ph: '123 Main St., Suite 100' }) + fld('City, state, zip', 'address2', n.address2, { ph: 'Sacramento, CA 95814' }) : '') +
     fld('Work phone', 'phone', n.phone, { type: 'tel', ph: '(916) 555-0100' }) + fld('Work email', 'email', n.email, { type: 'email', ph: 'first.last@stewart.com' }) + '</div>' +
+    nhInviteBox(n) +
     '<div class="field">Show on their materials<div class="row" style="gap:4px 24px">' + [['phone', 'Phone'], ['email', 'Email'], ['address', 'Office address'], ['headshot', 'Headshot']].map(([k, l]) =>
       '<label class="check"><input type="checkbox" data-show="' + k + '" ' + (n.show[k] ? 'checked' : '') + '> ' + l + '</label>').join('') + '</div></div>' +
     '<div id="nh-areas" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Market update areas <span class="muted" style="font-size:14px;font-weight:500">· at least 2</span></h2>' +
@@ -285,7 +293,7 @@ function nhReview(n) {
   let h = '<div class="cols"><section class="card col3" style="gap:4px"><div class="row" style="padding-bottom:16px;border-bottom:1px solid var(--line);flex-wrap:nowrap">' +
     (n.photoUrl ? '<img class="av" style="width:84px;height:84px" src="' + n.photoUrl + '" alt="">' : '<span class="av" style="width:84px;height:84px;font-size:24px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span>') +
     '<div class="grow"><div style="font-size:24px;font-weight:800">' + esc(n.firstName + ' ' + n.lastName) + '</div><div style="color:var(--brand);font-weight:700">' + esc(nhTitle(n)) + '</div></div><a href="#" data-act="nh-step" data-step="1" style="font-weight:600;font-size:14px">Edit</a></div>' +
-    line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) +
+    line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) + line('Portal invite', String(n.portalEmail || '').trim() && n.invite !== false ? 'Send to ' + n.portalEmail.trim() : 'Not sending one') +
     line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Newsletter', n.nlAreas.map(a => nlName(a.header)).join(', ')) + line('About Me', nhBioText(n).length > 140 ? nhBioText(n).slice(0, 140) + '…' : nhBioText(n), 2) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 3) +
     '<label class="field" style="margin-top:10px">Anything else marketing should know? (optional)<textarea data-f="notes" rows="3">' + esc(n.notes) + '</textarea></label></section>';
   h += '<section class="col2"><div class="card"><h2>What happens next</h2><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7" class="muted2"><li>' + esc(n.firstName || 'They') + ' is added to the Main Employee Sheet and your team.</li>' +
@@ -297,7 +305,9 @@ function nhReview(n) {
 }
 PAGES.submitted = () => {
   const l = S.last; if (!l) { go('newhire'); return ''; }
-  return '<div class="banner ok"><span class="av" style="background:var(--green);color:#fff">✓</span><div class="grow"><h1 style="font-size:28px;color:#124D2B">' + esc(l.first) + ' is on the way</h1><div style="margin-top:4px">Added to the Main Employee Sheet. Marketing will build the package and put it on the Employee Marketing Portal.</div></div>' +
+  return '<div class="banner ok"><span class="av" style="background:var(--green);color:#fff">✓</span><div class="grow"><h1 style="font-size:28px;color:#124D2B">' + esc(l.first) + ' is on the way</h1><div style="margin-top:4px">Added to the Main Employee Sheet. Marketing will build the package and put it on the Employee Marketing Portal.</div>' +
+    (l.invite && !l.invite.error ? '<div style="margin-top:6px"><b>Portal invite sent</b> to ' + esc(l.portalEmail) + '. monday.com emails them; their pieces will be waiting when they accept.</div>' : '') +
+    (l.invite && l.invite.error ? '<div style="margin-top:6px;color:var(--problem)"><b>The portal invite didn’t go through:</b> ' + esc(l.invite.error) + ' West Marketing can invite them instead.</div>' : '') + '</div>' +
     (l.onb ? '<a class="btn primary" href="#onboard/' + esc(l.onb) + '/prints">Back to ' + esc(l.first) + '’s onboarding ›</a>' : '') + '<a class="btn" href="#onboard" data-act="nh-another">All new hires</a></div>' +
     (l.selfServe ? '<div class="preview" style="max-width:560px"><div class="cardlabel" style="color:var(--navmuted)">Don’t want to wait?</div><h2>Create the package now</h2><div style="font-size:14px;color:var(--navtext)">Starts the full package right away instead of waiting for the marketing team.</div><button type="button" class="btn primary">Create the package now</button></div>' : '');
 };
@@ -481,6 +491,7 @@ ACT['nh-next'] = () => {
     const miss = need.filter(([, v]) => !String(v || '').trim()).map(([k]) => k);
     if (miss.length) { miss.forEach(k => { const el = document.querySelector('[data-f=' + k + ']'); if (el) el.classList.add('bad'); }); toast('Please fill in the highlighted fields.'); return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.email)) { toast('That email doesn’t look right.'); return; }
+    if (String(n.portalEmail || '').trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.portalEmail.trim())) { const el = document.querySelector('[data-f=portalEmail]'); if (el) el.classList.add('bad'); toast('The personal email doesn’t look right. Fix it, or leave it blank to skip the invite.'); return; }
     if (n.areas.length < 2) { toast('Add at least 2 market update areas.'); const el = document.getElementById('nh-areas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (!n.nlAreas.length) { toast('Add their newsletter area.'); const el = document.getElementById('nh-nl'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   }
@@ -491,6 +502,7 @@ ACT['nh-next'] = () => {
 ACT['nh-back'] = (el, e) => { e.preventDefault(); S.nh.step--; render(); };
 ACT['nh-step'] = (el, e) => { e.preventDefault(); S.nh.step = +el.dataset.step; render(); };
 ACT.look = el => { const n = S.nh, l = el.dataset.look; n.looks = n.looks.includes(l) ? n.looks.filter(x => x !== l) : n.looks.concat([l]); render(); };
+ACT['nh-invite'] = el => { S.nh.invite = el.checked; };
 ACT['nh-another'] = () => { S.nh = freshNewHire(); S.onbFrom = ''; };
 ACT['nh-submit'] = async () => {
   const n = S.nh, a = nhAddress(n);
@@ -498,10 +510,10 @@ ACT['nh-submit'] = async () => {
   try {
     const fd = new FormData();
     fd.append('fields', JSON.stringify({ firstName: n.firstName, lastName: n.lastName, title: nhTitle(n), company: n.company, address1: a.address1, address2: a.address2, phone: fmtPhone(n.phone), email: n.email,
-      startDate: n.startDate, show: n.show, areas: n.areas, nlAreas: n.nlAreas, bio: nhBioText(n), looks: n.looks, notes: n.notes }));
+      startDate: n.startDate, show: n.show, portalEmail: n.invite !== false ? String(n.portalEmail || '').trim() : '', areas: n.areas, nlAreas: n.nlAreas, bio: nhBioText(n), looks: n.looks, notes: n.notes }));
     if (n.photo) fd.append('photo', n.photo, n.photo.name);
-    await api('newhire', { method: 'POST', body: fd });
-    S.last = { first: n.firstName, selfServe: S.me.selfServe, onb: S.onbFrom || '' };
+    const res = await api('newhire', { method: 'POST', body: fd });
+    S.last = { first: n.firstName, selfServe: S.me.selfServe, onb: S.onbFrom || '', invite: res.invite || null, portalEmail: n.invite !== false ? String(n.portalEmail || '').trim() : '' };
     if (S.onbFrom && window.onbMarkSent) onbMarkSent(S.onbFrom); S.onbFrom = '';
     S.nh = freshNewHire(); S.busy = false; loadRequests(); go('submitted');
   } catch (e) { S.busy = false; render(); toast(e.message, 7000); }

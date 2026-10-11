@@ -267,8 +267,44 @@ async function submitNewHire(env, me, fd) {
     const nl = (f.nlAreas || []).filter(a => a && a.header);
     for (const a of nl) await nlAdd(env, { name, email: f.email, phone: f.phone, title: f.title, company: f.company, address1: f.address1, address2: f.address2 }, a.header, a.location, me.row.name);
   } catch (e) { await addUpdate(env, itemId, 'Newsletter areas could not be added to the Newsletter Template board: ' + escHtml(String(e.message || e))).catch(() => {}); }
+  // optional: invite them to monday.com as a guest and add them to the Employee Marketing Portal board
+  let invite = null;
+  const pe = String(f.portalEmail || '').trim().toLowerCase();
+  if (pe && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(pe)) {
+    try { invite = await portalInvite(env, eb, itemId, pe); await addUpdate(env, itemId, 'Employee Marketing Portal invite sent to ' + escHtml(pe) + (invite.already ? ' (they already had a monday.com login)' : '') + '. monday.com user ID ' + escHtml(invite.id) + '.'); }
+    catch (e) { invite = { error: String(e.message || e) }; await addUpdate(env, itemId, 'Employee Marketing Portal invite to ' + escHtml(pe) + ' did not go through: ' + escHtml(invite.error)).catch(() => {}); }
+  }
   forget('dir');
-  return { ok: true, id: itemId, name };
+  return { ok: true, id: itemId, name, invite };
+}
+// invite_users is newer than the API version the rest of the portal uses
+async function gqlNew(env, query, variables) {
+  const r = await fetch('https://api.monday.com/v2', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: env.MONDAY_TOKEN, 'API-Version': '2025-04' }, body: JSON.stringify({ query, variables: variables || {} }) });
+  const j = await r.json().catch(() => ({}));
+  if (j.errors || j.error_message) throw new Error('monday.com: ' + (j.errors ? j.errors.map(e => e.message).join('; ') : j.error_message));
+  return j.data;
+}
+async function portalInvite(env, eb, itemId, email) {
+  let id = '', already = false;
+  const d = await gqlNew(env, 'mutation($e:[String!]!){invite_users(emails:$e,user_role:GUEST,product:work_management){invited_users{id email} errors{message code email}}}', { e: [email] });
+  const r = d.invite_users || {};
+  if (r.invited_users && r.invited_users.length) id = String(r.invited_users[0].id);
+  if (!id) {
+    // already has a login on this account: use it
+    const u = await gql(env, 'query($e:[String]){users(emails:$e){id}}', { e: [email] });
+    if (u.users && u.users.length) { id = String(u.users[0].id); already = true; }
+  }
+  if (!id) throw new Error((r.errors && r.errors[0] && r.errors[0].message) || 'monday.com didn’t send the invite.');
+  const pb = await bid(env, 'portal');
+  await gql(env, 'mutation($b:ID!,$u:[ID!]!){add_users_to_board(board_id:$b,user_ids:$u,kind:subscriber){id}}', { b: String(pb), u: [id] });
+  // keep their login on the Main Employee Sheet so Marketing Tools puts them in the People column of their portal rows
+  let ec = await columns(env, eb);
+  const need = ['Portal User ID', 'Portal Email'].filter(t => !ec.byTitle[nk(t)]);
+  for (const t of need) await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:text){id}}', { b: String(eb), t });
+  if (need.length) { forget('cols:' + eb); ec = await columns(env, eb); }
+  const v = {}; v[ec.byTitle[nk('Portal User ID')].id] = id; v[ec.byTitle[nk('Portal Email')].id] = email;
+  await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: String(eb), i: String(itemId), v: JSON.stringify(v) });
+  return { id, already };
 }
 
 // ---------- My Team: the manager's team (view only) and their market update areas ----------
