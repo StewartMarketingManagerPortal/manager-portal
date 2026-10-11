@@ -1,7 +1,7 @@
 // My Marketing · Make a video: pick a script, set up, record on the front camera with a teleprompter, send it in.
 // The background is softly blurred on the phone while recording (person cut-out by MediaPipe), so it arrives ready to build.
 'use strict';
-const V = { list: null, filmed: [], err: '', blob: null, url: '', sending: 0, sent: false, speed: 1, size: 1 };
+const V = { list: null, filmed: [], reshoot: [], err: '', blob: null, url: '', sending: 0, sent: false, speed: 1, size: 1 };
 const VTIPS = [
   ['q', 'Find a quiet room', 'Close the door. No TV, fans or open windows. Phone on Do Not Disturb.'],
   ['bg', 'Pick a nice background', 'An office, bookshelf or plant a few feet behind you. Not a blank wall, a mess, or a window. We’ll soften it.'],
@@ -19,11 +19,19 @@ const vScript = id => (V.list || []).find(x => x.id === id);
 const vLen = s => s ? 'About ' + (s < 60 ? s + ' sec' : Math.floor(s / 60) + ' min ' + (s % 60 ? s % 60 + ' sec' : '')) : '';
 async function vLoad(force) {
   if (V.list && !force) return;
-  try { const r = await api('scripts'); V.list = r.scripts || []; V.filmed = (r.filmed || []).map(nk); V.err = ''; }
+  try { const r = await api('scripts'); V.list = r.scripts || []; V.filmed = (r.filmed || []).map(nk); V.reshoot = r.reshoot || []; V.err = ''; }
   catch (e) { V.err = e.message; V.list = V.list || []; }
-  if (/^(make|film)$/.test(route().page)) render();
+  if (/^(make|film|home)$/.test(route().page)) render();
 }
 
+// West Marketing asked for these to be recorded again
+const vRe = name => V.reshoot.find(x => nk(x.script) === nk(name));
+function vReshootHtml() {
+  if (!V.reshoot.length) return '';
+  return V.reshoot.map(x => { const s = (V.list || []).find(y => nk(y.name) === nk(x.script));
+    return '<a class="vre" href="' + (s ? '#film/' + esc(s.id) : '#make') + '"><span class="vic">' + I.film + '</span><span><b>Please record “' + esc(x.script) + '” again</b>' +
+      '<span>' + esc(x.note || 'West Marketing couldn’t use the last take.') + '</span></span><span class="vchev">' + I.next + '</span></a>'; }).join('');
+}
 // ---------- 1 · scripts ----------
 function makeHtml() {
   const t = tabs('make');
@@ -33,8 +41,8 @@ function makeHtml() {
   if (!V.list) h += '<div class="boot" style="min-height:30vh"><span class="spin"></span></div>';
   else if (V.err) h += '<div class="err">' + esc(V.err) + '</div>';
   else if (!V.list.length) h += '<div class="empty">No scripts yet. West Marketing will add them here.</div>';
-  else h += '<div class="vlist">' + V.list.map(s => '<a class="vrow" href="#film/' + esc(s.id) + '"><span class="vic">' + I.film + '</span><span class="vtx"><b>' + esc(s.name) + '</b><small>' + esc(vLen(s.secs)) +
-    (V.filmed.includes(nk(s.name)) ? '<span class="vpill">Sent</span>' : '') + '</small></span><span class="vchev">' + I.next + '</span></a>').join('') + '</div>';
+  else h += vReshootHtml() + '<div class="vlist">' + V.list.map(s => '<a class="vrow" href="#film/' + esc(s.id) + '"><span class="vic">' + I.film + '</span><span class="vtx"><b>' + esc(s.name) + '</b><small>' + esc(vLen(s.secs)) +
+    (vRe(s.name) ? '<span class="vpill re">Please reshoot</span>' : V.filmed.includes(nk(s.name)) ? '<span class="vpill">Sent</span>' : '') + '</small></span><span class="vchev">' + I.next + '</span></a>').join('') + '</div>';
   return h + '</div></div>' + foot() + '</div>' + t.bottom;
 }
 // ---------- 2 · before you film ----------
@@ -180,7 +188,7 @@ function vSend() {
   x.setRequestHeader('Content-Type', V.blob.type || 'video/mp4');
   x.upload.onprogress = e => { if (e.lengthComputable) { V.sending = Math.max(1, Math.min(97, e.loaded / e.total * 97)); const bar = document.querySelector('.vbar i'), lab = document.querySelector('.vsend span'); if (bar) bar.style.width = V.sending + '%'; if (lab) lab.textContent = 'Sending… ' + Math.round(V.sending) + '%'; } };
   x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
-    if (x.status >= 200 && x.status < 300 && j.ok) { V.sent = true; V.sending = 0; if (!V.filmed.includes(nk(s.name))) V.filmed.push(nk(s.name)); }
+    if (x.status >= 200 && x.status < 300 && j.ok) { V.sent = true; V.sending = 0; if (!V.filmed.includes(nk(s.name))) V.filmed.push(nk(s.name)); V.reshoot = V.reshoot.filter(x => nk(x.script) !== nk(s.name)); }
     else { V.sending = 0; V.err = j.error || 'It didn’t send. Check your connection and try again.'; }
     render(); };
   x.onerror = () => { V.sending = 0; V.err = 'It didn’t send. Check your connection and try again.'; render(); };

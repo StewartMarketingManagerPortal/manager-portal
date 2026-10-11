@@ -258,7 +258,8 @@ function homeHtml() {
       '<span class="c">' + c.count + ' piece' + (c.count === 1 ? '' : 's') + (c.newCount ? ' · <em>' + c.newCount + ' new</em>' : '') + '</span></a>').join('') + '</div></div></section>';
   }
 
-  h += '<section class="blk"><div class="wrap"><a class="vhome" href="#make"><span class="vic">' + I.film + '</span><span><b>Make a video</b><span>Record one of our scripts on your phone. We’ll turn it into a finished video for you.</span></span><span class="vchev">' + I.next + '</span></a></div></section>';
+  if (!V.list) vLoad();
+  h += '<section class="blk"><div class="wrap">' + vReshootHtml() + '<a class="vhome" href="#make"><span class="vic">' + I.film + '</span><span><b>Make a video</b><span>Record one of our scripts on your phone. We’ll turn it into a finished video for you.</span></span><span class="vchev">' + I.next + '</span></a></div></section>';
   const fresh = all.filter(p => p.isNew && !/market|newsletter/i.test(p.category));
   const latestCat = cats.find(c => !/market|newsletter/i.test(c.name));
   const row = fresh.length ? fresh : latestCat ? inCat(latestCat.name) : [];

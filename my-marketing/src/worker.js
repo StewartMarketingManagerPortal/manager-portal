@@ -212,18 +212,20 @@ async function scripts(env, s) {
       return { id: String(it.id), name: it.name.trim(), text: (v[b.cols.Script] || '').trim(), secs: Number(v[b.cols.Seconds]) || 0, active: !/^n/i.test(v[b.cols.Active] || 'Yes') };
     }).filter(x => x.active && x.text).sort((a, b) => a.name.localeCompare(b.name));
   });
-  // which ones this person has already sent in
-  let filmed = [];
-  try {
-    filmed = await cached('filmed:' + s.uid, 60e3, async () => {
-      const u = await boardByName(env, UPLOADS_BOARD);
-      if (!u || !u.cols.Email) return [];
-      const d = await gql(env, 'query($b:ID!,$c:String!,$v:[String]!){items_page_by_column_values(board_id:$b,limit:200,columns:[{column_id:$c,column_values:$v}]){items{column_values(ids:["' + u.cols.Script + '"]){text}}}}',
-        { b: u.id, c: u.cols.Email, v: [s.email] });
-      return d.items_page_by_column_values.items.map(it => (it.column_values[0] || {}).text || '');
-    });
-  } catch (e) {}
-  return { scripts: list, filmed };
+  // which ones this person has already sent in, and any West Marketing asked them to record again
+  let mine = { filmed: [], reshoot: [] };
+  try { mine = await cached('filmed:' + s.uid, 60e3, () => myUploads(env, s)); } catch (e) {}
+  return { scripts: list, filmed: mine.filmed, reshoot: mine.reshoot };
+}
+async function myUploads(env, s) {
+  const u = await boardByName(env, UPLOADS_BOARD);
+  if (!u || !u.cols.Email) return { filmed: [], reshoot: [], items: [] };
+  const ids = [u.cols.Script, u.cols.Status, u.cols.Note].filter(Boolean);
+  const d = await gql(env, 'query($b:ID!,$c:String!,$v:[String]!,$i:[String!]){items_page_by_column_values(board_id:$b,limit:200,columns:[{column_id:$c,column_values:$v}]){items{id column_values(ids:$i){id text}}}}',
+    { b: u.id, c: u.cols.Email, v: [s.email], i: ids });
+  const items = d.items_page_by_column_values.items.map(it => { const v = {}; it.column_values.forEach(c => v[c.id] = c.text || ''); return { id: String(it.id), script: v[u.cols.Script] || '', status: v[u.cols.Status] || '', note: u.cols.Note ? v[u.cols.Note] || '' : '' }; });
+  const re = items.filter(x => /^reshoot$/i.test(x.status));
+  return { filmed: items.filter(x => !/^(reshoot|reshot)$/i.test(x.status)).map(x => x.script), reshoot: re.map(x => ({ script: x.script, note: x.note })), items: re, board: u };
 }
 async function uploadVideo(request, env, s, url) {
   const script = String(url.searchParams.get('script') || '').trim().slice(0, 200);
@@ -254,6 +256,14 @@ async function uploadVideo(request, env, s, url) {
     console.error('upload failed', r.status, JSON.stringify(j).slice(0, 400));
     return fail(502, 'The video didn’t finish sending. Please try again.');
   }
+  // a new take clears any reshoot request for that script
+  try {
+    const m = await myUploads(env, s);
+    for (const x of m.items.filter(x => x.script.trim().toLowerCase() === script.toLowerCase())) {
+      const v = {}; v[m.board.cols.Status] = 'Reshot';
+      await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: m.board.id, i: x.id, v: JSON.stringify(v) });
+    }
+  } catch (e) { console.error('reshoot clear failed', e.message); }
   forget('filmed:' + s.uid);
   return json({ ok: true });
 }
