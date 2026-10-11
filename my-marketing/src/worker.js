@@ -26,12 +26,16 @@ async function route(request, env, ctx, url) {
   if (method === 'POST' && path === '/api/code') return sendCode(request, env);
   if (method === 'POST' && path === '/api/verify') return verify(request, env);
   if (method === 'POST' && path === '/api/logout') return json({ ok: true }, 200, { 'Set-Cookie': cookie('', 0) });
+  if (method === 'GET' && path === '/api/viewas') return viewAs(env, url);
+  if (method === 'POST' && path === '/api/viewas/exit') return json({ ok: true }, 200, { 'Set-Cookie': viewCookie('', 0) });
 
   const s = await session(request, env);
   if (!s) return fail(401, 'Please sign in.', { signin: true });
   if (!(await allowed(env, s.uid))) return fail(403, 'Your access to My Marketing has ended. Ask West Marketing if this is a mistake.', { signin: true, clear: true });
 
-  if (method === 'GET' && path === '/api/me') return json({ name: s.name, email: s.email });
+  // a manager looking at a team member's page from the Manager Portal can look, not change anything
+  if (s.ro && method !== 'GET') return fail(403, 'This is a read-only view from the Manager Portal.');
+  if (method === 'GET' && path === '/api/me') return json({ name: s.name, email: s.email, viewAs: s.ro ? { by: s.by || '' } : null });
   if (method === 'GET' && path === '/api/content') {
     if (url.searchParams.get('fresh')) forget('items:' + s.uid);
     return json(await content(env, s));
@@ -103,8 +107,29 @@ async function sign(env, payload) {
   const sig = await crypto.subtle.sign('HMAC', await key(env), enc.encode(body));
   return body + '.' + b64u(sig);
 }
+// ---------- view as: a manager opens a team member's page (read only) from the Manager Portal ----------
+// The Manager Portal signs a 5-minute pass with a key both sites can make (from VIEW_AS_SECRET, or their shared monday token).
+function viewCookie(v, maxAge) {
+  return 'mm_v=' + v + '; Path=/; HttpOnly; Secure; SameSite=Lax' + (maxAge === 0 ? '; Max-Age=0' : '; Max-Age=' + maxAge);
+}
+async function viewKey(env) {
+  const raw = await crypto.subtle.digest('SHA-256', enc.encode((env.VIEW_AS_SECRET || '') + '|view-as|' + env.MONDAY_TOKEN));
+  return crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+}
+async function viewAs(env, url) {
+  const t = String(url.searchParams.get('t') || ''), m = t.match(/^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/);
+  const bad = msg => new Response('<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:40px;color:#1A1A1C"><h2>Can’t open this view</h2><p>' + msg + '</p><p>Go back to the Manager Portal and click the button again.</p>', { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  if (!m) return bad('The link is missing its pass.');
+  const sig = Uint8Array.from(atob(m[2].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  if (!(await crypto.subtle.verify('HMAC', await viewKey(env), sig, enc.encode(m[1])))) return bad('The pass didn’t check out.');
+  let p; try { p = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)))); } catch (e) { return bad('The pass couldn’t be read.'); }
+  if (!p || !p.uid || !(p.exp > Date.now())) return bad('The pass has expired (they last 5 minutes).');
+  const token = await sign(env, { uid: String(p.uid), name: String(p.name || ''), email: '', ro: true, by: String(p.by || ''), exp: Date.now() + 2 * 3600e3 });
+  return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': viewCookie(token, 7200), 'Cache-Control': 'no-store' } });
+}
 async function session(request, env) {
-  const m = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)mm_s=([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/);
+  const ck = request.headers.get('Cookie') || '';
+  const m = ck.match(/(?:^|;\s*)mm_v=([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/) || ck.match(/(?:^|;\s*)mm_s=([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/);
   if (!m) return null;
   const sig = Uint8Array.from(atob(m[2].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
   const ok = await crypto.subtle.verify('HMAC', await key(env), sig, enc.encode(m[1]));

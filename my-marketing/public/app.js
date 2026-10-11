@@ -78,7 +78,7 @@ function render() {
   if (!S.data) { app.innerHTML = S.loading ? '<div class="boot"><span class="spin"></span></div>' : signinHtml(); afterSignin(); return; }
   const r = route();
   const fn = { home: homeHtml, c: catHtml, p: pieceHtml, search: searchHtml, make: window.makeHtml, film: window.filmHtml, rec: window.recHtml, review: window.reviewHtml }[r.page] || homeHtml;
-  app.innerHTML = fn(r.arg);
+  app.innerHTML = (S.viewAs ? '<div class="viewas"><span>Viewing as <b>' + esc(S.data.name || 'team member') + '</b> · read only</span><button data-act="viewas-exit">Exit</button></div>' : '') + fn(r.arg);
   hydrate();
 }
 
@@ -132,7 +132,7 @@ async function submitCode() {
 // ================= data =================
 async function load(fresh) {
   if (!S.data) { S.loading = true; render(); }
-  try { S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = ''; }
+  try { S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = ''; if (S.viewAs == null) api('me').then(m => { S.viewAs = m.viewAs || false; if (S.viewAs) render(); }).catch(() => {}); }
   catch (e) { S.data = null; if (e.status !== 401) S.err = e.message; }
   S.loading = false; render();
 }
@@ -458,6 +458,7 @@ document.addEventListener('click', async e => {
   if (d.go) { go('p/' + d.go); return; }
   if (d.filter) { S.filter = d.filter; render(); return; }
   if (d.act === 'refresh') { doRefresh(); return; }
+  if (d.act === 'viewas-exit') { api('viewas/exit', { method: 'POST' }).catch(() => {}).then(() => { S.viewAs = null; S.data = null; location.hash = ''; window.close(); load(); }); return; }
   if (d.act === 'menu') { openMenu(true); return; }
   if (d.act === 'menu-close') { openMenu(false); return; }
   if (d.act === 'change-email') { S.step = 'email'; S.err = ''; render(); }

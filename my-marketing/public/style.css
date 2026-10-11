@@ -373,3 +373,7 @@ body.vcam-on { overflow: hidden; }
   body.vcam-on::before { content: ''; position: fixed; inset: 0; background: #111; z-index: 49; }
   .vcam { left: 50%; right: auto; width: calc(100dvh * 9 / 16); transform: translateX(-50%); }
 }
+
+.viewas { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 14px; background: #1A1A1C; color: #fff; font-size: 13.5px; padding: 9px 16px; }
+.viewas b { color: #fff; } .viewas span { color: #D8D6D2; }
+.viewas button { font: inherit; font-size: 12.5px; font-weight: 700; color: #1A1A1C; background: #fff; border: none; border-radius: 999px; padding: 4px 12px; cursor: pointer; }

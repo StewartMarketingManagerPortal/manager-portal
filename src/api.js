@@ -33,6 +33,7 @@ export async function onRequest(ctx) {
     if (route === 'team' && m === 'GET') return json(await myTeam(env, me));
     if (route.startsWith('photo/') && m === 'GET') return await teamPhoto(env, me, route.split('/')[1]);
     if (route === 'areas' && m === 'POST') { const r = await changeArea(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
+    if (route.startsWith('viewas/') && m === 'GET') { const r = await viewAsLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route.startsWith('content/') && m === 'GET') { const r = await teamContent(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route.startsWith('asset/') && m === 'GET') return await teamAsset(env, me, route.split('/')[1], route.split('/')[2], new URL(request.url).searchParams.get('dl'));
     if (route === 'bio' && m === 'POST') { const r = await writeBios(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
@@ -668,4 +669,28 @@ async function onbChange(env, me, body) {
     return { ok: true, contacts: clean };
   }
   return { error: 'Unknown change.' };
+}
+
+// ---------- open a team member's My Marketing page, read only ----------
+// A 5-minute pass signed with a key My Marketing can make too (VIEW_AS_SECRET if set on both sites, otherwise the shared monday token).
+const MY_MARKETING = 'https://my-marketing.keving-stewart.workers.dev';
+async function viewAsLink(env, me, id) {
+  const who = teamOf(me).find(p => String(p.id) === String(id));
+  if (!who) return { error: 'You can only open your own team’s pages.' };
+  const pc = await portalCols(env), cols = await columns(env, pc.id);
+  const person = Object.values(cols.byTitle).find(c => c.type === 'people');
+  if (!pc.emp || !person) return { error: 'Couldn’t read the Employee Marketing Portal board.' };
+  const d = await gql(env, 'query($b:ID!,$c:String!,$v:[String]!,$p:[String!]){items_page_by_column_values(board_id:$b,limit:50,columns:[{column_id:$c,column_values:$v}]){items{column_values(ids:$p){value}}}}',
+    { b: String(pc.id), c: pc.emp.id, v: [who.name], p: [person.id] });
+  let uid = '';
+  for (const it of ((d.items_page_by_column_values || {}).items || [])) {
+    try { const pp = (JSON.parse(it.column_values[0].value || '{}').personsAndTeams || []).find(x => x.kind === 'person'); if (pp) { uid = String(pp.id); break; } } catch (e) {}
+  }
+  if (!uid) return { error: who.name + ' isn’t set up on the Employee Marketing Portal yet, so there’s no My Marketing page to show.' };
+  const enc = new TextEncoder(), b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const raw = await crypto.subtle.digest('SHA-256', enc.encode((env.VIEW_AS_SECRET || '') + '|view-as|' + env.MONDAY_TOKEN));
+  const key = await crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const body = b64u(enc.encode(JSON.stringify({ uid, name: who.name, by: me.email, exp: Date.now() + 5 * 60e3 })));
+  const sig = b64u(await crypto.subtle.sign('HMAC', key, enc.encode(body)));
+  return { url: (env.MY_MARKETING_URL || MY_MARKETING) + '/api/viewas?t=' + body + '.' + sig };
 }

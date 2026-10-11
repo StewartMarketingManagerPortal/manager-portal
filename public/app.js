@@ -664,6 +664,20 @@ function tmList(t) {
       '<span class="tm-chips"><span class="tm-n' + (!n ? ' none' : n === 1 ? ' part' : ' full') + '" title="' + plural(n, 'market update area') + '">' + TM_IC.market + n + '</span>' +
       '<span class="tm-n' + (nl ? ' full' : ' none') + '" title="' + plural(nl, 'newsletter area') + '">' + TM_IC.news + nl + '</span></span></button>'; }).join('');
 }
+// My Marketing (read-only view) and their website, on the bottom line of the contact block
+const LIVE_SITES = { 'reuben de la parra': 'https://stewart-west.keving-stewart.workers.dev/reuben-de-la-parra' };   // websites that are live
+const TM_PHONE = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/></svg>';
+const TM_WEB = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z"/></svg>';
+function tmLinks(p) {
+  const site = LIVE_SITES[String(p.name || '').toLowerCase().trim()];
+  return '<div class="cblk-links"><a href="#" data-act="tm-viewas" data-id="' + esc(p.id) + '" title="Opens ' + esc(p.name) + '’s My Marketing page in a new tab, read only">' + TM_PHONE + 'View My Marketing ›</a><span class="sep"></span>' +
+    (site ? '<a href="' + esc(site) + '" target="_blank" rel="noopener">' + TM_WEB + 'My Website ›</a>' : '<span class="off">' + TM_WEB + 'My Website <small>· Coming soon</small></span>') + '</div>';
+}
+ACT['tm-viewas'] = async el => {
+  const w = window.open('about:blank', '_blank');
+  try { const r = await api('viewas/' + el.dataset.id); if (w) w.location = r.url; else location.href = r.url; }
+  catch (e) { if (w) w.close(); toast(e.message, 8000); }
+};
 PAGES.team = () => {
   const t = tmState();
   if (!t.data && !t.err) loadTeam();
@@ -685,7 +699,7 @@ PAGES.team = () => {
       (p.phone ? '<a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + I.phone + esc(fmtPhone(p.phone)) + '</a>' : '') +
       (p.email ? '<a href="mailto:' + esc(p.email) + '">' + I.mail + esc(p.email) + '</a>' : '') +
       (addr ? '<div>' + I.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
-      '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
+      tmLinks(p) + '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
     if (window.onbTeamCard) h += onbTeamCard(p);
     // market areas
     const ready = t.data.areasReady;
