@@ -322,6 +322,8 @@ body.updating .topspin { display: flex; }
 .vti { width: 34px; height: 34px; border-radius: 10px; background: var(--tint); color: var(--brand); display: grid; place-items: center; flex: none; }
 .vtip b { display: block; font-size: 14.5px; }
 .vtip span span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 2px; }
+.vtip .vbrows { display: flex; gap: 6px; margin-top: 8px; }
+.vtip .vbrows i { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--ink); background: var(--tint); border-radius: 999px; padding: 3px 10px; }
 .vlight { font-size: 12.5px; color: #8C8984; line-height: 1.45; margin: 0 6px; }
 .vreview { width: 100%; max-height: 62vh; border-radius: 16px; background: #000; }
 .vsend span { font-size: 13px; color: var(--muted); }

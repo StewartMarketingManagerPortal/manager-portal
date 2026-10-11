@@ -12,7 +12,7 @@ const VTIPS = [
 const VI = {
   q: '<path d="M11 5L6 9H2v6h4l5 4z"/><path d="M19 5l-6 14"/>', bg: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 5 5 3-3 5 5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  ph: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>', shirt: '<path d="M8 3l4 3 4-3 5 4-3 4-2-1v11H8V10l-2 1-3-4z"/>',
+  ph: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>', web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z"/>', shirt: '<path d="M8 3l4 3 4-3 5 4-3 4-2-1v11H8V10l-2 1-3-4z"/>',
 };
 const vsvg = (p, s) => '<svg width="' + (s || 18) + '" height="' + (s || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
 const vScript = id => (V.list || []).find(x => x.id === id);
@@ -46,8 +46,10 @@ function filmHtml(id) {
     '<div><h1>Before you film</h1><p>A minute of setup makes the video look and sound great.</p></div></div></header><div class="body"><div class="wrap vnarrow">' +
     '<div class="vtips">' + VTIPS.map(([k, b, d]) => '<div class="vtip"><span class="vti">' + vsvg(VI[k]) + '</span><span><b>' + b + '</b><span>' + d + '</span></span></div>').join('') + '</div>' +
     '<p class="vlight">Suggested: a small phone tripod. It keeps the phone steady and at eye level, and frees up your hands.</p>' +
+    '<div class="vtips"><div class="vtip"><span class="vti">' + vsvg(VI.web) + '</span><span><b>Use Safari, Chrome or Edge</b><span>On a phone or a computer with a webcam. Firefox saves the video in a format our editor can’t open.</span>' +
+      '<span class="vbrows"><i>Safari</i><i>Chrome</i><i>Edge</i></span></span></div></div>' +
     '<a class="btn primary block" href="#rec/' + esc(s.id) + '">Open the camera</a>' +
-    (isComputer() ? '<p class="vlight" style="text-align:center">This works best on your phone. Open My Marketing there to record.</p>' : '') +
+    (isComputer() ? '<p class="vlight" style="text-align:center">On a computer, raise it so the camera is at eye level. A phone gives the sharpest video.</p>' : '') +
     '</div></div>' + foot() + '</div>' + t.bottom;
 }
 
