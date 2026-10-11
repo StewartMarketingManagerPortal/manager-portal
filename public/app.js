@@ -654,6 +654,7 @@ PAGES.team = () => {
       (p.email ? '<a href="mailto:' + esc(p.email) + '">' + I.mail + esc(p.email) + '</a>' : '') +
       (addr ? '<div>' + I.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
       '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
+    if (window.onbTeamCard) h += onbTeamCard(p);
     // market areas
     const ready = t.data.areasReady;
     h += '<section class="card"><div><h2>Market update areas</h2><div class="sub" style="font-size:14px">Each area gets its own weekly market snapshot graphic. Changes are picked up by the next weekly run.</div></div>';

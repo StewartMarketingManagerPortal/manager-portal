@@ -376,3 +376,20 @@ select:disabled { opacity: .6; cursor: default; }
 .ob-pick .chip { border: 1.5px solid var(--border); background: #fff; border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; margin: 4px 4px 0 0; }
 .ob-pick .chip:hover { border-color: var(--brand); color: var(--brand); }
 .ob-hire .small { white-space: nowrap; }
+
+.ob-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.ob-tab { display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 999px; padding: 8px 14px; font-size: 14px; color: var(--ink); text-decoration: none; border: 1.5px solid transparent; }
+.ob-tab span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.ob-tab.on { background: var(--ink); color: #fff; } .ob-tab.on span { color: var(--navmuted); }
+.ob-tab.new { border: 1.5px dashed var(--border); background: transparent; color: var(--brand); font-weight: 700; }
+.ob-tab:not(.on):hover { border-color: var(--border); }
+.ob-fin { margin-top: 18px; }
+.ob-rail-foot { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+.ob-rail-foot .btn { gap: 8px; width: 100%; }
+.ob-cancel { border: none; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; padding: 4px; }
+.ob-cancel:hover { color: var(--brand); }
+.ob-done summary { cursor: pointer; font-size: 16px; list-style: none; } .ob-done summary::-webkit-details-marker { display: none; }
+.ob-done summary::after { content: '›'; float: right; color: var(--muted); transition: transform .2s; } .ob-done[open] summary::after { transform: rotate(90deg); }
+.ob-av.done { background: var(--green); }
+.ob-team .ob-bar { margin: 0; }
+.ob-hire .small { flex: none; }

@@ -67,14 +67,14 @@ async function onbLoad(force) {
   catch (e) { OB.err = e.message; OB.list = OB.list || []; }
   OB.loading = false;
   if (!S.reqs) loadRequests();
-  if (route() === 'onboard') render();
+  if (route() === 'onboard' || route() === 'team') render();
 }
 const onbPost = body => api('onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 function onbSave(h) {
   clearTimeout(OB.timers[h.id]);
   OB.timers[h.id] = setTimeout(async () => {
     const t = onbTotals(h);
-    try { await onbPost({ op: 'save', id: h.id, data: h.data, progress: t.done + '/' + t.total }); }
+    try { await onbPost({ op: 'save', id: h.id, data: h.data, progress: (h.data && h.data.fin ? 'Completed ' : '') + t.done + '/' + t.total }); }
     catch (e) { toast('Couldn’t save that: ' + e.message, 7000); }
   }, 500);
 }
@@ -92,14 +92,18 @@ PAGES.onboard = () => {
   const t = onbTotals(h), first = h.name.split(' ')[0];
   const days = h.start ? Math.round((new Date(h.start + 'T12:00:00') - new Date(iso(new Date()) + 'T12:00:00')) / 864e5) : null;
   let out = '<div class="head"><div><a class="ob-back" href="#newhire">‹ New Hires</a><h1>Full onboarding</h1><div class="sub">Everything for a new hire’s first 90 days, in order. Jump to any step, tick things off as you go. Your progress is saved.</div></div>' +
-    '<div class="ob-who"><span class="ob-av">' + esc(initials(h.name)) + '</span><span><b>' + esc(h.name) + '</b><small>' + esc([h.title, h.start ? 'starts ' + nice(h.start) : ''].filter(Boolean).join(' · ')) + (S.me.admin && h.managerEmail !== S.me.email ? ' · ' + esc(h.manager) : '') + '</small></span><a class="btn" href="#onboard">Change</a></div></div>';
+    '<div class="ob-who"><span class="ob-av">' + esc(initials(h.name)) + '</span><span><b>' + esc(h.name) + '</b><small>' + esc([h.title, h.start ? 'starts ' + nice(h.start) : ''].filter(Boolean).join(' · ')) + (S.me.admin && h.managerEmail !== S.me.email ? ' · ' + esc(h.manager) : '') + '</small></span><a class="btn" href="#onboard">All new hires</a></div></div>';
+  out += onbTabs(h);
+  const fin = (h.data || {}).fin;
+  if (fin) out += '<div class="banner ok ob-fin"><span class="av" style="background:var(--green);color:#fff">✓</span><div class="grow"><b>Onboarding completed ' + onbNice(fin) + '</b><div class="small">Kept on ' + esc(first) + '’s page in My Team. You can still tick things here.</div></div><button class="btn" data-act="ob-reopen">Reopen</button></div>';
+  else if (t.done === t.total) out += '<div class="banner ok ob-fin"><span class="av" style="background:var(--green);color:#fff">✓</span><div class="grow"><b>Everything’s done for ' + esc(first) + '!</b><div class="small">Complete the onboarding to move it off your list. It stays on their page in My Team.</div></div><button class="btn primary" data-act="ob-complete">Complete onboarding</button></div>';
   out += '<div class="ob-wrap"><aside class="card ob-rail"><div><div class="ob-bar"><i style="width:' + Math.round(t.done / Math.max(1, t.total) * 100) + '%"></i></div><div class="small"><b>' + t.done + ' of ' + t.total + '</b> done' +
     (days != null ? ' · ' + (days > 0 ? plural(days, 'day') + ' until day 1' : days === 0 ? 'starts today' : 'day ' + (1 - days)) : '') + '</div></div><ol class="ob-steps">' +
     ONB_STEPS.map((x, i) => {
       const c = onbCount(h, x), all = c.done === c.total, left = c.total - c.done;
       return '<li class="' + (x === s ? 'on ' : '') + (all ? 'done ' : '') + (x.mkt ? 'mkt' : '') + '"><a ' + onbHref(h, x.k) + '><span class="ob-n">' + (all ? OB_CK : i + 1) + '</span><span class="ob-tx"><b>' + esc(x.t) + '</b><small>' + esc(x.when(h)) + '</small></span>' +
         '<span class="ob-cc">' + (all ? '<i class="ok" title="All done">' + OB_CK + '</i>' : (c.done ? '<i class="ok" title="' + c.done + ' done">' + c.done + '</i>' : '') + '<i class="left" title="' + left + ' to go">' + left + '</i>') + '</span></a></li>';
-    }).join('') + '</ol></aside><section class="ob-main">' + onbStep(h, s) + '</section></div>';
+    }).join('') + '</ol>' + (fin ? '' : '<div class="ob-rail-foot"><button class="btn" data-act="ob-complete">' + OB_CK.replace('#fff', 'currentColor') + 'Complete onboarding</button><button class="ob-cancel" data-act="ob-cancel">Cancel this onboarding</button></div>') + '</aside><section class="ob-main">' + onbStep(h, s) + '</section></div>';
   if (OB.mail) out += onbMailBox(h);
   return out;
 };
@@ -140,7 +144,7 @@ function onbStep(h, s) {
 // ---------- pick or start an onboarding ----------
 function onbPick() {
   const f = OB.form || (OB.form = { name: '', title: '', start: '' });
-  const list = OB.list || [];
+  const all = OB.list || [], list = all.filter(x => !(x.data || {}).fin), doneList = all.filter(x => (x.data || {}).fin);
   const taken = new Set(list.map(x => nk(x.name)));
   const recent = ((S.reqs && S.reqs.newHires) || []).filter(x => !taken.has(nk(x.name))).slice(0, 6);
   const titles = (S.me.titles || []).map(t => '<option ' + (t === f.title ? 'selected' : '') + '>' + esc(t) + '</option>').join('');
@@ -151,15 +155,17 @@ function onbPick() {
     out += '<section class="card"><h2>' + (S.me.admin ? 'Onboardings' : 'Your onboardings') + '</h2><div class="ob-hires">' + list.map(h => {
       const t = onbTotals(h), pct = Math.round(t.done / Math.max(1, t.total) * 100);
       return '<div class="ob-hire"><a href="#onboard/' + esc(h.id) + '"><span class="ob-av">' + esc(initials(h.name)) + '</span><span class="grow"><b>' + esc(h.name) + '</b><small>' + esc([h.title, h.start ? 'starts ' + nice(h.start) : '', S.me.admin && h.managerEmail !== S.me.email ? h.manager : ''].filter(Boolean).join(' · ')) + '</small>' +
-        '<span class="ob-bar sm"><i style="width:' + pct + '%"></i></span></span><span class="small"><b>' + t.done + '</b>/' + t.total + '</span></a><button class="ob-x" data-act="ob-remove" data-id="' + esc(h.id) + '" title="Remove" aria-label="Remove ' + esc(h.name) + '">×</button></div>';
+        '<span class="ob-bar sm"><i style="width:' + pct + '%"></i></span></span><span class="small"><b>' + t.done + '</b>/' + t.total + '</span></a><button class="ob-x" data-act="ob-remove" data-id="' + esc(h.id) + '" title="Cancel this onboarding" aria-label="Cancel ' + esc(h.name) + '’s onboarding">×</button></div>';
     }).join('') + '</div></section>';
   }
+  const doneHtml = doneList.length ? '<details class="card ob-done"><summary><b>Completed</b> <span class="muted">· ' + doneList.length + '</span></summary><div class="ob-hires">' + doneList.map(h =>
+    '<div class="ob-hire"><a href="#onboard/' + esc(h.id) + '"><span class="ob-av done">' + OB_CK + '</span><span class="grow"><b>' + esc(h.name) + '</b><small>Completed ' + onbNice(h.data.fin) + (h.title ? ' · ' + esc(h.title) : '') + '</small></span></a></div>').join('') + '</div></details>' : '';
   out += '<section class="card"><h2>Start a new onboarding</h2>' +
     (recent.length ? '<div class="small muted">New hires you sent to marketing: ' + recent.map(x => '<button class="chip" data-act="ob-quick" data-name="' + esc(x.name) + '">' + esc(x.name) + '</button>').join(' ') + '</div>' : '') +
     '<div class="ob-form"><label class="field">Their full name<input type="text" data-ob="name" value="' + esc(f.name) + '" placeholder="First and last name"></label>' +
     '<label class="field">Title<select data-ob="title"><option value="">Choose…</option>' + titles + '</select></label>' +
     '<label class="field">Start date<input type="date" data-ob="start" value="' + esc(f.start) + '"></label></div>' +
-    '<div><button class="btn primary" data-act="ob-create" ' + (OB.creating ? 'disabled' : '') + '>' + (OB.creating ? 'Starting…' : 'Start onboarding ›') + '</button></div></section></div>';
+    '<div><button class="btn primary" data-act="ob-create" ' + (OB.creating ? 'disabled' : '') + '>' + (OB.creating ? 'Starting…' : 'Start onboarding ›') + '</button></div></section>' + doneHtml + '</div>';
   return out;
 }
 ACT['ob-quick'] = el => { OB.form = Object.assign(OB.form || {}, { name: el.dataset.name }); render(); };
@@ -170,11 +176,38 @@ ACT['ob-create'] = async () => {
   try { const r = await onbPost({ op: 'create', name: f.name.trim(), title: f.title || '', start: f.start || '' }); OB.list.unshift(r.hire); OB.form = null; OB.creating = false; go('onboard/' + r.hire.id); }
   catch (e) { OB.creating = false; render(); toast(e.message, 7000); }
 };
-ACT['ob-remove'] = async el => {
-  const h = onbHire(el.dataset.id); if (!h || !confirm('Remove ' + h.name + '’s onboarding? Their checklist progress is deleted.')) return;
-  try { await onbPost({ op: 'remove', id: h.id }); OB.list = OB.list.filter(x => x !== h); render(); toast('Removed'); }
+async function onbCancel(h) {
+  if (!h || !confirm('Cancel ' + h.name + '’s onboarding?\n\nUse this if they aren’t starting after all. Their checklist is removed from the portal.')) return;
+  try { await onbPost({ op: 'remove', id: h.id }); OB.list = OB.list.filter(x => x !== h); toast(h.name + '’s onboarding was canceled'); go('onboard'); }
   catch (e) { toast(e.message, 7000); }
+}
+ACT['ob-remove'] = el => onbCancel(onbHire(el.dataset.id));
+ACT['ob-cancel'] = () => onbCancel(onbCur());
+ACT['ob-complete'] = () => {
+  const h = onbCur(); if (!h) return; const t = onbTotals(h), left = t.total - t.done;
+  if (left && !confirm(plural(left, 'item') + ' still open. Complete ' + h.name + '’s onboarding anyway?')) return;
+  h.data = h.data || {}; h.data.fin = onbToday(); onbSave(h); render(); toast(h.name.split(' ')[0] + '’s onboarding is complete. It’s kept on their page in My Team.', 6000);
 };
+ACT['ob-reopen'] = () => { const h = onbCur(); if (!h) return; delete h.data.fin; onbSave(h); render(); };
+// switch between everyone being onboarded right now
+function onbTabs(cur) {
+  const act = (OB.list || []).filter(x => !(x.data || {}).fin || x === cur);
+  if (act.length < 2) return '<div class="ob-tabs"><a class="ob-tab new" href="#onboard">+ Onboard another new hire</a></div>';
+  return '<div class="ob-tabs">' + act.map(x => { const t = onbTotals(x);
+    return '<a class="ob-tab' + (x === cur ? ' on' : '') + '" href="#onboard/' + esc(x.id) + '"><b>' + esc(x.name) + '</b><span>' + t.done + '/' + t.total + '</span></a>'; }).join('') +
+    '<a class="ob-tab new" href="#onboard">+ New</a></div>';
+}
+// My Team: their onboarding, in progress or completed
+function onbTeamCard(p) {
+  if (!OB.list) { onbLoad(); return ''; }
+  const h = OB.list.find(x => nk(x.name) === nk(p.name)); if (!h) return '';
+  const t = onbTotals(h), fin = (h.data || {}).fin, pct = Math.round(t.done / Math.max(1, t.total) * 100);
+  return '<section class="card ob-team"><div class="row" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2>Onboarding</h2><div class="sub" style="font-size:14px">' +
+    (fin ? 'Completed ' + onbNice(fin) + ' · ' + t.done + ' of ' + t.total + ' items done' : 'In progress · ' + t.done + ' of ' + t.total + ' done') + (h.start ? ' · started ' + nice(h.start) : '') + '</div></div>' +
+    '<a class="btn' + (fin ? '' : ' primary') + '" href="#onboard/' + esc(h.id) + '">' + (fin ? 'View checklist' : 'Open checklist ›') + '</a></div>' +
+    '<span class="ob-bar"><i style="width:' + pct + '%"></i></span></section>';
+}
+window.onbTeamCard = onbTeamCard;
 document.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.ob; if (k && OB.form) OB.form[k] = e.target.value; });
 document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.ob; if (k && OB.form) OB.form[k] = e.target.value; });
 
