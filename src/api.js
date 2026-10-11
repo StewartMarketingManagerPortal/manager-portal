@@ -40,6 +40,8 @@ export async function onRequest(ctx) {
     if (route === 'nlarea' && m === 'POST') { const r = await changeNl(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'altos' && m === 'POST') return json(await checkAltos((await request.json()).link));
     if (route === 'proof' && m === 'POST') { const r = await answerProof(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
+    if (route === 'onboarding' && m === 'GET') return json(await onbList(env, me));
+    if (route === 'onboarding' && m === 'POST') { const r = await onbChange(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
   } catch (e) {
@@ -550,4 +552,84 @@ async function writeBios(env, me, b) {
   const bios = ((out && out.bios) || []).map((x, i) => ({ style: String(x.style || styles[i] || 'Option'), text: String(x.text || '').trim() })).filter(x => x.text).slice(0, count);
   if (!bios.length) return { error: 'Claude’s answer came back empty. Try again.' };
   return { bios };
+}
+
+// ---------- full onboarding: each manager's checklist for a new hire, kept on the "Manager Onboarding" board ----------
+// One row per new hire (Data = which items are done / emailed), plus one "Contacts" row per manager (who each email goes to).
+const ONB_NAME = 'Manager Onboarding';
+const ONB_COLS = [['Kind', 'text'], ['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Start Date', 'text'], ['Progress', 'text'], ['Data', 'long_text']];
+async function onbBoard(env) {
+  return cached('onbBoard', 3600e3, async () => {
+    let id = env.ONBOARDING_BOARD_ID ? String(env.ONBOARDING_BOARD_ID) : '';
+    if (!id) { try { id = await boardId(env, ONB_NAME, 'ONBOARDING_BOARD_ID'); } catch (e) { forget('board:' + ONB_NAME); } }
+    if (!id) {
+      let ws = null;
+      try { const w = await gql(env, 'query{workspaces(limit:100){id name}}', {}); const hit = w.workspaces.find(x => nk(x.name) === 'stewart marketing west'); if (hit) ws = String(hit.id); } catch (e) {}
+      id = String((await gql(env, 'mutation($n:String!,$w:ID,$d:String){create_board(board_name:$n,board_kind:private,workspace_id:$w,description:$d){id}}',
+        { n: ONB_NAME, w: ws, d: 'Full onboarding checklists from the Manager Portal. One row per new hire, plus a Contacts row per manager. Kept up to date by the portal.' })).create_board.id);
+    }
+    let cols = await columns(env, id);
+    const missing = ONB_COLS.filter(([t]) => !cols.byTitle[nk(t)]);
+    for (const [t, type] of missing) await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:' + type + '){id}}', { b: id, t });
+    if (missing.length) { forget('cols:' + id); cols = await columns(env, id); }
+    const col = {}; ONB_COLS.forEach(([t]) => col[t] = cols.byTitle[nk(t)].id);
+    return { id, col };
+  });
+}
+async function onbRows(env, b) {
+  const items = await allItems(env, b.id, Object.values(b.col));
+  return items.map(it => {
+    const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+    let data = {}; try { data = JSON.parse(v[b.col.Data] || '{}') || {}; } catch (e) {}
+    return { id: String(it.id), name: it.name.trim(), kind: v[b.col.Kind] || 'hire', manager: v[b.col.Manager], managerEmail: (v[b.col['Manager Email']] || '').toLowerCase(),
+      title: v[b.col.Title], start: v[b.col['Start Date']], progress: v[b.col.Progress], data, created: it.created_at };
+  });
+}
+async function onbList(env, me) {
+  const b = await onbBoard(env), rows = await onbRows(env, b);
+  const mine = r => r.managerEmail === me.email;
+  const contacts = (rows.find(r => r.kind === 'contacts' && mine(r)) || {}).data || {};
+  const hires = rows.filter(r => r.kind !== 'contacts' && (me.row.admin || mine(r))).sort((a, b) => String(b.start || '').localeCompare(String(a.start || '')));
+  return { hires, contacts };
+}
+async function onbChange(env, me, body) {
+  const b = await onbBoard(env), C = b.col;
+  const txt = (x, n) => String(x == null ? '' : x).trim().slice(0, n || 200);
+  const own = async id => {
+    const d = await gql(env, 'query($i:[ID!]){items(ids:$i){id board{id} column_values(ids:["' + C['Manager Email'] + '"]){text}}}', { i: [String(id)] });
+    const it = d.items[0];
+    if (!it || String(it.board.id) !== b.id) return false;
+    return me.row.admin || (it.column_values[0].text || '').toLowerCase() === me.email;
+  };
+  const set = (id, vals) => gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: String(id), v: JSON.stringify(vals) });
+  if (body.op === 'create') {
+    const name = txt(body.name, 120); if (!name) return { error: 'Add the new hire’s name.' };
+    const vals = {}; vals[C.Kind] = 'hire'; vals[C.Manager] = me.row.name; vals[C['Manager Email']] = me.email; vals[C.Title] = txt(body.title); vals[C['Start Date']] = txt(body.start, 10); vals[C.Progress] = '0';
+    vals[C.Data] = { text: '{}' };
+    const id = await createItem(env, b.id, null, name, vals);
+    return { ok: true, hire: { id: String(id), name, kind: 'hire', manager: me.row.name, managerEmail: me.email, title: vals[C.Title], start: vals[C['Start Date']], progress: '0', data: {} } };
+  }
+  if (body.op === 'save') {
+    if (!(await own(body.id))) return { error: 'That onboarding isn’t yours to change.' };
+    const data = JSON.stringify(body.data || {}); if (data.length > 1900) return { error: 'Too much to save at once.' };
+    const vals = {}; vals[C.Data] = { text: data }; vals[C.Progress] = txt(body.progress, 20);
+    if (body.title != null) vals[C.Title] = txt(body.title); if (body.start != null) vals[C['Start Date']] = txt(body.start, 10);
+    await set(body.id, vals);
+    if (body.name) await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: String(body.id), v: JSON.stringify({ name: txt(body.name, 120) }) });
+    return { ok: true };
+  }
+  if (body.op === 'remove') {
+    if (!(await own(body.id))) return { error: 'That onboarding isn’t yours to remove.' };
+    await gql(env, 'mutation($i:ID!){archive_item(item_id:$i){id}}', { i: String(body.id) });
+    return { ok: true };
+  }
+  if (body.op === 'contacts') {
+    const rows = await onbRows(env, b), row = rows.find(r => r.kind === 'contacts' && r.managerEmail === me.email);
+    const clean = {}; Object.entries(body.contacts || {}).slice(0, 20).forEach(([k, v]) => { clean[txt(k, 20)] = { name: txt(v && v.name, 60), email: txt(v && v.email, 120) }; });
+    const data = JSON.stringify(clean); if (data.length > 1900) return { error: 'Too many contacts.' };
+    if (row) { const vals = {}; vals[C.Data] = { text: data }; await set(row.id, vals); }
+    else { const vals = {}; vals[C.Kind] = 'contacts'; vals[C.Manager] = me.row.name; vals[C['Manager Email']] = me.email; vals[C.Data] = { text: data }; await createItem(env, b.id, null, 'Contacts · ' + me.row.name, vals); }
+    return { ok: true, contacts: clean };
+  }
+  return { error: 'Unknown change.' };
 }

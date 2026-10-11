@@ -63,7 +63,7 @@ function go(h) { if (location.hash === '#' + h) render(); else location.hash = h
 function nav() {
   const r = route(), me = S.me;
   const open = S.reqs ? S.reqs.requests.filter(x => !/complete/i.test(x.status)).length : 0;
-  const link = (h, label, extra) => '<a class="nav ' + ((r === h || (h === 'newhire' && r === 'submitted') || (h === 'request' && r === 'sent')) ? 'on' : '') + '" href="#' + h + '">' + label + (extra ? '<span class="count">' + extra + '</span>' : '') + '</a>';
+  const link = (h, label, extra) => '<a class="nav ' + ((r === h || (h === 'newhire' && (r === 'submitted' || r === 'onboard')) || (h === 'request' && r === 'sent')) ? 'on' : '') + '" href="#' + h + '">' + label + (extra ? '<span class="count">' + extra + '</span>' : '') + '</a>';
   return '<img class="logo" src="logo-light.png" alt="Stewart Title"><div class="tag">MANAGER PORTAL</div>' +
     link('home', 'Home') + link('team', 'My Team') + link('newhire', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
     '<div class="me"><span class="av">' + esc(initials(me.name)) + '</span><span class="who"><b>' + esc(me.name) + '</b><span>' + (me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
@@ -134,7 +134,8 @@ PAGES.newhire = () => {
   const n = S.nh || (S.nh = freshNewHire());
   if (window.Cutout) Cutout.load().catch(() => {});
   const steps = ['Details + photo', 'About Me', 'Choose a look', 'Review'];
-  let h = '<div class="head"><div><h1>' + (n.step === 2 ? 'About ' + (n.firstName ? esc(n.firstName) : 'them') : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 4 ? 'Review and submit' : 'Add a new hire') + '</h1><div class="sub">' +
+  let h = (n.step === 1 && S.onbFrom ? '<div class="ob-banner"><span><b>Part of ' + esc(n.firstName || 'their') + '’s onboarding.</b> Once you send this, Marketing setup is ticked off.</span><a class="btn" href="#onboard/' + esc(S.onbFrom) + '/mkt">‹ Back to the checklist</a></div>' : '') + (n.step === 1 && !S.onbFrom ? '<div class="ob-banner"><span><b>Onboarding someone new?</b> Follow the full checklist, from ordering supplies to the 90-day check-in.</span><a class="btn primary" href="#onboard">Full onboarding ›</a></div>' : '') +
+    '<div class="head"><div><h1>' + (n.step === 2 ? 'About ' + (n.firstName ? esc(n.firstName) : 'them') : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 4 ? 'Review and submit' : 'Add a new hire') + '</h1><div class="sub">' +
     (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Their About Me, used on their website and marketing pieces. Answer a few questions or paste one they have.' : n.step === 3 ? 'Pick one, or both to get every piece in dark and light.' : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
     '<ol class="steps" aria-label="Steps">' + steps.map((s, i) => '<li class="' + (i + 1 === n.step ? 'on' : i + 1 < n.step ? 'done' : '') + '"><span>' + (i + 1 < n.step ? '✓' : i + 1) + '</span>' + s + '</li>').join('') + '</ol></div>';
   if (n.step === 1) h += nhDetails(n); else if (n.step === 2) h += nhBio(n); else if (n.step === 3) h += nhLooks(n); else h += nhReview(n);
@@ -297,7 +298,7 @@ function nhReview(n) {
 PAGES.submitted = () => {
   const l = S.last; if (!l) { go('newhire'); return ''; }
   return '<div class="banner ok"><span class="av" style="background:var(--green);color:#fff">✓</span><div class="grow"><h1 style="font-size:28px;color:#124D2B">' + esc(l.first) + ' is on the way</h1><div style="margin-top:4px">Added to the Main Employee Sheet. Marketing will build the package and put it on the Employee Marketing Portal.</div></div>' +
-    '<a class="btn" href="#newhire" data-act="nh-another">Add another new hire</a></div>' +
+    (l.onb ? '<a class="btn primary" href="#onboard/' + esc(l.onb) + '/prints">Back to ' + esc(l.first) + '’s onboarding ›</a>' : '') + '<a class="btn" href="#newhire" data-act="nh-another">Add another new hire</a></div>' +
     (l.selfServe ? '<div class="preview" style="max-width:560px"><div class="cardlabel" style="color:var(--navmuted)">Don’t want to wait?</div><h2>Create the package now</h2><div style="font-size:14px;color:var(--navtext)">Starts the full package right away instead of waiting for the marketing team.</div><button type="button" class="btn primary">Create the package now</button></div>' : '');
 };
 
@@ -490,7 +491,7 @@ ACT['nh-next'] = () => {
 ACT['nh-back'] = (el, e) => { e.preventDefault(); S.nh.step--; render(); };
 ACT['nh-step'] = (el, e) => { e.preventDefault(); S.nh.step = +el.dataset.step; render(); };
 ACT.look = el => { const n = S.nh, l = el.dataset.look; n.looks = n.looks.includes(l) ? n.looks.filter(x => x !== l) : n.looks.concat([l]); render(); };
-ACT['nh-another'] = () => { S.nh = freshNewHire(); };
+ACT['nh-another'] = () => { S.nh = freshNewHire(); S.onbFrom = ''; };
 ACT['nh-submit'] = async () => {
   const n = S.nh, a = nhAddress(n);
   S.busy = true; render();
@@ -500,7 +501,8 @@ ACT['nh-submit'] = async () => {
       startDate: n.startDate, show: n.show, areas: n.areas, nlAreas: n.nlAreas, bio: nhBioText(n), looks: n.looks, notes: n.notes }));
     if (n.photo) fd.append('photo', n.photo, n.photo.name);
     await api('newhire', { method: 'POST', body: fd });
-    S.last = { first: n.firstName, selfServe: S.me.selfServe };
+    S.last = { first: n.firstName, selfServe: S.me.selfServe, onb: S.onbFrom || '' };
+    if (S.onbFrom && window.onbMarkSent) onbMarkSent(S.onbFrom); S.onbFrom = '';
     S.nh = freshNewHire(); S.busy = false; loadRequests(); go('submitted');
   } catch (e) { S.busy = false; render(); toast(e.message, 7000); }
 };
