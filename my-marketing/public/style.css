@@ -357,3 +357,13 @@ body.vcam-on { overflow: hidden; }
 .vre .vic { background: var(--brand); color: #fff; }
 .vre b { display: block; font-size: 15px; }
 .vre span span { display: block; font-size: 13px; color: var(--ink); line-height: 1.45; margin-top: 2px; }
+
+.vnote { display: inline-flex; align-items: center; gap: 10px; margin-top: 18px; font-size: 13.5px; color: var(--ink); text-decoration: none; }
+.vnote i { position: relative; width: 9px; height: 9px; border-radius: 50%; background: var(--brand); flex: none; }
+.vnote i::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--brand); animation: vpulse 1.8s ease-out infinite; }
+.vnote u { text-decoration: none; color: #1E8A4F; font-weight: 700; }
+@keyframes vpulse { 0% { transform: scale(1); opacity: .6; } 80%, 100% { transform: scale(2.8); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .vnote i::after { animation: none; } }
+.vnblk { padding-bottom: 0 !important; }
+.vnblk .vnote { margin-top: 0; }
+.vnote u { white-space: nowrap; }

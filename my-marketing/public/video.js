@@ -32,6 +32,15 @@ function vReshootHtml() {
     return '<a class="vre" href="' + (s ? '#film/' + esc(s.id) : '#make') + '"><span class="vic">' + I.film + '</span><span><b>Please record “' + esc(x.script) + '” again</b>' +
       '<span>' + esc(x.note || 'West Marketing couldn’t use the last take.') + '</span></span><span class="vchev">' + I.next + '</span></a>'; }).join('');
 }
+// Home: one quiet line under the header until they've opened Make a video and seen the request
+const vKey = x => nk(x.script) + '|' + (x.note || '');
+function vSeen() { try { return JSON.parse(localStorage.getItem('vseen') || '[]'); } catch (e) { return []; } }
+function vHomeNote() {
+  const seen = vSeen(), un = V.reshoot.filter(x => !seen.includes(vKey(x)));
+  if (!un.length) return '';
+  return '<section class="blk vnblk"><div class="wrap"><a class="vnote" href="#make"><i></i><span>' + (un.length === 1 ? 'West Marketing asked for a reshoot' : un.length + ' videos to reshoot') + '</span><u>View ›</u></a></div></section>';
+}
+function vMarkSeen() { if (!V.reshoot.length) return; try { localStorage.setItem('vseen', JSON.stringify(V.reshoot.map(vKey))); } catch (e) {} }
 // ---------- 1 · scripts ----------
 function makeHtml() {
   const t = tabs('make');
@@ -41,8 +50,8 @@ function makeHtml() {
   if (!V.list) h += '<div class="boot" style="min-height:30vh"><span class="spin"></span></div>';
   else if (V.err) h += '<div class="err">' + esc(V.err) + '</div>';
   else if (!V.list.length) h += '<div class="empty">No scripts yet. West Marketing will add them here.</div>';
-  else h += vReshootHtml() + '<div class="vlist">' + V.list.map(s => '<a class="vrow" href="#film/' + esc(s.id) + '"><span class="vic">' + I.film + '</span><span class="vtx"><b>' + esc(s.name) + '</b><small>' + esc(vLen(s.secs)) +
-    (vRe(s.name) ? '<span class="vpill re">Please reshoot</span>' : V.filmed.includes(nk(s.name)) ? '<span class="vpill">Sent</span>' : '') + '</small></span><span class="vchev">' + I.next + '</span></a>').join('') + '</div>';
+  else { vMarkSeen(); h += vReshootHtml() + '<div class="vlist">' + V.list.map(s => '<a class="vrow" href="#film/' + esc(s.id) + '"><span class="vic">' + I.film + '</span><span class="vtx"><b>' + esc(s.name) + '</b><small>' + esc(vLen(s.secs)) +
+    (vRe(s.name) ? '<span class="vpill re">Please reshoot</span>' : V.filmed.includes(nk(s.name)) ? '<span class="vpill">Sent</span>' : '') + '</small></span><span class="vchev">' + I.next + '</span></a>').join('') + '</div>'; }
   return h + '</div></div>' + foot() + '</div>' + t.bottom;
 }
 // ---------- 2 · before you film ----------

@@ -226,6 +226,7 @@ function homeHtml() {
     '<p>' + (newCount ? 'You have <b>' + newCount + ' new piece' + (newCount === 1 ? '' : 's') + '</b> ready to share.' : all.length ? 'Everything you have is below, ready to share.' : 'Your marketing will show up here as soon as it’s ready.') + '</p></div>' +
     '<button class="refresh" data-act="refresh" aria-label="Check for new pieces">' + I.refresh + '<span>Refresh</span></button>' +
     '<form class="search dark" id="f-search" role="search"><span style="color:var(--muted-dark);display:flex">' + I.search + '</span><input type="search" id="q" placeholder="Search flyers, tips, updates" aria-label="Search"></form></div></header>';
+  h += vHomeNote();
 
   const week = S.data.week || [];
   if (week.length) {
@@ -259,7 +260,7 @@ function homeHtml() {
   }
 
   if (!V.list) vLoad();
-  h += '<section class="blk"><div class="wrap">' + vReshootHtml() + '<a class="vhome" href="#make"><span class="vic">' + I.film + '</span><span><b>Make a video</b><span>Record one of our scripts on your phone. We’ll turn it into a finished video for you.</span></span><span class="vchev">' + I.next + '</span></a></div></section>';
+  h += '<section class="blk"><div class="wrap"><a class="vhome" href="#make"><span class="vic">' + I.film + '</span><span><b>Make a video</b><span>Record one of our scripts on your phone. We’ll turn it into a finished video for you.</span></span><span class="vchev">' + I.next + '</span></a></div></section>';
   const fresh = all.filter(p => p.isNew && !/market|newsletter/i.test(p.category));
   const latestCat = cats.find(c => !/market|newsletter/i.test(c.name));
   const row = fresh.length ? fresh : latestCat ? inCat(latestCat.name) : [];
