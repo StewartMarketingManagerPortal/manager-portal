@@ -104,7 +104,7 @@ function recLoop() {
           if (mc.width !== mw) { mc.width = mw; mc.height = mh; }
           const mx = mc.getContext('2d'), img = mx.createImageData(mw, mh), d = img.data;
           let top = -1, sx = 0, n = 0;
-          for (let i = 0; i < f.length; i++) { const a = f[i]; d[i * 4 + 3] = a > 0.5 ? 255 : a * 400; if (a > 0.6) { const y = (i / mw) | 0; if (top < 0) top = y; sx += i % mw; n++; } }
+          for (let i = 0; i < f.length; i++) { const a = f[i], t = Math.min(1, Math.max(0, (a - 0.45) / 0.4)); d[i * 4 + 3] = t * t * (3 - 2 * t) * 255; if (a > 0.6) { const y = (i / mw) | 0; if (top < 0) top = y; sx += i % mw; n++; } }
           mx.putImageData(img, 0, 0); mask = mc;
           REC.lined = n > mw * mh * 0.12 && top / mh > 0.05 && top / mh < 0.3 && Math.abs(sx / n / mw - 0.5) < 0.1;
           m.close && m.close();
@@ -112,10 +112,16 @@ function recLoop() {
       } catch (e) {}
     }
     if (mask) {
-      c.filter = 'blur(9px)'; c.drawImage(v, r[0] - 20, r[1] - 20, r[2] + 40, r[3] + 40); c.filter = 'none';
+      // background: shrink the frame and scale it back up (a soft blur that works in every browser, lined up exactly with the person)
+      if (!REC.s1) { REC.s1 = document.createElement('canvas'); REC.s1.width = 240; REC.s1.height = 427; REC.s2 = document.createElement('canvas'); REC.s2.width = 120; REC.s2.height = 213; }
+      const a1 = REC.s1.getContext('2d'), a2 = REC.s2.getContext('2d');
+      a1.imageSmoothingQuality = a2.imageSmoothingQuality = c.imageSmoothingQuality = 'high';
+      a1.drawImage(v, r[0] / 3, r[1] / 3, r[2] / 3, r[3] / 3); a2.drawImage(REC.s1, 0, 0, 120, 213);
+      a1.drawImage(REC.s2, 0, 0, 240, 427); c.drawImage(REC.s1, 0, 0, W, H);
+      // the person, sharp, with the mask's soft edge (the low-res mask scaled up feathers it)
       const p = REC.personC.getContext('2d');
       p.globalCompositeOperation = 'source-over'; p.clearRect(0, 0, W, H); p.drawImage(v, r[0], r[1], r[2], r[3]);
-      p.globalCompositeOperation = 'destination-in'; p.filter = 'blur(3px)'; p.drawImage(mask, r[0], r[1], r[2], r[3]); p.filter = 'none';
+      p.globalCompositeOperation = 'destination-in'; p.imageSmoothingQuality = 'high'; p.drawImage(mask, r[0], r[1], r[2], r[3]);
       c.drawImage(REC.personC, 0, 0);
     } else c.drawImage(v, r[0], r[1], r[2], r[3]);
   }
