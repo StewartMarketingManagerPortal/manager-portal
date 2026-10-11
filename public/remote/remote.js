@@ -38,7 +38,7 @@ const D = () => (R.st && R.st.data) || {};
 function macState() {
   const s = R.st; if (!s || !s.beat) return { k: 'off', t: 'Waiting for your Mac' };
   const age = (s.now || Date.now()) - s.beat;
-  if (age < 90e3) return { k: 'ok', t: 'Your Mac is ready' };
+  if (age < 90e3) return { k: 'ok', t: (s.mac ? String(s.mac).replace(/[<>&"]/g, '') : 'Your Mac') + ' is ready' };
   if (age < 15 * 60e3) return { k: 'late', t: 'Mac checked in ' + Math.round(age / 60e3) + ' min ago' };
   return { k: 'off', t: 'Mac is asleep or Marketing Tools is closed · requests will wait' };
 }

@@ -712,12 +712,12 @@ async function remoteRoute(env, me, sub, m, request) {
     if (!b) return { waiting: true };
     const items = await allItems(env, b.id, Object.values(b.col));
     const rows = items.map(it => { const v = {}; it.column_values.forEach(c => v[c.id] = c.text || ''); return { id: String(it.id), name: it.name, kind: v[b.col.Kind], state: v[b.col.State], payload: v[b.col.Payload], by: v[b.col.By], result: v[b.col.Result], created: it.created_at }; });
-    const beat = Number((rows.find(r => r.name === 'beat') || {}).payload || 0);
+    const beatRaw = String((rows.find(r => r.name === 'beat') || {}).payload || ''); const beat = Number(beatRaw.split('|')[0]) || 0, mac = beatRaw.split('|')[1] || '';
     const parts = rows.filter(r => r.kind === 'data').sort((x, y) => Number(x.name.split(':')[1]) - Number(y.name.split(':')[1]));
     let data = null;
     if (parts.length) { const first = parts[0].payload, bar = first.indexOf('|'), n = Number(first.slice(0, bar)); if (parts.length >= n) { try { data = JSON.parse(first.slice(bar + 1) + parts.slice(1, n).map(x => x.payload).join('')); } catch (e) {} } }
     const commands = rows.filter(r => r.kind === 'command').sort((x, y) => Number(y.id) - Number(x.id)).slice(0, 12).map(r => ({ id: r.id, title: r.name, state: r.state, result: r.result, by: r.by, created: r.created }));
-    return { beat, now: Date.now(), data, commands };
+    return { beat, mac, now: Date.now(), data, commands };
   }
   if (sub === 'command' && m === 'POST') {
     if (!b || !b.col.Kind) return { error: 'The remote isn’t set up yet. Open Marketing Tools on the Mac once.' };
