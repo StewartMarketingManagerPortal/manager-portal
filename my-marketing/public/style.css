@@ -334,8 +334,8 @@ body.vcam-on { overflow: hidden; }
 .vcam { position: fixed; inset: 0; background: #000; z-index: 50; overflow: hidden; }
 #vcanvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 .vguide { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: min(88vw, 400px); height: 62vh; fill: none; stroke: #fff; stroke-width: 3; stroke-dasharray: 10 8; opacity: .85; pointer-events: none; }
-.vprompt { position: absolute; top: calc(var(--safe-t) + 46px); left: 12px; right: 12px; height: 30vh; overflow: hidden; background: rgba(20,20,22,.72); border-radius: 18px; padding: 16px 18px; color: #fff; line-height: 1.4; font-weight: 600; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
-.vpin { will-change: transform; }
+.vprompt { position: absolute; top: calc(var(--safe-t) + 46px); left: 12px; right: 12px; height: 30vh; overflow: hidden; background: rgba(20,20,22,.72); border-radius: 18px; padding: 16px 18px; color: #fff; line-height: 1.4; font-weight: 600; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); -webkit-mask-image: linear-gradient(transparent, #000 28%); mask-image: linear-gradient(transparent, #000 28%); }
+.vpin { will-change: transform; padding-top: calc(30vh - 32px - 2.9em); }
 .vlens { position: absolute; z-index: 2; top: calc(var(--safe-t) + 14px); left: 50%; transform: translateX(-50%); font-size: 11px; color: #fff; background: var(--brand); padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
 .vchip { position: absolute; top: calc(var(--safe-t) + 46px + 30vh + 12px); left: 50%; transform: translateX(-50%); background: rgba(20,20,22,.7); color: #fff; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
 .vchip.good { background: rgba(27,122,67,.92); }

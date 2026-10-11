@@ -129,12 +129,18 @@ function recLoop() {
       } catch (e) {}
     }
     if (mask) {
-      // background: shrink the frame and scale it back up (a soft blur that works in every browser, lined up exactly with the person)
-      if (!REC.s1) { REC.s1 = document.createElement('canvas'); REC.s1.width = 240; REC.s1.height = 427; REC.s2 = document.createElement('canvas'); REC.s2.width = 120; REC.s2.height = 213; }
-      const a1 = REC.s1.getContext('2d'), a2 = REC.s2.getContext('2d');
-      a1.imageSmoothingQuality = a2.imageSmoothingQuality = c.imageSmoothingQuality = 'high';
-      a1.drawImage(v, r[0] / 3, r[1] / 3, r[2] / 3, r[3] / 3); a2.drawImage(REC.s1, 0, 0, 120, 213);
-      a1.drawImage(REC.s2, 0, 0, 240, 427); c.drawImage(REC.s1, 0, 0, W, H);
+      // background: a smooth blur that works in every browser. Halve the frame three times, soften the small copy, then double it back up step by step
+      if (!REC.L) { REC.L = [[360, 640], [180, 320], [90, 160]].map(([w, h]) => { const k = document.createElement('canvas'); k.width = w; k.height = h; const x = k.getContext('2d'); x.imageSmoothingQuality = 'high'; return x; }); REC.T = document.createElement('canvas'); REC.T.width = 90; REC.T.height = 160; }
+      const L = REC.L, tx = REC.T.getContext('2d');
+      L[0].drawImage(v, r[0] / 2, r[1] / 2, r[2] / 2, r[3] / 2);
+      L[1].drawImage(L[0].canvas, 0, 0, 180, 320); L[2].drawImage(L[1].canvas, 0, 0, 90, 160);
+      for (let pass = 0; pass < 2; pass++) {
+        tx.clearRect(0, 0, 90, 160); tx.drawImage(L[2].canvas, 0, 0);
+        [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]].forEach(([dx, dy], k) => { L[2].globalAlpha = 1 / (k + 2); L[2].drawImage(REC.T, dx, dy); });
+        L[2].globalAlpha = 1;
+      }
+      L[1].drawImage(L[2].canvas, 0, 0, 180, 320); L[0].drawImage(L[1].canvas, 0, 0, 360, 640);
+      c.imageSmoothingQuality = 'high'; c.drawImage(L[0].canvas, 0, 0, W, H);
       // the person, sharp, with the mask's soft edge (the low-res mask scaled up feathers it)
       const p = REC.personC.getContext('2d');
       p.globalCompositeOperation = 'source-over'; p.clearRect(0, 0, W, H); p.drawImage(v, r[0], r[1], r[2], r[3]);
