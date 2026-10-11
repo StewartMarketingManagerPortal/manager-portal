@@ -192,10 +192,10 @@ ACT['ob-reopen'] = () => { const h = onbCur(); if (!h) return; delete h.data.fin
 // switch between everyone being onboarded right now
 function onbTabs(cur) {
   const act = (OB.list || []).filter(x => !(x.data || {}).fin || x === cur);
-  if (act.length < 2) return '<div class="ob-tabs"><a class="ob-tab new" href="#onboard">+ Onboard another new hire</a></div>';
+  if (act.length < 2) return '';
   return '<div class="ob-tabs">' + act.map(x => { const t = onbTotals(x);
     return '<a class="ob-tab' + (x === cur ? ' on' : '') + '" href="#onboard/' + esc(x.id) + '"><b>' + esc(x.name) + '</b><span>' + t.done + '/' + t.total + '</span></a>'; }).join('') +
-    '<a class="ob-tab new" href="#onboard">+ New</a></div>';
+    '</div>';
 }
 // My Team: their onboarding, in progress or completed
 function onbTeamCard(p) {
