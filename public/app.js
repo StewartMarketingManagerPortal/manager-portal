@@ -136,7 +136,7 @@ PAGES.home = () => {
   const proofs = reqs.filter(r => /proof/i.test(r.status)).length, open = reqs.filter(r => !/complete/i.test(r.status)).length;
   const cv = coreValue();
   let h = '<div class="hello"><div><div class="eyebrow">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div><h1>' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', ' + esc(first) + '</h1></div>' +
-    '<div class="cval" title="Our core values">' + esc(cv[1]) + '<span>' + esc(cv[0]) + '</span></div></div>';
+    '<div class="cval"><b class="cv-lab">Our core values</b>' + esc(cv[1]) + '<span>' + esc(cv[0]) + '</span></div></div>';
   h += '<div class="tiles3">' +
     '<a class="bigtile red" href="#onboard"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="8" r="4"/><path d="M3 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M19 8v6M16 11h6"/></svg><span class="t">Onboard a new hire</span><span class="d">Their first 90 days as one checklist: supplies, marketing setup, day 1, tools and check-ins.</span><span class="go">Start →</span></a>' +
     '<a class="bigtile" href="#request"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#A30C33" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span class="t">Request marketing</span><span class="d">Flyers, classes, events, social posts and more — sent straight to the marketing team.</span><span class="go">Start a request →</span></a>' +

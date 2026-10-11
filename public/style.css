@@ -416,3 +416,4 @@ select:disabled { opacity: .6; cursor: default; }
 .cval { max-width: 420px; text-align: right; font-size: 14px; color: var(--muted2); line-height: 1.45; font-style: italic; border-right: 3px solid var(--brand); padding-right: 12px; }
 .cval span { display: block; font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--muted); margin-top: 3px; letter-spacing: .06em; text-transform: uppercase; }
 @media (max-width: 800px) { .cval { display: none; } }
+.cval .cv-lab { display: block; font-style: normal; font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--brand); margin-bottom: 4px; text-transform: uppercase; }
