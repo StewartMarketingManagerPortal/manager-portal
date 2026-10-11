@@ -271,3 +271,12 @@ select:disabled { opacity: .6; cursor: default; }
 .pc-file { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--muted); text-decoration: none; }
 .pc-item figcaption { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; }
 .pc-item figcaption span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* new hire bio step */
+.bios { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.bio { background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 14px 16px; text-align: left; font: inherit; color: inherit; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+.bio[aria-pressed=true] { border-color: var(--brand); background: var(--brand-tint); }
+.bio p { margin: 0; font-size: 14px; line-height: 1.55; }
+.bio .bt { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
+.bio .bw { font-size: 12px; color: var(--muted); }
+@media (max-width: 900px) { .bios { grid-template-columns: 1fr; } }

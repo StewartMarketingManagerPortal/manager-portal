@@ -52,7 +52,7 @@ const CB_ICONS = {
 
 // ---------- state ----------
 const S = { me: null, reqs: null, busy: false, nh: null, rq: null, last: null };
-function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, looks: ['Modern Dark'], notes: '' }; }
+function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, bio: null, looks: ['Modern Dark'], notes: '' }; }
 function freshRequest() { return { step: 1, state: 'California', type: null, other: '', projectName: '', who: 'pick', people: [], needBy: inDays(7), description: '', files: [], photos: [], x: {} }; }
 
 // ---------- routing ----------
@@ -133,11 +133,11 @@ function reqList(list) {
 PAGES.newhire = () => {
   const n = S.nh || (S.nh = freshNewHire());
   if (window.Cutout) Cutout.load().catch(() => {});
-  const steps = ['Details + photo', 'Choose a look', 'Review'];
-  let h = '<div class="head"><div><h1>' + (n.step === 2 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 3 ? 'Review and submit' : 'Add a new hire') + '</h1><div class="sub">' +
-    (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Pick one, or both to get every piece in dark and light.' : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
+  const steps = ['Details + photo', 'Bio', 'Choose a look', 'Review'];
+  let h = '<div class="head"><div><h1>' + (n.step === 2 ? (n.firstName ? esc(n.firstName) + '’s' : 'Their') + ' bio' : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 4 ? 'Review and submit' : 'Add a new hire') + '</h1><div class="sub">' +
+    (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Used on their website and marketing pieces. Answer a few questions or paste one they have.' : n.step === 3 ? 'Pick one, or both to get every piece in dark and light.' : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
     '<ol class="steps" aria-label="Steps">' + steps.map((s, i) => '<li class="' + (i + 1 === n.step ? 'on' : i + 1 < n.step ? 'done' : '') + '"><span>' + (i + 1 < n.step ? '✓' : i + 1) + '</span>' + s + '</li>').join('') + '</ol></div>';
-  if (n.step === 1) h += nhDetails(n); else if (n.step === 2) h += nhLooks(n); else h += nhReview(n);
+  if (n.step === 1) h += nhDetails(n); else if (n.step === 2) h += nhBio(n); else if (n.step === 3) h += nhLooks(n); else h += nhReview(n);
   return h;
 };
 function fld(label, key, val, o) {
@@ -180,7 +180,7 @@ function nhDetails(n) {
     '<label class="btn small" style="align-self:flex-start">' + (n.photo ? 'Replace photo' : 'Upload photo') + '<input type="file" accept="image/*" data-file="photo" hidden></label></div></div></div>' +
     '<div class="preview"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock" id="cblock">' + cblock(n) + '</div>' +
     '<div class="small" style="color:var(--border)">This is how their details appear on flyers and the email signature.</div></div></section></div>';
-  h += '<div class="row" style="justify-content:space-between"><a href="#home" style="font-weight:600">Cancel</a><button type="button" class="btn primary" data-act="nh-next">Next: choose a look →</button></div>';
+  h += '<div class="row" style="justify-content:space-between"><a href="#home" style="font-weight:600">Cancel</a><button type="button" class="btn primary" data-act="nh-next">Next: their bio →</button></div>';
   return h;
 }
 function headshotBox(n) {
@@ -220,6 +220,55 @@ function lookSample(n, cls) {
     '<span class="s-sig"><span class="av" style="width:34px;height:34px;font-size:10px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span><span><b style="font-size:11px">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + '</b><br>' + esc(nhTitle(n) || 'Title') + '<br>' + esc(fmtPhone(n.phone)) + '</span></span>' +
     '<span class="s-ban">' + esc((n.firstName + ' ' + n.lastName).trim() || 'Their name') + ' · Stewart Title</span></span>';
 }
+// ---------- bio step: Claude writes 2 to start, "Show 2 more" up to twice (6 in all) ----------
+const BIO_Q = [['years', 'Years in title & escrow', '12'], ['areas', 'Areas they serve', 'Riverside, Corona, Temecula'], ['known', 'What they’re known for / specialties', 'Smooth closings, new construction, investors', 1],
+  ['langs', 'Languages', 'English, Spanish'], ['before', 'Before Stewart (optional)', 'Escrow officer at a builder’s in-house escrow'], ['personal', 'A personal touch (optional)', 'Mom of two, coaches youth soccer, loves hiking', 1]];
+function bioState(n) {
+  if (!n.bio) n.bio = { mode: 'write', q: { areas: (n.areas || []).map(a => a.label || a.area).join(', ') }, paste: '', opts: [], pick: -1, text: '', more: 0, busy: false, err: '' };
+  return n.bio;
+}
+const nhBioText = n => (n.bio && n.bio.text) || '';
+function nhBio(n) {
+  const b = bioState(n), write = b.mode === 'write';
+  let h = '<div class="cols"><section class="card col3" style="gap:18px">' +
+    '<div class="seg" role="group" aria-label="How to make the bio"><button type="button" aria-pressed="' + write + '" data-act="bio-mode" data-m="write">Write one for me</button><button type="button" aria-pressed="' + !write + '" data-act="bio-mode" data-m="clean">I have a bio</button></div>';
+  if (write) h += '<div class="muted2" style="font-size:14px">Answer a few questions and Claude writes options to pick from. Short answers are fine.</div><div class="grid2">' +
+    BIO_Q.map(([k, l, ph, full]) => '<label class="field"' + (full ? ' style="grid-column:1/-1"' : '') + '>' + l + '<input type="text" data-bq="' + k + '" value="' + esc(b.q[k] || '') + '" placeholder="' + esc(ph) + '"></label>').join('') + '</div>';
+  else h += '<label class="field">Paste their bio<textarea rows="5" data-bq="paste" placeholder="Paste the bio they already use…">' + esc(b.paste) + '</textarea></label>';
+  h += '<div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-act="bio-go"' + (b.busy ? ' disabled' : '') + '>' + (b.busy && !b.opts.length ? '<span class="spin"></span> Writing…' : '✦ ' + (b.opts.length ? 'Start over' : write ? 'Write bios' : 'Clean it up')) + '</button></div>';
+  if (b.err) h += '<div class="err">' + esc(b.err) + '</div>';
+  if (b.opts.length) {
+    h += '<div style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div class="row" style="justify-content:space-between"><h2>Pick one</h2>' +
+      (b.more < 2 ? '<button type="button" class="btn small" data-act="bio-more"' + (b.busy ? ' disabled' : '') + '>' + (b.busy ? '<span class="spin dark"></span> Writing…' : '↻ Show 2 more (' + (2 - b.more) + ' left)') + '</button>' : '<span class="small muted">That’s all 6 - edit the one you like best below.</span>') + '</div>' +
+      '<div class="bios">' + b.opts.map((o, i) => '<button type="button" class="bio" aria-pressed="' + (i === b.pick) + '" data-act="bio-pick" data-i="' + i + '"><span class="bt">' + esc(o.style) + '</span><p>' + esc(o.text) + '</p><span class="bw">' + o.text.split(/\s+/).filter(Boolean).length + ' words</span></button>').join('') + '</div>' +
+      '<label class="field">' + (b.pick >= 0 ? 'Edit the one you picked (optional)' : 'Pick one above - or type your own here') + '<textarea rows="5" data-bq="text">' + esc(b.text) + '</textarea></label></div>';
+  }
+  h += '</section><section class="col2"><div class="preview"><div class="cardlabel" style="color:var(--navmuted)">How it works</div>' +
+    '<ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7;color:var(--navtext)">' + (write ? '<li>Answer the questions.</li><li>Claude writes 2 bios in different styles.</li>' : '<li>Paste the bio they have.</li><li>Claude tidies the spelling, grammar and flow - it keeps their facts and adds nothing new.</li>') +
+    '<li>Not quite right? <b>Show 2 more</b> (up to 6 in all).</li><li>Pick one and edit it if you like. A bio is needed to continue.</li></ol></div></section></div>';
+  h += '<div class="row" style="justify-content:space-between"><a href="#" data-act="nh-back" style="font-weight:600">← Back</a><button type="button" class="btn primary" data-act="nh-next" ' + (nhBioText(n).trim() ? '' : 'disabled') + '>Next: choose a look →</button></div>';
+  return h;
+}
+async function bioAsk(more) {
+  const n = S.nh, b = bioState(n);
+  b.busy = true; b.err = ''; render();
+  const a = nhAddress(n);
+  try {
+    const r = await api('bio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      mode: b.mode, count: 2, answers: b.q, text: b.paste, have: b.opts.map(o => o.text), styles: b.opts.map(o => o.style),
+      person: { name: (n.firstName + ' ' + n.lastName).trim(), title: nhTitle(n), company: n.company, city: String(a.address2 || '').replace(/,?\s*[A-Z]{2}\s*\d{5}.*$/, '') } }) });
+    if (!more) {
+      b.opts = []; b.pick = -1; b.more = 0;
+      if (b.mode === 'clean') b.opts.push({ style: 'As written', text: b.paste.trim() });
+      // a cleaned-up bio is 1 + original to start (2 to choose from); written bios start with 2
+      const add = b.mode === 'clean' ? r.bios.slice(0, 1).map(x => Object.assign(x, { style: '✦ Cleaned up · recommended' })) : r.bios;
+      b.opts = b.opts.concat(add);
+      b.pick = b.mode === 'clean' ? 1 : -1;
+    } else { b.opts = b.opts.concat(r.bios); b.more++; }
+    if (b.pick >= 0 && b.opts[b.pick]) b.text = b.opts[b.pick].text;
+  } catch (e) { b.err = e.message; }
+  b.busy = false; render();
+}
 function nhLooks(n) {
   let h = '<div class="looks">' + LOOKS.map(([name, cls, d]) => { const on = n.looks.includes(name); return '<button type="button" class="look" aria-pressed="' + on + '" data-act="look" data-look="' + name + '">' +
     '<span class="row" style="flex-wrap:nowrap"><input type="checkbox" tabindex="-1" ' + (on ? 'checked' : '') + ' aria-hidden="true"><span class="grow"><b style="display:block;font-size:19px">' + name + '</b><span class="muted small">' + d + '</span></span>' +
@@ -231,12 +280,12 @@ function nhLooks(n) {
 }
 function nhReview(n) {
   const a = nhAddress(n);
-  const line = (k, v, edit) => '<div class="rq" style="padding:10px 0"><span class="muted" style="width:130px;flex:none">' + k + '</span><span class="grow">' + esc(v || '—') + '</span>' + (edit ? '<a href="#" data-act="nh-step" data-step="' + edit + '" style="font-weight:600;font-size:14px">' + (edit === 2 ? 'Change' : 'Edit') + '</a>' : '') + '</div>';
+  const line = (k, v, edit) => '<div class="rq" style="padding:10px 0"><span class="muted" style="width:130px;flex:none">' + k + '</span><span class="grow">' + esc(v || '—') + '</span>' + (edit ? '<a href="#" data-act="nh-step" data-step="' + edit + '" style="font-weight:600;font-size:14px">' + (edit === 3 ? 'Change' : 'Edit') + '</a>' : '') + '</div>';
   let h = '<div class="cols"><section class="card col3" style="gap:4px"><div class="row" style="padding-bottom:16px;border-bottom:1px solid var(--line);flex-wrap:nowrap">' +
     (n.photoUrl ? '<img class="av" style="width:84px;height:84px" src="' + n.photoUrl + '" alt="">' : '<span class="av" style="width:84px;height:84px;font-size:24px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span>') +
     '<div class="grow"><div style="font-size:24px;font-weight:800">' + esc(n.firstName + ' ' + n.lastName) + '</div><div style="color:var(--brand);font-weight:700">' + esc(nhTitle(n)) + '</div></div><a href="#" data-act="nh-step" data-step="1" style="font-weight:600;font-size:14px">Edit</a></div>' +
     line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) +
-    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Newsletter', n.nlAreas.map(a => nlName(a.header)).join(', ')) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 2) +
+    line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Newsletter', n.nlAreas.map(a => nlName(a.header)).join(', ')) + line('Bio', nhBioText(n).length > 140 ? nhBioText(n).slice(0, 140) + '…' : nhBioText(n), 2) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 3) +
     '<label class="field" style="margin-top:10px">Anything else marketing should know? (optional)<textarea data-f="notes" rows="3">' + esc(n.notes) + '</textarea></label></section>';
   h += '<section class="col2"><div class="card"><h2>What happens next</h2><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7" class="muted2"><li>' + esc(n.firstName || 'They') + ' is added to the Main Employee Sheet and your team.</li>' +
     '<li>Marketing removes the photo background and builds the package' + (n.looks.length > 1 ? ' in both looks' : ' in ' + esc(n.looks[0])) + '.</li><li>Everything lands on the Employee Marketing Portal.</li></ol></div>' +
@@ -363,6 +412,16 @@ PAGES.mine = () => {
 
 // ---------- actions ----------
 const ACT = {};
+ACT['bio-mode'] = el => { const b = bioState(S.nh); if (b.mode === el.dataset.m) return; b.mode = el.dataset.m; b.opts = []; b.pick = -1; b.more = 0; b.err = ''; render(); };
+ACT['bio-go'] = () => {
+  const b = bioState(S.nh);
+  if (b.mode === 'clean' && b.paste.trim().length < 20) return toast('Paste their bio first.');
+  if (b.mode === 'write' && ['years', 'areas', 'known', 'langs'].filter(k => String(b.q[k] || '').trim()).length < 2) return toast('Answer at least a couple of the questions first.');
+  if (b.opts.length && b.text && !confirm('Start over? The bios below will be replaced.')) return;
+  bioAsk(false);
+};
+ACT['bio-more'] = () => { if (bioState(S.nh).more < 2) bioAsk(true); };
+ACT['bio-pick'] = el => { const b = bioState(S.nh); b.pick = +el.dataset.i; b.text = b.opts[b.pick].text; render(); };
 ACT['nh-area-add'] = () => {
   const n = S.nh, st = arState('nh'), link = st.link.trim(), area = st.area.trim();
   if (!ALTOS_RX.test(link)) return toast('Paste an Altos report link (it starts with https://altos.re/r/…).');
@@ -382,7 +441,8 @@ ACT['nh-next'] = () => {
     if (n.areas.length < 2) { toast('Add at least 2 market update areas.'); const el = document.getElementById('nh-areas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (!n.nlAreas.length) { toast('Add their newsletter area.'); const el = document.getElementById('nh-nl'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   }
-  if (n.step === 2 && !n.looks.length) return toast('Pick at least one look.');
+  if (n.step === 2 && !nhBioText(n).trim()) return toast('Pick a bio (or write your own in the box) to continue.');
+  if (n.step === 3 && !n.looks.length) return toast('Pick at least one look.');
   n.step++; render(); window.scrollTo(0, 0);
 };
 ACT['nh-back'] = (el, e) => { e.preventDefault(); S.nh.step--; render(); };
@@ -395,7 +455,7 @@ ACT['nh-submit'] = async () => {
   try {
     const fd = new FormData();
     fd.append('fields', JSON.stringify({ firstName: n.firstName, lastName: n.lastName, title: nhTitle(n), company: n.company, address1: a.address1, address2: a.address2, phone: fmtPhone(n.phone), email: n.email,
-      startDate: n.startDate, show: n.show, areas: n.areas, nlAreas: n.nlAreas, looks: n.looks, notes: n.notes }));
+      startDate: n.startDate, show: n.show, areas: n.areas, nlAreas: n.nlAreas, bio: nhBioText(n), looks: n.looks, notes: n.notes }));
     if (n.photo) fd.append('photo', n.photo, n.photo.name);
     await api('newhire', { method: 'POST', body: fd });
     S.last = { first: n.firstName, selfServe: S.me.selfServe };
@@ -455,6 +515,7 @@ document.addEventListener('input', e => {
   if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther|address1|address2/.test(d.f)) refreshPreview(); }
   if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); if (d.r === 'needBy') updateSummaryDate(); }
   if (d.nlf && t.tagName === 'INPUT') { const [sc, k] = d.nlf.split('.'); nlfState(sc)[k] = t.value; const st = nlfState(sc), b = document.querySelector('[data-act=' + sc + '-nl-add]'); if (b) b.disabled = !(st.header === '__other' ? st.other.trim() : st.header); return; }
+  if (d.bq && S.nh) { const b = bioState(S.nh); if (d.bq === 'paste') b.paste = t.value; else if (d.bq === 'text') { b.text = t.value; const nx = document.querySelector('[data-act=nh-next]'); if (nx) nx.disabled = !t.value.trim(); } else b.q[d.bq] = t.value; return; }
   if (d.tm === 'q') { const t = tmState(); t.q = e.target.value; document.getElementById('tm-list').innerHTML = tmList(t); return; }
   if (d.ar) {
     const [scope, k] = d.ar.split('.'), st = arState(scope); st[k] = e.target.value;

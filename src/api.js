@@ -35,6 +35,7 @@ export async function onRequest(ctx) {
     if (route === 'areas' && m === 'POST') { const r = await changeArea(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route.startsWith('content/') && m === 'GET') { const r = await teamContent(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route.startsWith('asset/') && m === 'GET') return await teamAsset(env, me, route.split('/')[1], route.split('/')[2], new URL(request.url).searchParams.get('dl'));
+    if (route === 'bio' && m === 'POST') { const r = await writeBios(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'nlareas' && m === 'GET') return json({ options: await nlOptions(env) });
     if (route === 'nlarea' && m === 'POST') { const r = await changeNl(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'altos' && m === 'POST') return json(await checkAltos((await request.json()).link));
@@ -213,14 +214,18 @@ async function submitNewHire(env, me, fd) {
   const name = [f.firstName, f.lastName].map(s => String(s || '').trim()).filter(Boolean).join(' ');
   if (!name) throw new Error('First and last name are required.');
   const eb = await bid(env, 'employees');
-  const ec = await columns(env, eb);
+  let ec = await columns(env, eb);
+  // the bio goes in a long-text "Bio" column (made the first time it's needed)
+  if (f.bio && !ec.byTitle[nk('Bio')]) {
+    try { await gql(env, 'mutation($b:ID!){create_column(board_id:$b,title:"Bio",column_type:long_text){id}}', { b: String(eb) }); forget('cols:' + eb); ec = await columns(env, eb); } catch (e) {}
+  }
   const show = f.show || {};
   const fields = {
     title: f.title, company: f.company, email: f.email,
     phone: show.phone === false ? '' : f.phone,
     address1: show.address === false ? '' : f.address1, address2: show.address === false ? '' : f.address2,
     'Marketing Setup': 'Pending', 'Package Look': (f.looks || []).join(', '), 'Requested By': me.email,
-    'Start Date': f.startDate, 'Market Areas': (f.areas || []).map(a => typeof a === 'string' ? a : (a.label || a.area)).join(', '), 'Notes for Marketing': f.notes,
+    'Start Date': f.startDate, Bio: f.bio, 'Market Areas': (f.areas || []).map(a => typeof a === 'string' ? a : (a.label || a.area)).join(', '), 'Notes for Marketing': f.notes,
   };
   const { values, missing } = buildValues(ec, fields);
   const itemId = await createItem(env, eb, null, name, values);
@@ -498,4 +503,46 @@ async function teamAsset(env, me, itemId, assetId, dl) {
   const head = { 'Content-Type': type, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' };
   if (dl) head['Content-Disposition'] = 'attachment; filename="' + String(a.name).replace(/["\\\r\n]/g, '') + '"';
   return new Response(r.body, { headers: head });
+}
+
+// ---------- new hire bios, written by Claude (ANTHROPIC_API_KEY is a Cloudflare Secret) ----------
+const BIO_MODEL = 'claude-sonnet-5-5';
+const BIO_STYLES = { write: ['Warm', 'Polished', 'Short', 'Conversational', 'Community-focused', 'Straightforward'], clean: ['Cleaned up', 'Polished', 'Short', 'Warm', 'Straightforward'] };
+async function writeBios(env, me, b) {
+  if (!env.ANTHROPIC_API_KEY) return { error: 'Bios aren’t switched on yet (the Claude API key is missing in Cloudflare). Ask West Marketing.' };
+  // a few per manager per hour is plenty; this stops runaway clicking
+  const k = 'bios:' + me.email, used = await cached(k, 3600e3, async () => ({ n: 0 }));
+  if (used.n >= 40) return { error: 'That’s a lot of bios this hour - try again a little later.' };
+  used.n++;
+  const mode = b.mode === 'clean' ? 'clean' : 'write', have = (b.have || []).slice(0, 8).map(String);
+  const count = Math.min(2, Math.max(1, Number(b.count) || 2));
+  const styles = BIO_STYLES[mode].filter(x => !(b.styles || []).includes(x)).slice(0, count);
+  while (styles.length < count) styles.push(mode === 'clean' ? 'Another take' : 'Fresh take');
+  const p = b.person || {}, a = b.answers || {};
+  const who = ['Name: ' + (p.name || ''), 'Title: ' + (p.title || ''), 'Company: ' + (p.company || 'Stewart Title'), p.city ? 'Office: ' + p.city : ''].filter(x => !/: $/.test(x)).join('\n');
+  let task;
+  if (mode === 'clean') {
+    const text = String(b.text || '').trim().slice(0, 3000);
+    if (text.length < 20) return { error: 'Paste their bio first.' };
+    task = 'Here is a bio the new hire already has:\n<bio>\n' + text + '\n</bio>\n\nWrite ' + count + ' cleaned-up version(s). Fix spelling, grammar, capitals and flow, use their full name, and keep it professional and friendly. ' +
+      'Keep ALL of their facts and do not add any new facts, numbers, awards or claims. Keep about the same length unless the style says otherwise.';
+  } else {
+    const lines = [['Years in title & escrow', a.years], ['Areas they serve', a.areas], ['Known for / specialties', a.known], ['Languages', a.langs], ['Before Stewart', a.before], ['Personal touch', a.personal]].filter(x => String(x[1] || '').trim()).map(x => x[0] + ': ' + String(x[1]).trim().slice(0, 300));
+    if (lines.length < 2) return { error: 'Answer at least a couple of the questions first.' };
+    task = 'Facts from their manager:\n' + lines.join('\n') + '\n\nWrite ' + count + ' different bio(s). Use ONLY these facts - never invent numbers, awards, designations, clients or claims. ' +
+      'Third person, except a "Conversational" style may be first person. About 40-80 words; a "Short" style 20-35 words.';
+  }
+  const prompt = 'You write short professional bios for new team members at Stewart Title (title and escrow) to use on their website and marketing pieces.\n\nThe new hire:\n' + who + '\n\n' + task +
+    '\n\nStyles to write, one bio each, in this order: ' + styles.join(', ') + '.' +
+    (have.length ? '\nMake them clearly different from these bios they already have:\n' + have.map((t, i) => (i + 1) + '. ' + t).join('\n') : '') +
+    '\nNo headings, no emojis, no hashtags, no quotation marks around the bio. Plain text, one paragraph each.\n\nAnswer with ONLY JSON: {"bios":[{"style":"...","text":"..."}]}';
+  const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: BIO_MODEL, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) return { error: 'Claude couldn’t write the bios right now (' + ((j.error && j.error.message) || r.status) + '). Try again in a moment.' };
+  const text = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  let out = null; try { out = JSON.parse((text.match(/\{[\s\S]*\}/) || [''])[0]); } catch (e) {}
+  const bios = ((out && out.bios) || []).map((x, i) => ({ style: String(x.style || styles[i] || 'Option'), text: String(x.text || '').trim() })).filter(x => x.text).slice(0, count);
+  if (!bios.length) return { error: 'Claude’s answer came back empty. Try again.' };
+  return { bios };
 }
