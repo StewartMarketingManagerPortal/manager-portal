@@ -561,30 +561,33 @@ async function packages(env) {
   return cached('pkgs', 300e3, async () => {
     let id; try { id = await boardId(env, 'New Hire Packages', 'PACKAGES_BOARD_ID'); } catch (e) { forget('board:New Hire Packages'); return []; }
     const c = await columns(env, id), col = t => (c.byTitle[nk(t)] || {}).id;
-    const ids = ['Description', 'Pieces', 'Package Status', 'Order'].map(col).filter(Boolean);
-    const d = await gql(env, 'query($b:[ID!],$c:[String!]){boards(ids:$b){items_page(limit:100){items{id name column_values(ids:$c){id text} assets{id file_extension public_url created_at}}}}}', { b: [id], c: ids });
+    const ids = ['Description', 'Pieces', 'Posts', 'Package Status', 'Order'].map(col).filter(Boolean);
+    const d = await gql(env, 'query($b:[ID!],$c:[String!]){boards(ids:$b){items_page(limit:100){items{id name column_values(ids:$c){id text} assets{id name file_extension public_url created_at}}}}}', { b: [id], c: ids });
     return d.boards[0].items_page.items.map(it => {
       const v = {}; it.column_values.forEach(x => v[x.id] = (x.text || '').trim());
-      const a = (it.assets || []).filter(x => /png|jpe?g/i.test(x.file_extension || '')).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
-      return { name: it.name.trim(), about: v[col('Description')] || '', pieces: (v[col('Pieces')] || '').split(/\s*,\s*/).filter(Boolean),
-        status: (v[col('Package Status')] || '').toLowerCase(), order: Number(v[col('Order')]) || 99, img: a ? { id: String(a.id), url: a.public_url } : null };
+      // the look's posts, in upload order ("1 - Announcement.png", "2 - I've Made a Move.png")
+      const imgs = (it.assets || []).filter(x => /png|jpe?g/i.test(x.file_extension || '')).sort((x, y) => String(x.name).localeCompare(String(y.name), undefined, { numeric: true }))
+        .map(x => ({ id: String(x.id), url: x.public_url, label: String(x.name || '').replace(/\.\w+$/, '').replace(/^\d+\s*-\s*/, '').replace(/\s+preview$/i, '') }));
+      return { name: it.name.trim(), about: v[col('Description')] || '', pieces: [],
+        status: (v[col('Package Status')] || '').toLowerCase(), order: Number(v[col('Order')]) || 99, imgs: imgs, img: imgs[0] || null };
     }).filter(x => x.img && x.status !== 'retired').sort((x, y) => x.order - y.order || x.name.localeCompare(y.name));
   });
 }
 async function packageList(env, me) {
   const all = await packages(env).catch(() => []);
-  return { packages: all.filter(x => x.status === 'live' || me.row.admin).map(x => ({ name: x.name, about: x.about, pieces: x.pieces, notReady: x.status !== 'live', img: 'api/pkgimg/' + x.img.id })) };
+  return { packages: all.filter(x => x.status === 'live' || me.row.admin).map(x => ({ name: x.name, about: x.about, pieces: x.pieces, notReady: x.status !== 'live', img: 'api/pkgimg/' + x.img.id, imgs: x.imgs.map(i => ({ src: 'api/pkgimg/' + i.id, label: i.label })) })) };
 }
 async function packageImg(env, me, assetId) {
   assetId = String(assetId || '').replace(/\D/g, '');
-  let x = (await packages(env)).find(p => p.img.id === assetId);
+  const findImg = list => { for (const p of list) { const i = p.imgs.find(z => z.id === assetId); if (i) return i; } return null; };
+  let x = findImg(await packages(env));
   if (!x) return fail('Not found', 404);
   const ck = new Request('https://manager-portal.cache/pkgimg/' + assetId), cache = caches.default;
   const head = { 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
   const hit = await cache.match(ck);
   if (hit) return new Response(hit.body, { headers: Object.assign({ 'Content-Type': hit.headers.get('Content-Type') || 'image/png' }, head) });
-  let r = await fetch(x.img.url);
-  if (!r.ok) { forget('pkgs'); x = (await packages(env)).find(p => p.img.id === assetId); if (x) r = await fetch(x.img.url); }
+  let r = await fetch(x.url);
+  if (!r.ok) { forget('pkgs'); x = findImg(await packages(env)); if (x) r = await fetch(x.url); }
   if (!r.ok) return fail('Could not load the preview', 502);
   const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
   try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}

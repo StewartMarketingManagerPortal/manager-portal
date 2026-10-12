@@ -487,3 +487,7 @@ select:disabled { opacity: .6; cursor: default; }
 /* New hire package looks from Amy's package folders */
 .looks.pk .pk-img { width: 100%; height: auto; max-height: 340px; object-fit: contain; border-radius: 10px; background: #F4F1EC; display: block; }
 .looks.pk .pk-note { font-size: 12.5px; font-weight: 600; color: #8A5A00; background: #FFF4DE; border-radius: 8px; padding: 6px 10px; }
+.looks.pk .pk-imgs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
+.looks.pk .pk-fig { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.looks.pk .pk-fig .pk-img { max-height: 300px; }
+.looks.pk .pk-cap { font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; }
