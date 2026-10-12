@@ -457,8 +457,8 @@ async function ensureBoard(env, name, envKey, desc, cols) {
   });
 }
 const hlDesignBoard = env => ensureBoard(env, 'Highlight Designs', 'HL_DESIGNS_BOARD_ID',
-  'Team Highlight post designs for the Manager Portal. One row per design: pick the Type, add the 1080x1080 PNG to Art, then set Status to "Ready for review". Kevin sets it to "Live" when it should go out. The guide and Adobe templates are in 1_Administration/2_Templates/_Team Highlights.',
-  [['Type', 'status', { 1: 'Birthday', 2: 'Anniversary' }], ['Art', 'file'], ['Status', 'status', { 0: 'Ready for review', 1: 'Live', 2: 'Retired' }], ['Text Color', 'text'], ['Accent Color', 'text'], ['Small Text Color', 'text']]);
+  'Team Highlight post designs for the Manager Portal. One row per design: pick the Type, leave Layout as Classic unless Kevin has added a new layout, add the 1080x1080 PNG to Art, then set Status to "Ready for review". Kevin sets it to "Live" when it should go out. The guide and Adobe templates are in 1_Administration/2_Templates/_Team Highlights.',
+  [['Type', 'status', { 1: 'Birthday', 2: 'Anniversary' }], ['Art', 'file'], ['Status', 'status', { 0: 'Ready for review', 1: 'Live', 2: 'Retired' }], ['Text Color', 'text'], ['Accent Color', 'text'], ['Small Text Color', 'text'], ['Layout', 'text']]);
 const hlPostedBoard = env => ensureBoard(env, 'Team Highlights', 'HL_POSTED_BOARD_ID',
   'Kept by the Manager Portal: one row each time a manager marks a team birthday or work anniversary post as posted.',
   [['Key', 'text'], ['Manager Email', 'text'], ['Posted On', 'text']]);
@@ -475,7 +475,7 @@ async function hlDesigns(env) {
       const kind = /anniv/.test(type) ? 'start' : /birth/.test(type) ? 'birthday' : '';
       const status = /live/.test(st) ? 'live' : /retir/.test(st) ? 'retired' : /review|ready/.test(st) ? 'review' : '';
       return { id: String(it.id), name: it.name.trim(), kind, status, art: art ? { id: String(art.id), url: art.public_url } : null,
-        text: hex(v[b.col['Text Color']]), accent: hex(v[b.col['Accent Color']]), small: hex(v[b.col['Small Text Color']]) };
+        layout: (v[b.col.Layout] || 'Classic').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'classic', text: hex(v[b.col['Text Color']]), accent: hex(v[b.col['Accent Color']]), small: hex(v[b.col['Small Text Color']]) };
     }).filter(x => x.kind && x.art && (x.status === 'live' || x.status === 'review'));
   });
 }
@@ -518,7 +518,7 @@ async function highlights(env, me) {
     .filter(h => !(h.days < 0 && h.posted))
     .sort((a, b) => a.days - b.days || a.name.localeCompare(b.name));
   const show = designs.filter(d => d.status === 'live' || me.row.admin)
-    .map(d => ({ id: d.id, name: d.name, kind: d.kind, review: d.status === 'review', art: 'api/hlart/' + d.art.id, text: d.text, accent: d.accent, small: d.small }));
+    .map(d => ({ id: d.id, name: d.name, kind: d.kind, review: d.status === 'review', layout: d.layout, art: 'api/hlart/' + d.art.id, text: d.text, accent: d.accent, small: d.small }));
   return { items, designs: show };
 }
 async function hlMark(env, me, body) {

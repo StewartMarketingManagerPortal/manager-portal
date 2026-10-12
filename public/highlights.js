@@ -49,7 +49,10 @@
     return out;
   }
   // Layout "Classic": headline top-left, headshot bottom-right, name + title bottom-left. Amy's art goes underneath.
-  async function draw(h, d) {
+  // Each layout places the headline, photo and name its own way. New layouts are added here (Kevin only).
+  const LAYOUTS = { classic: classic };
+  function draw(h, d) { return (LAYOUTS[d.layout || 'classic'] || classic)(h, d); }
+  async function classic(h, d) {
     await fonts();
     const c = document.createElement('canvas'); c.width = c.height = W;
     const ctx = c.getContext('2d'), ink = d.text || INK, red = d.accent || RED, small = d.small || MUTED;
@@ -95,7 +98,7 @@
 
   // ---------- state ----------
   const HL = window.HL = { data: null, loading: false, err: '', pick: {}, pics: {}, busy: {} };
-  const designsFor = kind => BUILT_IN.filter(d => d.kind === kind).concat(((HL.data && HL.data.designs) || []).filter(d => d.kind === kind));
+  const designsFor = kind => BUILT_IN.filter(d => d.kind === kind).concat(((HL.data && HL.data.designs) || []).filter(d => d.kind === kind && LAYOUTS[d.layout || 'classic']));
   const pick = h => HL.pick[h.key] || (HL.pick[h.key] = { d: designsFor(h.kind)[0].id, c: 0 });
   const design = h => designsFor(h.kind).find(d => d.id === pick(h).d) || designsFor(h.kind)[0];
   async function load() {
