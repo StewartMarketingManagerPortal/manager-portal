@@ -164,7 +164,7 @@ PAGES.newhire = () => {
   const steps = ['Details + photo', 'About Me', 'Choose a look', 'Review'];
   let h = (n.step === 1 && S.onbFrom ? '<div class="ob-banner"><span><b>Part of ' + esc(n.firstName || 'their') + '’s onboarding.</b> Once you send this, Marketing setup is ticked off.</span><a class="btn" href="#onboard/' + esc(S.onbFrom) + '/before">‹ Back to the checklist</a></div>' : '') + (n.step === 1 && !S.onbFrom ? '<div class="ob-banner"><span><b>This is the Marketing setup step of onboarding.</b> Start from the new hire’s checklist so everything stays in one place.</span><a class="btn primary" href="#onboard">Go to onboarding ›</a></div>' : '') +
     '<div class="head"><div><h1>' + (n.step === 2 ? 'About ' + (n.firstName ? esc(n.firstName) : 'them') : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + ' look' : n.step === 4 ? 'Review and submit' : 'Introduce ' + (n.firstName ? esc(n.firstName) : 'your new hire') + ' to Marketing') + '</h1><div class="sub">' +
-    (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Their About Me, used on their website and marketing pieces. Answer a few questions or paste one they have.' : n.step === 3 ? 'Pick one, or both to get every piece in dark and light.' : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
+    (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Their About Me, used on their website and marketing pieces. Answer a few questions or paste one they have.' : n.step === 3 ? (S.pk && S.pk.list && S.pk.list.length ? 'Pick one, or more than one to get every piece in each look.' : 'Pick one, or both to get every piece in dark and light.') : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
     '<ol class="steps" aria-label="Steps">' + steps.map((s, i) => '<li class="' + (i + 1 === n.step ? 'on' : i + 1 < n.step ? 'done' : '') + '"><span>' + (i + 1 < n.step ? '✓' : i + 1) + '</span>' + s + '</li>').join('') + '</ol></div>';
   if (n.step === 1) h += nhDetails(n); else if (n.step === 2) h += nhBio(n); else if (n.step === 3) h += nhLooks(n); else h += nhReview(n);
   return h;
@@ -299,7 +299,17 @@ async function bioAsk(more) {
   } catch (e) { b.err = e.message; }
   b.busy = false; render();
 }
+// Package looks come from the "New Hire Packages" board (Amy's package folders in 2_Templates/0_New Hire, kept in step by Marketing Tools).
+// Until any are set up there, the two built-in looks below are shown.
+async function pkLoad() {
+  if (S.pk) return; S.pk = { list: null };
+  try { S.pk.list = (await api('packages')).packages || []; } catch (e) { S.pk.list = []; }
+  if (route() === 'newhire' || route() === 'onboard') render();
+}
 function nhLooks(n) {
+  if (!S.pk) { pkLoad(); return '<div class="card empty"><span class="spin dark"></span></div>'; }
+  if (S.pk.list === null) return '<div class="card empty"><span class="spin dark"></span></div>';
+  if (S.pk.list.length) return nhPackages(n, S.pk.list);
   let h = '<div class="looks">' + LOOKS.map(([name, cls, d]) => { const on = n.looks.includes(name); return '<button type="button" class="look" aria-pressed="' + on + '" data-act="look" data-look="' + name + '">' +
     '<span class="row" style="flex-wrap:nowrap"><input type="checkbox" tabindex="-1" ' + (on ? 'checked' : '') + ' aria-hidden="true"><span class="grow"><b style="display:block;font-size:19px">' + name + '</b><span class="muted small">' + d + '</span></span>' +
     (on ? '<span class="status proof" style="background:var(--brand);color:#fff">Selected</span>' : '') + '</span>' + lookSample(n, cls) +
@@ -522,7 +532,21 @@ ACT['nh-next'] = () => {
 };
 ACT['nh-back'] = (el, e) => { e.preventDefault(); S.nh.step--; render(); };
 ACT['nh-step'] = (el, e) => { e.preventDefault(); S.nh.step = +el.dataset.step; render(); };
-ACT.look = el => { const n = S.nh, l = el.dataset.look; n.looks = n.looks.includes(l) ? n.looks.filter(x => x !== l) : n.looks.concat([l]); render(); };
+function nhPackages(n, list) {
+  const names = list.map(x => x.name);
+  n.looks = n.looks.filter(l => names.includes(l));
+  if (!n.looks.length && !n.looksTouched) n.looks = [(list.find(x => !x.notReady) || list[0]).name];
+  let h = '<div class="looks pk">' + list.map(x => { const on = n.looks.includes(x.name); return '<button type="button" class="look" aria-pressed="' + on + '" data-act="look" data-look="' + esc(x.name) + '">' +
+    '<span class="row" style="flex-wrap:nowrap"><input type="checkbox" tabindex="-1" ' + (on ? 'checked' : '') + ' aria-hidden="true"><span class="grow"><b style="display:block;font-size:19px">' + esc(x.name) + '</b>' + (x.about ? '<span class="muted small">' + esc(x.about) + '</span>' : '') + '</span>' +
+    (on ? '<span class="status proof" style="background:var(--brand);color:#fff">Selected</span>' : '') + '</span>' +
+    (x.notReady ? '<span class="pk-note">Not ready yet. Only Portal Admins see this until its pieces are marked Ready.</span>' : '') +
+    '<img class="pk-img" src="' + esc(x.img) + '" alt="' + esc(x.name + ' package preview') + '" loading="lazy">' +
+    (x.pieces.length ? '<span class="chips" style="font-size:12px">' + x.pieces.map(p => '<span class="status">' + esc(p) + '</span>').join('') + '</span>' : '') + '</button>'; }).join('') + '</div>';
+  h += '<div class="card" style="flex-direction:row;flex-wrap:wrap;gap:10px 28px;font-size:14px;padding:18px 22px"><b>Also included for every new hire:</b><span class="muted2">All current Title Tips</span><span class="muted2">Personalized flyers</span><span class="muted2">Weekly market update (once areas are set)</span></div>';
+  h += '<div class="row" style="justify-content:space-between"><a href="#" data-act="nh-back" style="font-weight:600">← Back</a><button type="button" class="btn primary" data-act="nh-next" ' + (n.looks.length ? '' : 'disabled') + '>Next: review →</button></div>';
+  return h;
+}
+ACT.look = el => { const n = S.nh, l = el.dataset.look; n.looksTouched = true; n.looks = n.looks.includes(l) ? n.looks.filter(x => x !== l) : n.looks.concat([l]); render(); };
 ACT['nh-invite'] = el => { S.nh.invite = el.checked; };
 ACT['nh-another'] = () => { S.nh = freshNewHire(); S.onbFrom = ''; };
 ACT['nh-submit'] = async () => {

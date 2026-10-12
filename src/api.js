@@ -45,6 +45,8 @@ export async function onRequest(ctx) {
     if (route === 'onboarding' && m === 'GET') return json(await onbList(env, me));
     if (route === 'onboarding' && m === 'POST') { const r = await onbChange(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'dates' && m === 'POST') { const r = await setDate(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'packages' && m === 'GET') return json(await packageList(env, me));
+    if (route.startsWith('pkgimg/') && m === 'GET') return await packageImg(env, me, route.split('/')[1]);
     if (route === 'highlights' && m === 'GET') return json(await highlights(env, me));
     if (route === 'highlights' && m === 'POST') { const r = await hlMark(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route.startsWith('hlart/') && m === 'GET') return await hlArt(env, me, route.split('/')[1]);
@@ -553,6 +555,40 @@ async function hlArt(env, me, assetId) {
   const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
   try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
   return new Response(buf, { headers: Object.assign(head, { 'Content-Type': type }) });
+}
+// ---------- new hire package looks: the "New Hire Packages" board, kept in step by Marketing Tools from 2_Templates/0_New Hire ----------
+async function packages(env) {
+  return cached('pkgs', 300e3, async () => {
+    let id; try { id = await boardId(env, 'New Hire Packages', 'PACKAGES_BOARD_ID'); } catch (e) { forget('board:New Hire Packages'); return []; }
+    const c = await columns(env, id), col = t => (c.byTitle[nk(t)] || {}).id;
+    const ids = ['Description', 'Pieces', 'Package Status', 'Order'].map(col).filter(Boolean);
+    const d = await gql(env, 'query($b:[ID!],$c:[String!]){boards(ids:$b){items_page(limit:100){items{id name column_values(ids:$c){id text} assets{id file_extension public_url created_at}}}}}', { b: [id], c: ids });
+    return d.boards[0].items_page.items.map(it => {
+      const v = {}; it.column_values.forEach(x => v[x.id] = (x.text || '').trim());
+      const a = (it.assets || []).filter(x => /png|jpe?g/i.test(x.file_extension || '')).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
+      return { name: it.name.trim(), about: v[col('Description')] || '', pieces: (v[col('Pieces')] || '').split(/\s*,\s*/).filter(Boolean),
+        status: (v[col('Package Status')] || '').toLowerCase(), order: Number(v[col('Order')]) || 99, img: a ? { id: String(a.id), url: a.public_url } : null };
+    }).filter(x => x.img && x.status !== 'retired').sort((x, y) => x.order - y.order || x.name.localeCompare(y.name));
+  });
+}
+async function packageList(env, me) {
+  const all = await packages(env).catch(() => []);
+  return { packages: all.filter(x => x.status === 'live' || me.row.admin).map(x => ({ name: x.name, about: x.about, pieces: x.pieces, notReady: x.status !== 'live', img: 'api/pkgimg/' + x.img.id })) };
+}
+async function packageImg(env, me, assetId) {
+  assetId = String(assetId || '').replace(/\D/g, '');
+  let x = (await packages(env)).find(p => p.img.id === assetId);
+  if (!x) return fail('Not found', 404);
+  const ck = new Request('https://manager-portal.cache/pkgimg/' + assetId), cache = caches.default;
+  const head = { 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+  const hit = await cache.match(ck);
+  if (hit) return new Response(hit.body, { headers: Object.assign({ 'Content-Type': hit.headers.get('Content-Type') || 'image/png' }, head) });
+  let r = await fetch(x.img.url);
+  if (!r.ok) { forget('pkgs'); x = (await packages(env)).find(p => p.img.id === assetId); if (x) r = await fetch(x.img.url); }
+  if (!r.ok) return fail('Could not load the preview', 502);
+  const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
+  try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
+  return new Response(buf, { headers: Object.assign({ 'Content-Type': type }, head) });
 }
 // ---------- headshots: the cut-out copies the Marketing Tools app puts in the "Headshot Cutout" column ----------
 async function headshots(env, ids) {
