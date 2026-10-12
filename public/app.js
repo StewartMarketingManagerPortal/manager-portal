@@ -699,7 +699,7 @@ PAGES.team = () => {
       (p.phone ? '<a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + I.phone + esc(fmtPhone(p.phone)) + '</a>' : '') +
       (p.email ? '<a href="mailto:' + esc(p.email) + '">' + I.mail + esc(p.email) + '</a>' : '') +
       (addr ? '<div>' + I.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
-      (window.dtPills ? dtPills(p) : '') + tmLinks(p) + '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
+      '<div class="cblk-foot">' + (window.dtPills ? dtPills(p) : '<span></span>') + tmLinks(p) + '</div>' + '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
     if (window.onbTeamCard) h += onbTeamCard(p);
     // market areas
     const ready = t.data.areasReady;
