@@ -143,6 +143,7 @@ PAGES.home = () => {
     '<a class="bigtile" href="#mine"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#A30C33" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="t">Track my requests</span><span class="d">See where each request stands and approve proofs.</span><span class="go">' +
     (S.reqs ? (open ? open + ' in progress' + (proofs ? ' · ' + plural(proofs, 'proof') + ' to approve' : '') : 'Nothing open') : 'Loading…') + ' →</span></a></div>';
   if (window.onbHomeCard) h += onbHomeCard();
+  if (window.hlHomeCard) h += hlHomeCard();
   h += '<div class="cols"><section class="card col3"><div class="row"><h2 class="grow">Your requests</h2><a href="#mine" style="font-size:14px;font-weight:600">See all</a></div>' + reqList(reqs.slice(0, 5)) + '</section>' +
     '<section class="card col2"><h2>Good to know</h2><div class="muted2" style="font-size:14px;line-height:1.6">Most requests are ready within 7 days. You’ll get an email when your proof is ready to approve.</div>' +
     '<div class="muted2" style="font-size:14px;line-height:1.6">Best headshots: shoulders up, plain background, facing the camera.</div>' +

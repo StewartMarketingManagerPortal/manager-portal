@@ -45,6 +45,9 @@ export async function onRequest(ctx) {
     if (route === 'onboarding' && m === 'GET') return json(await onbList(env, me));
     if (route === 'onboarding' && m === 'POST') { const r = await onbChange(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'dates' && m === 'POST') { const r = await setDate(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'highlights' && m === 'GET') return json(await highlights(env, me));
+    if (route === 'highlights' && m === 'POST') { const r = await hlMark(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route.startsWith('hlart/') && m === 'GET') return await hlArt(env, me, route.split('/')[1]);
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
   } catch (e) {
@@ -343,6 +346,7 @@ async function myTeam(env, me) {
   const nb = await nlBoard(env).catch(() => null), nlRows = nb ? await nlAll(env, nb).catch(() => []) : [];
   const out = team.map(p => ({ id: p.id, name: p.name, title: p.title, email: p.email, phone: p.phone, company: p.company, address1: p.address1, address2: p.address2,
     birthday: p.birthday || '', start: p.start || '',
+    posts: Object.fromEntries(hlDue(p, today()).filter(h => h.days >= 0).map(h => [h.kind, h.date])),
     photo: photos[p.id] ? 'api/photo/' + p.id + '?v=' + photos[p.id].id : '',
     areas: areas.filter(a => nk(a.employee) === nk(p.name) && (a.area || a.link)).sort((x, y) => (x.label || x.area).localeCompare(y.label || y.area)),
     nl: nlRows.filter(r => nk(r.name) === nk(p.name) && r.header).map(r => ({ id: r.id, header: r.header, location: r.location, active: r.active })).sort((x, y) => x.header.localeCompare(y.header)) }));
@@ -428,6 +432,128 @@ async function checkAltos(link) {
   } catch (e) { return { ok: false, error: 'Couldn’t reach Altos to check the link.' }; }
 }
 
+// ---------- My Team Highlights: birthday + work anniversary posts, a week ahead, for the manager only ----------
+// The post itself is drawn in the browser (art + headshot cutout + name). Art comes from the built-in designs
+// plus any Amy adds to the "Highlight Designs" board (Status = Live; "Ready for review" ones show to Portal Admins only).
+// "Mark as posted" is kept on the "Team Highlights" board (one row per person, kind and year).
+const HL_AHEAD = 7, HL_AFTER = 2;
+async function wsWest(env) {
+  try { const w = await gql(env, 'query{workspaces(limit:100){id name}}', {}); const hit = w.workspaces.find(x => nk(x.name) === 'stewart marketing west'); return hit ? String(hit.id) : null; } catch (e) { return null; }
+}
+async function ensureBoard(env, name, envKey, desc, cols) {
+  return cached('hlb:' + name, 3600e3, async () => {
+    let id = env[envKey] ? String(env[envKey]) : '';
+    if (!id) { try { id = await boardId(env, name, envKey); } catch (e) { forget('board:' + name); } }
+    if (!id) id = String((await gql(env, 'mutation($n:String!,$w:ID,$d:String){create_board(board_name:$n,board_kind:public,workspace_id:$w,description:$d){id}}', { n: name, w: await wsWest(env), d: desc })).create_board.id);
+    let c = await columns(env, id);
+    const missing = cols.filter(([t]) => !c.byTitle[nk(t)]);
+    for (const [t, type, labels] of missing) {
+      try { await gql(env, 'mutation($b:ID!,$t:String!,$d:JSON){create_column(board_id:$b,title:$t,column_type:' + type + ',defaults:$d){id}}', { b: id, t, d: labels ? JSON.stringify({ labels }) : null }); }
+      catch (e) { await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:' + type + '){id}}', { b: id, t }); }
+    }
+    if (missing.length) { forget('cols:' + id); c = await columns(env, id); }
+    const col = {}; cols.forEach(([t]) => col[t] = (c.byTitle[nk(t)] || {}).id);
+    return { id, col };
+  });
+}
+const hlDesignBoard = env => ensureBoard(env, 'Highlight Designs', 'HL_DESIGNS_BOARD_ID',
+  'Team Highlight post designs for the Manager Portal. One row per design: pick the Type, add the 1080x1080 PNG to Art, then set Status to "Ready for review". Kevin sets it to "Live" when it should go out. The guide and Adobe templates are in 1_Administration/2_Templates/_Team Highlights.',
+  [['Type', 'status', { 1: 'Birthday', 2: 'Anniversary' }], ['Art', 'file'], ['Status', 'status', { 0: 'Ready for review', 1: 'Live', 2: 'Retired' }], ['Text Color', 'text'], ['Accent Color', 'text'], ['Small Text Color', 'text']]);
+const hlPostedBoard = env => ensureBoard(env, 'Team Highlights', 'HL_POSTED_BOARD_ID',
+  'Kept by the Manager Portal: one row each time a manager marks a team birthday or work anniversary post as posted.',
+  [['Key', 'text'], ['Manager Email', 'text'], ['Posted On', 'text']]);
+const hex = s => { const m = String(s || '').trim().match(/^#?([0-9a-f]{6}|[0-9a-f]{3})$/i); return m ? '#' + m[1] : ''; };
+async function hlDesigns(env) {
+  return cached('hlDesigns', 300e3, async () => {
+    const b = await hlDesignBoard(env);
+    const ids = Object.values(b.col).filter(Boolean);
+    const d = await gql(env, 'query($b:[ID!],$c:[String!],$f:[String!]){boards(ids:$b){items_page(limit:200){items{id name column_values(ids:$c){id text} assets(column_ids:$f){id name file_extension public_url created_at}}}}}', { b: [b.id], c: ids, f: [b.col.Art] });
+    return d.boards[0].items_page.items.map(it => {
+      const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+      const type = (v[b.col.Type] || '').toLowerCase(), st = (v[b.col.Status] || '').toLowerCase();
+      const art = (it.assets || []).filter(a => /png|jpe?g|webp/i.test(a.file_extension || a.name)).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
+      const kind = /anniv/.test(type) ? 'start' : /birth/.test(type) ? 'birthday' : '';
+      const status = /live/.test(st) ? 'live' : /retir/.test(st) ? 'retired' : /review|ready/.test(st) ? 'review' : '';
+      return { id: String(it.id), name: it.name.trim(), kind, status, art: art ? { id: String(art.id), url: art.public_url } : null,
+        text: hex(v[b.col['Text Color']]), accent: hex(v[b.col['Accent Color']]), small: hex(v[b.col['Small Text Color']]) };
+    }).filter(x => x.kind && x.art && (x.status === 'live' || x.status === 'review'));
+  });
+}
+async function hlPosted(env) {
+  return cached('hlPosted', 120e3, async () => {
+    const b = await hlPostedBoard(env), out = {};
+    (await allItems(env, b.id, [b.col.Key, b.col['Manager Email'], b.col['Posted On']])).forEach(it => {
+      const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+      if (v[b.col.Key]) out[v[b.col.Key]] = { row: String(it.id), by: v[b.col['Manager Email']], on: v[b.col['Posted On']] };
+    });
+    return out;
+  });
+}
+function hlDue(p, now) {
+  const out = [], t = new Date(now + 'T12:00:00');
+  const occ = (md, y) => { let [m, d] = md.split('-').map(Number); if (m === 2 && d === 29 && new Date(y, 1, 29).getMonth() !== 1) d = 28; return new Date(y, m - 1, d, 12); };
+  const add = (kind, md, from) => {
+    for (const y of [t.getFullYear() - 1, t.getFullYear(), t.getFullYear() + 1]) {
+      const dt = occ(md, y), days = Math.round((dt - t) / 864e5);
+      if (days < -HL_AFTER || days > HL_AHEAD) continue;
+      const years = from ? y - from : 0;
+      if (from && years < 1) continue;
+      out.push({ kind, date: dt.toISOString().slice(0, 10), days, years, key: p.id + '|' + kind + '|' + y });
+    }
+  };
+  if (p.birthday) add('birthday', p.birthday, 0);
+  if (p.start) add('start', p.start.slice(5), Number(p.start.slice(0, 4)));
+  return out;
+}
+async function highlights(env, me) {
+  const now = today(), team = teamOf(me);
+  const due = [];
+  team.forEach(p => hlDue(p, now).forEach(h => due.push(Object.assign({ id: p.id, name: p.name, title: p.title }, h))));
+  if (!due.length) { await hlDesigns(env).catch(() => []); return { items: [], designs: [] }; }   // still sets up the Highlight Designs board
+  const [photos, posted, designs] = await Promise.all([
+    headshots(env, Array.from(new Set(due.map(h => h.id)))).catch(() => ({})),
+    hlPosted(env).catch(() => ({})),
+    hlDesigns(env).catch(() => [])]);
+  const items = due.map(h => Object.assign(h, { photo: photos[h.id] ? 'api/photo/' + h.id + '?v=' + photos[h.id].id : '', posted: posted[h.key] ? posted[h.key].on || true : false }))
+    .filter(h => !(h.days < 0 && h.posted))
+    .sort((a, b) => a.days - b.days || a.name.localeCompare(b.name));
+  const show = designs.filter(d => d.status === 'live' || me.row.admin)
+    .map(d => ({ id: d.id, name: d.name, kind: d.kind, review: d.status === 'review', art: 'api/hlart/' + d.art.id, text: d.text, accent: d.accent, small: d.small }));
+  return { items, designs: show };
+}
+async function hlMark(env, me, body) {
+  const p = teamOf(me).find(x => x.id === String(body.id));
+  if (!p) return { error: 'That person isn’t on your team.' };
+  const h = hlDue(p, today()).find(x => x.kind === body.kind && x.key === String(body.key));
+  if (!h) return { error: 'That highlight isn’t coming up.' };
+  const b = await hlPostedBoard(env), posted = await hlPosted(env);
+  forget('hlPosted');
+  if (body.posted === false) {
+    if (posted[h.key]) await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: posted[h.key].row });
+    return { ok: true, posted: false };
+  }
+  if (!posted[h.key]) {
+    const v = {}; v[b.col.Key] = h.key; v[b.col['Manager Email']] = me.email; v[b.col['Posted On']] = today();
+    await gql(env, 'mutation($b:ID!,$n:String!,$v:JSON!){create_item(board_id:$b,item_name:$n,column_values:$v){id}}',
+      { b: b.id, n: p.name + ' - ' + (h.kind === 'birthday' ? 'Birthday' : h.years + ' Year Anniversary') + ' ' + h.date.slice(0, 4), v: JSON.stringify(v) });
+  }
+  return { ok: true, posted: today() };
+}
+async function hlArt(env, me, assetId) {
+  assetId = String(assetId || '').replace(/\D/g, '');
+  const d = (await hlDesigns(env)).find(x => x.art.id === assetId && (x.status === 'live' || me.row.admin));
+  if (!d) return fail('Not found', 404);
+  const ck = new Request('https://manager-portal.cache/hlart/' + assetId), cache = caches.default;
+  const head = { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+  const hit = await cache.match(ck);
+  if (hit) return new Response(hit.body, { headers: Object.assign(head, { 'Content-Type': hit.headers.get('Content-Type') || 'image/png' }) });
+  let r = await fetch(d.art.url);
+  if (!r.ok) { forget('hlDesigns'); const d2 = (await hlDesigns(env)).find(x => x.art.id === assetId); if (d2) r = await fetch(d2.art.url); }
+  if (!r.ok) return fail('Could not load the design', 502);
+  const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
+  try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
+  return new Response(buf, { headers: Object.assign(head, { 'Content-Type': type }) });
+}
 // ---------- headshots: the cut-out copies the Marketing Tools app puts in the "Headshot Cutout" column ----------
 async function headshots(env, ids) {
   const eb = await bid(env, 'employees');
