@@ -44,6 +44,7 @@ export async function onRequest(ctx) {
     if (route === 'proof' && m === 'POST') { const r = await answerProof(env, me, await request.json()); return json(r, r.error ? 403 : 200); }
     if (route === 'onboarding' && m === 'GET') return json(await onbList(env, me));
     if (route === 'onboarding' && m === 'POST') { const r = await onbChange(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'dates' && m === 'POST') { const r = await setDate(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
   } catch (e) {
@@ -62,7 +63,8 @@ async function directory(env) {
     eItems.forEach(it => {
       const f = {}; it.column_values.forEach(cv => { if (etitle[cv.id]) f[etitle[cv.id]] = (cv.text || '').trim(); });
       employees[it.id] = { id: it.id, name: it.name.trim(), email: (f.email || '').toLowerCase(), title: f.title || '', phone: f.phone || '', company: f.company || '',
-        address1: f.address1 || '', address2: f.address2 || '', setup: f['marketing setup'] || '', requestedBy: (f['requested by'] || '').toLowerCase(), skip: SKIP(it.name) };
+        address1: f.address1 || '', address2: f.address2 || '', setup: f['marketing setup'] || '', requestedBy: (f['requested by'] || '').toLowerCase(), skip: SKIP(it.name),
+        birthday: monthDay(f.birthday), start: ymd(f['start date']) };
     });
     const rel = Object.values(mc.byTitle).find(c => c.type === 'board_relation');
     const ppl = Object.values(mc.byTitle).find(c => c.type === 'people');
@@ -340,10 +342,39 @@ async function myTeam(env, me) {
   const photos = await headshots(env, team.map(p => p.id)).catch(() => ({}));
   const nb = await nlBoard(env).catch(() => null), nlRows = nb ? await nlAll(env, nb).catch(() => []) : [];
   const out = team.map(p => ({ id: p.id, name: p.name, title: p.title, email: p.email, phone: p.phone, company: p.company, address1: p.address1, address2: p.address2,
+    birthday: p.birthday || '', start: p.start || '',
     photo: photos[p.id] ? 'api/photo/' + p.id + '?v=' + photos[p.id].id : '',
     areas: areas.filter(a => nk(a.employee) === nk(p.name) && (a.area || a.link)).sort((x, y) => (x.label || x.area).localeCompare(y.label || y.area)),
     nl: nlRows.filter(r => nk(r.name) === nk(p.name) && r.header).map(r => ({ id: r.id, header: r.header, location: r.location, active: r.active })).sort((x, y) => x.header.localeCompare(y.header)) }));
   return { team: out, areasReady: !!b, nlReady: !!nb, nlOptions: nb ? nlOptionsFrom(nlRows) : [], altosSearch: ALTOS_SEARCH };
+}
+// ---------- birthday (MM-DD, no year) + Stewart start date (YYYY-MM-DD) on the Main Employee Sheet ----------
+function monthDay(s) {
+  s = String(s || '').trim(); let m;
+  if ((m = s.match(/^\d{4}-(\d{2})-(\d{2})/))) return m[1] + '-' + m[2];
+  if ((m = s.match(/^(\d{1,2})[-/](\d{1,2})$/))) return m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0');
+  return '';
+}
+function ymd(s) { const m = String(s || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ''; }
+async function setDate(env, me, body) {
+  const who = teamOf(me).find(p => p.id === String(body.id));
+  if (!who) return { error: 'You can only set dates for people on your team.' };
+  const kind = body.kind === 'birthday' ? 'birthday' : body.kind === 'start' ? 'start' : '';
+  if (!kind) return { error: 'Unknown date.' };
+  const v = String(body.value || '').trim();
+  if (v && kind === 'birthday' && !/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(v)) return { error: 'Pick a month and day.' };
+  if (v && kind === 'start' && !/^(19|20)\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(v)) return { error: 'Pick a date.' };
+  const eb = await bid(env, 'employees'), title = kind === 'birthday' ? 'Birthday' : 'Start Date';
+  let ec = await columns(env, eb), col = ec.byTitle[nk(title)];
+  if (!col) {
+    await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:' + (kind === 'birthday' ? 'text' : 'date') + '){id}}', { b: String(eb), t: title });
+    forget('cols:' + eb); ec = await columns(env, eb); col = ec.byTitle[nk(title)];
+  }
+  const vals = {};
+  vals[col.id] = col.type === 'date' ? (v ? { date: kind === 'birthday' ? '2000-' + v : v } : {}) : v;
+  await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: String(eb), i: String(who.id), v: JSON.stringify(vals) });
+  who[kind] = v;
+  return { ok: true, id: who.id, kind, value: v };
 }
 async function changeArea(env, me, body) {
   const who = teamOf(me).find(p => nk(p.name) === nk(body.employee));

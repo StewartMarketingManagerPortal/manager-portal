@@ -681,7 +681,7 @@ ACT['tm-viewas'] = async el => {
 PAGES.team = () => {
   const t = tmState();
   if (!t.data && !t.err) loadTeam();
-  let h = '<div class="head"><div><h1>My Team</h1><div class="sub">' + (S.me.admin ? 'Everyone on the Main Employee Sheet' : 'The people linked to you on the Manager Contacts board') + '. Details are view only - ask West Marketing to change them.</div></div></div>';
+  let h = '<div class="head"><div><h1>My Team</h1><div class="sub">' + (S.me.admin ? 'Everyone on the Main Employee Sheet' : 'The people linked to you on the Manager Contacts board') + '. Contact details are view only - ask West Marketing to change them. You can set birthdays and Stewart start dates.</div></div></div>';
   if (t.err) return h + '<div class="card"><div class="err">' + esc(t.err) + '</div><button class="btn" data-act="tm-reload">Try again</button></div>';
   const team = t.data ? t.data.team : [];
   if (!t.sel && team[0]) t.sel = team[0].name;
@@ -699,7 +699,7 @@ PAGES.team = () => {
       (p.phone ? '<a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + I.phone + esc(fmtPhone(p.phone)) + '</a>' : '') +
       (p.email ? '<a href="mailto:' + esc(p.email) + '">' + I.mail + esc(p.email) + '</a>' : '') +
       (addr ? '<div>' + I.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
-      tmLinks(p) + '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
+      (window.dtPills ? dtPills(p) : '') + tmLinks(p) + '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></section>';
     if (window.onbTeamCard) h += onbTeamCard(p);
     // market areas
     const ready = t.data.areasReady;
