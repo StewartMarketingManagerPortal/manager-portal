@@ -491,3 +491,6 @@ select:disabled { opacity: .6; cursor: default; }
 .looks.pk .pk-fig { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .looks.pk .pk-fig .pk-img { max-height: 300px; }
 .looks.pk .pk-cap { font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; }
+
+.hl-pic.wp-pic { height: auto; aspect-ratio: 4 / 5; background: #1A1A1C; align-self: flex-start; }
+.hl-pic.wp-pic img { object-fit: contain; height: 100%; width: 100%; }

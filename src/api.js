@@ -50,6 +50,9 @@ export async function onRequest(ctx) {
     if (route === 'highlights' && m === 'GET') return json(await highlights(env, me));
     if (route === 'highlights' && m === 'POST') { const r = await hlMark(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route.startsWith('hlart/') && m === 'GET') return await hlArt(env, me, route.split('/')[1]);
+    if (route === 'welcome' && m === 'GET') return json(await welcomeList(env, me));
+    if (route === 'welcome' && m === 'POST') { const r = await welcomeMark(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route.startsWith('welcome/') && m === 'GET') return await welcomeImg(env, me, route.split('/')[1]);
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
   } catch (e) {
@@ -69,7 +72,7 @@ async function directory(env) {
       const f = {}; it.column_values.forEach(cv => { if (etitle[cv.id]) f[etitle[cv.id]] = (cv.text || '').trim(); });
       employees[it.id] = { id: it.id, name: it.name.trim(), email: (f.email || '').toLowerCase(), title: f.title || '', phone: f.phone || '', company: f.company || '',
         address1: f.address1 || '', address2: f.address2 || '', setup: f['marketing setup'] || '', requestedBy: (f['requested by'] || '').toLowerCase(), skip: SKIP(it.name),
-        birthday: monthDay(f.birthday), start: ymd(f['start date']) };
+        birthday: monthDay(f.birthday), start: ymd(f['start date']), welcome: !!f['welcome post'], welcomePosted: f['welcome posted'] || '' };
     });
     const rel = Object.values(mc.byTitle).find(c => c.type === 'board_relation');
     const ppl = Object.values(mc.byTitle).find(c => c.type === 'people');
@@ -555,6 +558,55 @@ async function hlArt(env, me, assetId) {
   const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
   try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
   return new Response(buf, { headers: Object.assign(head, { 'Content-Type': type }) });
+}
+// ---------- welcome posts: Stewart's announcement for a new hire, made by Marketing Tools ----------
+// Marketing Tools puts it in the "Welcome Post" file column on the Main Employee Sheet (it never goes to the new hire's own portal).
+// Their manager sees it on the home page until they mark it posted ("Welcome Posted" column).
+async function welcomeAssets(env, ids) {
+  const eb = await bid(env, 'employees'), ec = await columns(env, eb), col = ec.byTitle[nk('Welcome Post')];
+  if (!col || !ids.length) return {};
+  return cached('welcome:' + ids.slice().sort().join(',').slice(0, 2000), 5 * 60e3, async () => {
+    const out = {};
+    for (let i = 0; i < ids.length; i += 100) {
+      const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i,limit:100){id assets(column_ids:$c){id name public_url created_at}}}', { i: ids.slice(i, i + 100).map(String), c: [col.id] });
+      (d.items || []).forEach(it => { const a = (it.assets || []).slice().sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0]; if (a) out[String(it.id)] = { id: String(a.id), url: a.public_url, at: a.created_at, name: a.name }; });
+    }
+    return out;
+  });
+}
+async function welcomeList(env, me) {
+  const team = teamOf(me).filter(p => p.welcome);
+  const a = await welcomeAssets(env, team.map(p => p.id));
+  return { items: team.filter(p => a[p.id]).map(p => ({ id: p.id, name: p.name, title: p.title, company: p.company, start: p.start || '', posted: p.welcomePosted || '',
+    img: 'api/welcome/' + p.id + '?v=' + a[p.id].id, made: String(a[p.id].at || '').slice(0, 10) })).sort((x, y) => String(y.made).localeCompare(String(x.made))) };
+}
+async function welcomeImg(env, me, id) {
+  id = String(id || '').replace(/\D/g, '');
+  if (!teamOf(me).some(p => String(p.id) === id)) return fail('Not found', 404);
+  const a = (await welcomeAssets(env, [id]))[id];
+  if (!a) return fail('No welcome post', 404);
+  const ck = new Request('https://manager-portal.cache/welcome/' + a.id), cache = caches.default;
+  const head = { 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+  const hit = await cache.match(ck);
+  if (hit) return new Response(hit.body, { headers: Object.assign(head, { 'Content-Type': hit.headers.get('Content-Type') || 'image/png' }) });
+  let r = await fetch(a.url);
+  if (!r.ok) { forget('welcome:'); const b = (await welcomeAssets(env, [id]))[id]; if (b) r = await fetch(b.url); }
+  if (!r.ok) return fail('Could not load the welcome post', 502);
+  const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
+  try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
+  return new Response(buf, { headers: Object.assign(head, { 'Content-Type': type }) });
+}
+async function welcomeMark(env, me, body) {
+  const who = teamOf(me).find(p => String(p.id) === String(body.id));
+  if (!who) return { error: 'You can only mark posts for people on your team.' };
+  const eb = await bid(env, 'employees');
+  let ec = await columns(env, eb), col = ec.byTitle[nk('Welcome Posted')];
+  if (!col) { await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:text){id}}', { b: String(eb), t: 'Welcome Posted' }); forget('cols:' + eb); ec = await columns(env, eb); col = ec.byTitle[nk('Welcome Posted')]; }
+  const v = body.posted ? 'Posted ' + today() + ' by ' + me.row.name : '';
+  const vals = {}; vals[col.id] = v;
+  await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: String(eb), i: String(who.id), v: JSON.stringify(vals) });
+  who.welcomePosted = v;
+  return { ok: true, posted: v };
 }
 // ---------- new hire package looks: the "New Hire Packages" board, kept in step by Marketing Tools from 2_Templates/0_New Hire ----------
 async function packages(env) {

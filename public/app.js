@@ -57,7 +57,7 @@ function nhInviteBox(n) {
   return '<div class="nh-inv"><b>Invite to the Employee Marketing Portal</b>' +
     '<label class="field" style="margin:0">Personal email<input type="email" data-f="portalEmail" value="' + esc(n.portalEmail || '') + '" placeholder="The email they’ll check before day 1"></label>' +
     '<label class="check"><input type="checkbox" data-act="nh-invite" ' + (n.invite !== false ? 'checked' : '') + '> Send the monday.com invite when I submit</label>' +
-    '<small>They’re added to the portal board as a guest right away, so their announcement and flyers are waiting when they accept.</small></div>';
+    '<small>They’re added to the portal board as a guest right away, so their “I’ve Made a Move” post and flyers are waiting when they accept.</small></div>';
 }
 function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, bio: null, looks: ['Modern Dark'], notes: '' }; }
 function freshRequest() { return { step: 1, state: 'California', type: null, other: '', projectName: '', who: 'pick', people: [], needBy: inDays(7), description: '', files: [], photos: [], x: {} }; }
@@ -143,6 +143,7 @@ PAGES.home = () => {
     '<a class="bigtile" href="#mine"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#A30C33" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="t">Track my requests</span><span class="d">See where each request stands and approve proofs.</span><span class="go">' +
     (S.reqs ? (open ? open + ' in progress' + (proofs ? ' · ' + plural(proofs, 'proof') + ' to approve' : '') : 'Nothing open') : 'Loading…') + ' →</span></a></div>';
   if (window.onbHomeCard) h += onbHomeCard();
+  if (window.wpHomeCard) h += wpHomeCard();
   if (window.hlHomeCard) h += hlHomeCard();
   h += '<div class="cols"><section class="card col3"><div class="row"><h2 class="grow">Your requests</h2><a href="#mine" style="font-size:14px;font-weight:600">See all</a></div>' + reqList(reqs.slice(0, 5)) + '</section>' +
     '<section class="card col2"><h2>Good to know</h2><div class="muted2" style="font-size:14px;line-height:1.6">Most requests are ready within 7 days. You’ll get an email when your proof is ready to approve.</div>' +
