@@ -132,7 +132,13 @@ async function submitCode() {
 // ================= data =================
 async function load(fresh) {
   if (!S.data) { S.loading = true; render(); }
-  try { S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = ''; if (S.viewAs == null) api('me').then(m => { S.viewAs = m.viewAs || false; if (S.viewAs) render(); else if (!store.get('welcomed')) intro(); }).catch(() => {}); }
+  try {
+    S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = '';
+    if (S.viewAs == null) {
+      const meP = api('me').then(m => { S.viewAs = m.viewAs || false; return m; }).catch(() => null);
+      if (!store.get('welcomed')) { const m = await meP; if (m && !m.viewAs) intro(true); } else meP.then(() => { if (S.viewAs) render(); });
+    }
+  }
   catch (e) { S.data = null; if (e.status !== 401) S.err = e.message; }
   S.loading = false; render();
 }
@@ -144,7 +150,7 @@ const CORE_VALUES = [
   ['Honest and Courageous', 'We stand up for what’s right and stay open to new ideas.'],
   ['Team Focus', 'We foster growth.'],
 ];
-function intro() {
+function intro(instant) {
   if ($('#intro') || !S.data) return;
   store.set('welcomed', '1');   // once per device
   const el = document.createElement('div'); el.id = 'intro'; el.className = 'intro'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Welcome to My Marketing');
@@ -154,7 +160,7 @@ function intro() {
     '<div class="in-cv"><div class="in-lab">Our core values</div><div class="in-val" aria-live="polite"></div><div class="in-dots">' + CORE_VALUES.map(() => '<i></i>').join('') + '</div></div>' +
     '</div>';
   document.body.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('on'));
+  if (instant) el.classList.add('on', 'now'); else requestAnimationFrame(() => el.classList.add('on'));
   const val = el.querySelector('.in-val'), dots = el.querySelectorAll('.in-dots i');
   let i = -1, t = null, done = false;
   const finish = () => { if (done) return; done = true; clearTimeout(t); el.classList.add('out'); setTimeout(() => el.remove(), 650); };
