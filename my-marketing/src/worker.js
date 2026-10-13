@@ -153,6 +153,18 @@ function cleanTitle(assetName, itemName, employee, single) {
   return t || tidy(itemName);
 }
 
+async function startDate(env, name) {
+  return cached('start:' + nk(name), 3600e3, async () => {
+    const b = await boardByName(env, 'Main Employee Sheet');
+    const col = b && Object.keys(b.cols).find(t => nk(t) === 'start date');
+    if (!col) return '';
+    const qp = '{rules:[{column_id:"name",compare_value:[' + JSON.stringify(name) + '],operator:contains_text}]}';
+    const d = await gql(env, 'query($b:[ID!],$c:[String!]){boards(ids:$b){items_page(limit:20,query_params:' + qp + '){items{name column_values(ids:$c){text}}}}}', { b: [b.id], c: [b.cols[col]] });
+    const it = ((d.boards[0] && d.boards[0].items_page.items) || []).find(x => nk(x.name) === nk(name));
+    const m = it && String((it.column_values[0] || {}).text || '').match(/\d{4}-\d{2}-\d{2}/);
+    return m ? m[0] : '';
+  });
+}
 async function content(env, s) {
   const { p, items } = await itemsFor(env, s.uid);
   const now = Date.now();
@@ -187,7 +199,9 @@ async function content(env, s) {
   pieces.sort((a, b) => (b.isNew - a.isNew) || String(b.date).localeCompare(String(a.date)) || a.title.localeCompare(b.title));
   const week = pieces.filter(x => /market update/i.test(x.category));
   const newsletter = pieces.filter(x => /newsletter|event calendar/i.test(x.category));
-  return { name: s.name, categories, pieces, week, newsletter, board: p.name };
+  // their start date (Main Employee Sheet), so the "Share your move" card can go away 5 days after it
+  const start = pieces.some(x => /new hire/i.test(x.category) && /move/i.test(x.row + ' ' + x.title)) ? await startDate(env, s.name).catch(() => '') : '';
+  return { name: s.name, categories, pieces, week, newsletter, board: p.name, start };
 }
 
 // ---------- files: streamed through here so only the right person can open them ----------

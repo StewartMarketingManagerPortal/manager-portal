@@ -217,7 +217,7 @@ function foot() {
 
 // ================= the new hire's own welcome post ("I've Made a Move") =================
 // Stewart's announcement goes to their manager in the Manager Portal; this is the one they share themselves.
-// It sits at the top of home until they tap "I posted it" (remembered on this device).
+// It sits at the top of home until they tap "I posted it" (remembered on this device), or 5 days after their start date.
 const WP_CAPS = [
   'I’ve made a move! 🎉 I’m excited to share that I’ve joined Stewart Title. I’d love to help with your next transaction - let’s connect!',
   'New chapter! I’m thrilled to announce I’m now part of the Stewart Title team. Reach out anytime - I’m here to help you close with confidence.',
@@ -227,6 +227,9 @@ const welcomePiece = () => pieces().find(p => p.kind === 'image' && /new hire/i.
 function welcomeHtml() {
   const p = welcomePiece();
   if (!p || store.get('wpPosted.' + p.id)) return '';
+  // goes away 5 days after their start date (on the Main Employee Sheet)
+  const st = S.data.start ? Date.parse(S.data.start + 'T12:00:00') : 0;
+  if (st && Date.now() > st + 5 * 864e5) return '';
   const c = Number(store.get('wpCap') || 0) % WP_CAPS.length, canShare = !!(navigator.share && navigator.canShare) && !isComputer();
   return '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">Share your move</h2><span class="badge">NEW</span></div>' +
     '<div class="sub">Your welcome post is ready. Share it on LinkedIn, Facebook or Instagram so your network knows where to find you.</div>' +
