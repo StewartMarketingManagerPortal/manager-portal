@@ -231,7 +231,7 @@ function welcomeHtml() {
   const st = S.data.start ? Date.parse(S.data.start + 'T12:00:00') : 0;
   if (st && Date.now() > st + 5 * 864e5) return '';
   const c = Number(store.get('wpCap') || 0) % WP_CAPS.length, canShare = !!(navigator.share && navigator.canShare) && !isComputer();
-  return '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">Share your move</h2><span class="badge">NEW</span></div>' +
+  return '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">Tell your network</h2><span class="badge">NEW</span></div>' +
     '<div class="sub">Your welcome post is ready. Share it on LinkedIn, Facebook or Instagram so your network knows where to find you.</div>' +
     '<div class="wp"><a class="wp-pic" href="#p/' + esc(p.id) + '"><img src="' + esc(p.url) + '" alt="Your I’ve Made a Move post"></a><div class="wp-r">' +
     '<div class="wp-caps"><span>Caption</span>' + WP_CAPS.map((x, i) => '<button class="chip' + (i === c ? ' on' : '') + '" data-act="wp-cap" data-c="' + i + '">' + (i + 1) + '</button>').join('') + '</div>' +
