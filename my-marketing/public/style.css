@@ -377,3 +377,15 @@ body.vcam-on { overflow: hidden; }
 .viewas { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 14px; background: #1A1A1C; color: #fff; font-size: 13.5px; padding: 9px 16px; }
 .viewas b { color: #fff; } .viewas span { color: #D8D6D2; }
 .viewas button { font: inherit; font-size: 12.5px; font-weight: 700; color: #1A1A1C; background: #fff; border: none; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+
+/* the new hire's own welcome post on home */
+.wp { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 14px; }
+.wp-pic { display: block; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 24px rgba(26,26,28,.12); background: #000; aspect-ratio: 4 / 5; }
+.wp-pic img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.wp-r { display: flex; flex-direction: column; gap: 10px; }
+.wp-caps { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.wp-caps .chip { min-width: 34px; justify-content: center; }
+.wp-caps .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wp-cap { background: #fff; border: 1.5px solid var(--field); border-radius: 12px; padding: 12px 14px; font-size: 14.5px; line-height: 1.5; }
+.wp-r .link { align-self: flex-start; margin-top: 2px; }
+@media (max-width: 640px) { .wp { grid-template-columns: 1fr; } .wp-pic { max-width: 340px; } }

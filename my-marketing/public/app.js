@@ -215,6 +215,34 @@ function foot() {
     '<span>Questions? Contact the West Marketing team.</span></div></div>';
 }
 
+// ================= the new hire's own welcome post ("I've Made a Move") =================
+// Stewart's announcement goes to their manager in the Manager Portal; this is the one they share themselves.
+// It sits at the top of home until they tap "I posted it" (remembered on this device).
+const WP_CAPS = [
+  'I’ve made a move! 🎉 I’m excited to share that I’ve joined Stewart Title. I’d love to help with your next transaction - let’s connect!',
+  'New chapter! I’m thrilled to announce I’m now part of the Stewart Title team. Reach out anytime - I’m here to help you close with confidence.',
+  'Excited to start my next chapter with Stewart Title! Looking forward to working with all of you. #StewartTitle #NewBeginnings'
+];
+const welcomePiece = () => pieces().find(p => p.kind === 'image' && /new hire/i.test(p.category) && /move/i.test(p.row + ' ' + p.title));
+function welcomeHtml() {
+  const p = welcomePiece();
+  if (!p || store.get('wpPosted.' + p.id)) return '';
+  const c = Number(store.get('wpCap') || 0) % WP_CAPS.length, canShare = !!(navigator.share && navigator.canShare) && !isComputer();
+  return '<section class="blk"><div class="wrap"><div class="h2row"><h2 class="h">Share your move</h2><span class="badge">NEW</span></div>' +
+    '<div class="sub">Your welcome post is ready. Share it on LinkedIn, Facebook or Instagram so your network knows where to find you.</div>' +
+    '<div class="wp"><a class="wp-pic" href="#p/' + esc(p.id) + '"><img src="' + esc(p.url) + '" alt="Your I’ve Made a Move post"></a><div class="wp-r">' +
+    '<div class="wp-caps"><span>Caption</span>' + WP_CAPS.map((x, i) => '<button class="chip' + (i === c ? ' on' : '') + '" data-act="wp-cap" data-c="' + i + '">' + (i + 1) + '</button>').join('') + '</div>' +
+    '<div class="wp-cap">' + esc(WP_CAPS[c]) + '</div>' +
+    '<button class="btn" data-act="wp-copy">' + 'Copy caption</button>' +
+    (canShare ? '<button class="btn primary" data-share="' + esc(p.id) + '" data-act="wp-copyshare">' + I.share + 'Share</button>' : '') +
+    '<a class="btn' + (canShare ? '' : ' primary') + '" href="' + esc(p.url) + '?dl=1" download>' + I.down + 'Download</a>' +
+    '<button class="link" data-act="wp-done" data-id="' + esc(p.id) + '">I posted it</button></div></div></div></section>';
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (x) {} ta.remove(); return ok; }
+}
+
 // ================= home =================
 function homeHtml() {
   const t = tabs('home'), now = new Date();
@@ -227,6 +255,7 @@ function homeHtml() {
     '<button class="refresh" data-act="refresh" aria-label="Check for new pieces">' + I.refresh + '<span>Refresh</span></button>' +
     '<form class="search dark" id="f-search" role="search"><span style="color:var(--muted-dark);display:flex">' + I.search + '</span><input type="search" id="q" placeholder="Search flyers, tips, updates" aria-label="Search"></form></div></header>';
   h += vHomeNote();
+  h += welcomeHtml();
 
   const week = S.data.week || [];
   if (week.length) {
@@ -452,6 +481,7 @@ document.addEventListener('click', async e => {
   if (!el) return;
   const d = el.dataset;
   if (d.jump) { e.preventDefault(); const s = document.getElementById(d.jump); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  if (d.act === 'wp-copyshare') copyText(WP_CAPS[Number(store.get('wpCap') || 0) % WP_CAPS.length]);
   if (d.share) { e.preventDefault(); const p = byId(d.share); if (p) share([p]); return; }
   if (d.shareWeek) { e.preventDefault(); share((S.data.week || []).slice()); return; }
   if (d.shareNl) { e.preventDefault(); share((S.data.newsletter || []).slice()); return; }
@@ -467,6 +497,9 @@ document.addEventListener('click', async e => {
     if (d.act === 'account' && !confirmSignout()) return;
     await api('logout', { method: 'POST' }).catch(() => {}); S.data = null; S.step = 'email'; S.err = ''; location.hash = ''; render();
   }
+  if (d.act === 'wp-cap') { store.set('wpCap', d.c); render(); return; }
+  if (d.act === 'wp-copy') { toast(await copyText(WP_CAPS[Number(store.get('wpCap') || 0) % WP_CAPS.length]) ? 'Caption copied' : 'Couldn’t copy. Press and hold the caption to copy it.'); return; }
+  if (d.act === 'wp-done') { store.set('wpPosted.' + d.id, '1'); toast('Nice! It’s still in your New Hire pieces any time.'); render(); return; }
   if (d.act === 'hide-install') { store.set('installHidden', '1'); render(); }
   if (d.act === 'install' && S.installEvt) { const ev = S.installEvt; ev.prompt(); try { await ev.userChoice; } catch (x) {} S.installEvt = null; render(); }
 });
