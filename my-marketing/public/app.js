@@ -152,7 +152,7 @@ function intro() {
     '<div class="in-hi">Welcome, ' + esc(firstName(S.data.name)) + '</div><h1>We’re so glad you’re here.</h1>' +
     '<p>This is My Marketing: everything West Marketing makes for you, ready to share right from your phone.</p>' +
     '<div class="in-cv"><div class="in-lab">Our core values</div><div class="in-val" aria-live="polite"></div><div class="in-dots">' + CORE_VALUES.map(() => '<i></i>').join('') + '</div></div>' +
-    '<button class="in-skip" type="button">Skip</button></div>';
+    '</div>';
   document.body.appendChild(el);
   requestAnimationFrame(() => el.classList.add('on'));
   const val = el.querySelector('.in-val'), dots = el.querySelectorAll('.in-dots i');
@@ -169,7 +169,6 @@ function intro() {
     }, i ? 350 : 0);
     t = setTimeout(next, 3000);
   };
-  el.querySelector('.in-skip').addEventListener('click', finish);
   t = setTimeout(next, 1600);
 }
 window.mmIntro = intro;

@@ -394,7 +394,7 @@ body.vcam-on { overflow: hidden; }
 .intro { position: fixed; inset: 0; z-index: 100; background: radial-gradient(120% 90% at 50% 0%, #2C2B2D 0%, #1A1A1C 60%); color: #fff; display: flex; align-items: center; justify-content: center; padding: calc(32px + var(--safe-t)) 28px calc(32px + var(--safe-b)); opacity: 0; transition: opacity .6s ease; }
 .intro.on { opacity: 1; } .intro.out { opacity: 0; }
 .in-wrap { width: 100%; max-width: 520px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; }
-.in-logo { width: 190px; height: auto; margin-bottom: 18px; }
+.in-logo { width: 190px; height: auto; margin-bottom: 18px; transform: translateX(-14.1%); }
 .in-hi { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #E5486E; }
 .intro h1 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 800; }
 .intro p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--on-dark); max-width: 420px; }
