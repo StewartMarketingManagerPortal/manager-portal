@@ -125,7 +125,7 @@ async function submitCode() {
   if (code.length !== 6) { S.err = 'Enter all 6 digits.'; render(); return; }
   const remember = $('#remember') ? $('#remember').checked : true;
   S.busy = true; S.err = ''; render();
-  try { await api('verify', { method: 'POST', body: JSON.stringify({ email: S.email, code, remember }) }); S.busy = false; S.step = 'email'; await load(); }
+  try { await api('verify', { method: 'POST', body: JSON.stringify({ email: S.email, code, remember }) }); S.busy = false; S.step = 'email'; S.justSignedIn = true; await load(); }
   catch (e) { S.busy = false; S.err = e.message; render(); }
 }
 
@@ -136,7 +136,8 @@ async function load(fresh) {
     S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = '';
     if (S.viewAs == null) {
       const meP = api('me').then(m => { S.viewAs = m.viewAs || false; return m; }).catch(() => null);
-      if (!store.get('welcomed')) { const m = await meP; if (m && !m.viewAs) intro(true); } else meP.then(() => { if (S.viewAs) render(); });
+      // the full welcome the first time; "Welcome back" each time they sign in again after that
+      if (!store.get('welcomed') || S.justSignedIn) { const back = !!store.get('welcomed'); S.justSignedIn = false; const m = await meP; if (m && !m.viewAs) intro(true, back); } else meP.then(() => { if (S.viewAs) render(); });
     }
   }
   catch (e) { S.data = null; if (e.status !== 401) S.err = e.message; }
@@ -150,12 +151,12 @@ const CORE_VALUES = [
   ['Honest and Courageous', 'We stand up for what’s right and stay open to new ideas.'],
   ['Team Focus', 'We foster growth.'],
 ];
-function intro(instant) {
+function intro(instant, back) {
   if ($('#intro') || !S.data) return;
   store.set('welcomed', '1');   // once per device
   const el = document.createElement('div'); el.id = 'intro'; el.className = 'intro'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Welcome to My Marketing');
   el.innerHTML = '<div class="in-wrap"><img src="logo-light.png" alt="Stewart Title" class="in-logo">' +
-    '<div class="in-hi">Welcome, ' + esc(firstName(S.data.name)) + '</div><h1>You made it! 🎉</h1>' +
+    '<div class="in-hi">' + (back ? 'Hi, ' : 'Welcome, ') + esc(firstName(S.data.name)) + '</div><h1>' + (back ? 'Welcome back! 👋' : 'You made it! 🎉') + '</h1>' +
     '<p>Your marketing is ready when you are.</p>' +
     '<div class="in-cv"><div class="in-lab">Our core values</div><div class="in-val" aria-live="polite"></div><div class="in-dots">' + CORE_VALUES.map(() => '<i></i>').join('') + '</div></div>' +
     '</div>';
