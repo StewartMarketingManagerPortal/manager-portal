@@ -167,7 +167,7 @@ function intro() {
       dots.forEach((d, k) => d.classList.toggle('on', k <= i));
       val.classList.add('show');
     }, i ? 350 : 0);
-    t = setTimeout(next, 3000);
+    t = setTimeout(next, 2000);
   };
   t = setTimeout(next, 1600);
 }
