@@ -180,7 +180,7 @@ function intro(instant, back) {
 }
 window.mmIntro = intro;
 // shorter names for some categories on the site (the monday board keeps its own names)
-const NAMES = [[/photos? (and|&)? ?personal branding/, 'Personal Branding'], [/newsletter/, 'Newsletter']];
+const NAMES = [[/photos? (and|&)? ?personal branding/, 'Branding'], [/newsletter/, 'Newsletter']];
 function rename(d) {
   const fix = n => { const m = NAMES.find(([re]) => re.test(nk(n).replace(/ +/g, ' ')) || re.test(String(n).toLowerCase())); return m ? m[1] : n; };
   (d.categories || []).forEach(c => c.name = fix(c.name));
@@ -374,7 +374,7 @@ const SECTION_RULES = [
     ['Drop Cards', /drop card|door hanger|leave behind/],
     ['Email Signature', /signature/],
     ['Name Badges', /badge|name tag/],
-    ['Social Media Profile', /profile|banner|cover|avatar/],
+    ['Social Media Headers', /profile|banner|cover|avatar|header|facebook|linkedin/],
     ['Bio & Introductions', /\bbio\b|about me|introduc|meet /],
   ]],
   [/flyer/, 'More flyers', [

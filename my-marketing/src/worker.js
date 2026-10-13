@@ -140,7 +140,7 @@ async function session(request, env) {
 
 // ---------- content ----------
 const IMG = /^(png|jpe?g|gif|webp)$/i, VID = /^(mp4|mov|m4v|webm)$/i;
-const ORDER = ['market update', 'newsletter', 'title tips', 'flyers', 'new hire', 'social media', 'holiday', 'happy anniversary', 'anniversary', 'photos'];
+const ORDER = ['market update', 'newsletter', 'title tips', 'flyers', 'new hire', 'social media', 'holiday', 'happy anniversary', 'anniversary', 'branding', 'photos'];
 
 // underscores (from file names) become spaces, and stray ones at the ends go away
 const tidy = s => String(s || '').replace(/_+/g, ' ').replace(/\s{2,}/g, ' ').replace(/^[\s\-–]+|[\s\-–]+$/g, '').trim();
@@ -172,7 +172,8 @@ async function content(env, s) {
   items.forEach(it => {
     const v = {}; (it.column_values || []).forEach(c => v[c.id] = c.text || '');
     if (p.status && /archiv|old|inactive|remove/i.test(v[p.status] || '')) return;
-    const category = (p.category && v[p.category]) || (it.group && it.group.title) || 'Other';
+    // "Photos & Personal Branding" was renamed "Branding": older rows still carry the old name
+    const category = String((p.category && v[p.category]) || (it.group && it.group.title) || 'Other').replace(/^photos? (and|&) personal branding$/i, 'Branding');
     const date = (p.date && v[p.date]) || String(it.updated_at || it.created_at || '').slice(0, 10);
     const employee = p.employee ? v[p.employee] : '';
     const isMU = /market update/i.test(category);
