@@ -389,3 +389,21 @@ body.vcam-on { overflow: hidden; }
 .wp-cap { background: #fff; border: 1.5px solid var(--field); border-radius: 12px; padding: 12px 14px; font-size: 14.5px; line-height: 1.5; }
 .wp-r .link { align-self: flex-start; margin-top: 2px; }
 @media (max-width: 640px) { .wp { grid-template-columns: 1fr; } .wp-pic { max-width: 340px; } }
+
+/* first sign-in welcome */
+.intro { position: fixed; inset: 0; z-index: 100; background: radial-gradient(120% 90% at 50% 0%, #2C2B2D 0%, #1A1A1C 60%); color: #fff; display: flex; align-items: center; justify-content: center; padding: calc(32px + var(--safe-t)) 28px calc(32px + var(--safe-b)); opacity: 0; transition: opacity .6s ease; }
+.intro.on { opacity: 1; } .intro.out { opacity: 0; }
+.in-wrap { width: 100%; max-width: 520px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; }
+.in-logo { width: 190px; height: auto; margin-bottom: 18px; }
+.in-hi { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #E5486E; }
+.intro h1 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 800; }
+.intro p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--on-dark); max-width: 420px; }
+.in-cv { margin-top: 34px; width: 100%; border-top: 1px solid rgba(255,255,255,.14); padding-top: 26px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 190px; }
+.in-lab { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted-dark); }
+.in-val { display: flex; flex-direction: column; gap: 8px; opacity: 0; transform: translateY(10px); transition: opacity .35s ease, transform .35s ease; min-height: 92px; }
+.in-val.show { opacity: 1; transform: none; }
+.in-val b { font-size: 26px; font-weight: 800; }
+.in-val span { font-size: 16px; line-height: 1.5; color: var(--on-dark); }
+.in-dots { display: flex; gap: 8px; } .in-dots i { width: 26px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.18); transition: background .3s; } .in-dots i.on { background: var(--brand); }
+.in-skip { margin-top: 18px; background: none; border: none; color: var(--muted-dark); font: inherit; font-size: 14px; font-weight: 600; padding: 10px 16px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .intro, .in-val { transition: none; } }

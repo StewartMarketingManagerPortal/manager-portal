@@ -132,10 +132,47 @@ async function submitCode() {
 // ================= data =================
 async function load(fresh) {
   if (!S.data) { S.loading = true; render(); }
-  try { S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = ''; if (S.viewAs == null) api('me').then(m => { S.viewAs = m.viewAs || false; if (S.viewAs) render(); }).catch(() => {}); }
+  try { S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = ''; if (S.viewAs == null) api('me').then(m => { S.viewAs = m.viewAs || false; if (S.viewAs) render(); else if (!store.get('welcomed')) intro(); }).catch(() => {}); }
   catch (e) { S.data = null; if (e.status !== 401) S.err = e.message; }
   S.loading = false; render();
 }
+// ================= first sign-in: a welcome, then our core values one at a time, then their home page =================
+const CORE_VALUES = [
+  ['Winning Approach', 'We hustle to make big things happen for our clients and partners.'],
+  ['Customer Oriented', 'We work to ensure our customers have a memorable experience.'],
+  ['Accountable', 'We deliver on our promises and own the outcomes.'],
+  ['Honest and Courageous', 'We stand up for what’s right and stay open to new ideas.'],
+  ['Team Focus', 'We foster growth.'],
+];
+function intro() {
+  if ($('#intro') || !S.data) return;
+  store.set('welcomed', '1');   // once per device
+  const el = document.createElement('div'); el.id = 'intro'; el.className = 'intro'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Welcome to My Marketing');
+  el.innerHTML = '<div class="in-wrap"><img src="logo-light.png" alt="Stewart Title" class="in-logo">' +
+    '<div class="in-hi">Welcome, ' + esc(firstName(S.data.name)) + '</div><h1>We’re so glad you’re here.</h1>' +
+    '<p>This is My Marketing: everything West Marketing makes for you, ready to share right from your phone.</p>' +
+    '<div class="in-cv"><div class="in-lab">Our core values</div><div class="in-val" aria-live="polite"></div><div class="in-dots">' + CORE_VALUES.map(() => '<i></i>').join('') + '</div></div>' +
+    '<button class="in-skip" type="button">Skip</button></div>';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('on'));
+  const val = el.querySelector('.in-val'), dots = el.querySelectorAll('.in-dots i');
+  let i = -1, t = null, done = false;
+  const finish = () => { if (done) return; done = true; clearTimeout(t); el.classList.add('out'); setTimeout(() => el.remove(), 650); };
+  const next = () => {
+    i++;
+    if (i >= CORE_VALUES.length) { t = setTimeout(finish, 900); return; }
+    val.classList.remove('show');
+    setTimeout(() => {
+      val.innerHTML = '<b>' + esc(CORE_VALUES[i][0]) + '</b><span>' + esc(CORE_VALUES[i][1]) + '</span>';
+      dots.forEach((d, k) => d.classList.toggle('on', k <= i));
+      val.classList.add('show');
+    }, i ? 350 : 0);
+    t = setTimeout(next, 3000);
+  };
+  el.querySelector('.in-skip').addEventListener('click', finish);
+  t = setTimeout(next, 1600);
+}
+window.mmIntro = intro;
 // shorter names for some categories on the site (the monday board keeps its own names)
 const NAMES = [[/photos? (and|&)? ?personal branding/, 'Personal Branding'], [/newsletter/, 'Newsletter']];
 function rename(d) {
