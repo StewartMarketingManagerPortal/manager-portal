@@ -149,8 +149,8 @@ function intro() {
   store.set('welcomed', '1');   // once per device
   const el = document.createElement('div'); el.id = 'intro'; el.className = 'intro'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Welcome to My Marketing');
   el.innerHTML = '<div class="in-wrap"><img src="logo-light.png" alt="Stewart Title" class="in-logo">' +
-    '<div class="in-hi">Welcome, ' + esc(firstName(S.data.name)) + '</div><h1>We’re so glad you’re here.</h1>' +
-    '<p>This is My Marketing: everything West Marketing makes for you, ready to share right from your phone.</p>' +
+    '<div class="in-hi">Welcome, ' + esc(firstName(S.data.name)) + '</div><h1>You made it! 🎉</h1>' +
+    '<p>Your marketing is ready when you are.</p>' +
     '<div class="in-cv"><div class="in-lab">Our core values</div><div class="in-val" aria-live="polite"></div><div class="in-dots">' + CORE_VALUES.map(() => '<i></i>').join('') + '</div></div>' +
     '</div>';
   document.body.appendChild(el);
