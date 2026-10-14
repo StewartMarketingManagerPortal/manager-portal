@@ -10,6 +10,7 @@ Everything they submit lands on the team's monday.com boards.
   - *Managers* group → can submit for the people linked to their row (their team)
   - *Portal Admins* group → can see and submit for everyone
   - Set a row's Status to *Paused* to switch someone off without deleting them.
+  - *Presidents* group → sees everyone on the teams of the managers typed in the **Managers** text column (names separated by commas, exactly as on their rows), plus those managers, and their requests, new hires and onboarding.
   - *Assistants* group → a manager's assistant. Type the manager's name (exactly as on their row) in the **Assistant To** text column. They sign in with the email in their row's Person column and see that manager's portal: same team, same lists. What they do is noted as "Jane for Vera". Pausing the manager pauses their assistants too.
 
 ## Boards it uses (found by name)

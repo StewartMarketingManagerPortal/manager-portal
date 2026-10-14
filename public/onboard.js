@@ -92,7 +92,7 @@ PAGES.onboard = () => {
   const t = onbTotals(h), first = h.name.split(' ')[0];
   const days = h.start ? Math.round((new Date(h.start + 'T12:00:00') - new Date(iso(new Date()) + 'T12:00:00')) / 864e5) : null;
   let out = '<div class="head"><div><a class="ob-back" href="#onboard">‹ All new hires</a><h1>Onboarding</h1><div class="sub">Everything for a new hire’s first 90 days, in order. Jump to any step, tick things off as you go. Your progress is saved.</div></div>' +
-    '<div class="ob-who"><span class="ob-av">' + esc(initials(h.name)) + '</span><span><b>' + esc(h.name) + '</b><small>' + esc([h.title, h.start ? 'starts ' + nice(h.start) : ''].filter(Boolean).join(' · ')) + (S.me.admin && h.managerEmail !== S.me.email ? ' · ' + esc(h.manager) : '') + '</small></span><a class="btn" href="#onboard">All new hires</a></div></div>';
+    '<div class="ob-who"><span class="ob-av">' + esc(initials(h.name)) + '</span><span><b>' + esc(h.name) + '</b><small>' + esc([h.title, h.start ? 'starts ' + nice(h.start) : ''].filter(Boolean).join(' · ')) + ((S.me.admin || S.me.president) && h.managerEmail !== S.me.email ? ' · ' + esc(h.manager) : '') + '</small></span><a class="btn" href="#onboard">All new hires</a></div></div>';
   out += onbTabs(h);
   const fin = (h.data || {}).fin;
   if (fin) out += '<div class="banner ok ob-fin"><span class="av" style="background:var(--green);color:#fff">✓</span><div class="grow"><b>Onboarding completed ' + onbNice(fin) + '</b><div class="small">Kept on ' + esc(first) + '’s page in My Team. You can still tick things here.</div></div><button class="btn" data-act="ob-reopen">Reopen</button></div>';
@@ -152,9 +152,9 @@ function onbPick() {
   if (OB.err) out += '<div class="banner bad">' + esc(OB.err) + '</div>';
   out += '<div class="ob-pick">';
   if (list.length) {
-    out += '<section class="card"><h2>' + (S.me.admin ? 'Onboardings' : 'Your onboardings') + '</h2><div class="ob-hires">' + list.map(h => {
+    out += '<section class="card"><h2>' + (S.me.admin || S.me.president ? 'Onboardings' : 'Your onboardings') + '</h2><div class="ob-hires">' + list.map(h => {
       const t = onbTotals(h), pct = Math.round(t.done / Math.max(1, t.total) * 100);
-      return '<div class="ob-hire"><a href="#onboard/' + esc(h.id) + '"><span class="ob-av">' + esc(initials(h.name)) + '</span><span class="grow"><b>' + esc(h.name) + '</b><small>' + esc([h.title, h.start ? 'starts ' + nice(h.start) : '', S.me.admin && h.managerEmail !== S.me.email ? h.manager : ''].filter(Boolean).join(' · ')) + '</small>' +
+      return '<div class="ob-hire"><a href="#onboard/' + esc(h.id) + '"><span class="ob-av">' + esc(initials(h.name)) + '</span><span class="grow"><b>' + esc(h.name) + '</b><small>' + esc([h.title, h.start ? 'starts ' + nice(h.start) : '', (S.me.admin || S.me.president) && h.managerEmail !== S.me.email ? h.manager : ''].filter(Boolean).join(' · ')) + '</small>' +
         '<span class="ob-bar sm"><i style="width:' + pct + '%"></i></span></span><span class="small"><b>' + t.done + '</b>/' + t.total + '</span></a><button class="ob-x" data-act="ob-remove" data-id="' + esc(h.id) + '" title="Cancel this onboarding" aria-label="Cancel ' + esc(h.name) + '’s onboarding">×</button></div>';
     }).join('') + '</div></section>';
   }
@@ -293,7 +293,7 @@ function onbHomeCard() {
       const d = h.start ? Math.round((new Date(h.start + 'T12:00:00') - today) / 864e5) : null;
       const when = d == null ? '' : d > 0 ? plural(d, 'day') + ' to day 1' : d === 0 ? 'Starts today' : 'Day ' + (1 - d);
       return '<a class="hob-row" href="#onboard/' + esc(h.id) + '"><span class="ob-av">' + esc(initials(h.name)) + '</span><span class="grow"><b>' + esc(h.name) + '</b><small>' +
-        esc([h.title, h.start ? (d != null && d < 0 ? 'started ' : 'starts ') + nice(h.start) : '', S.me.admin && h.managerEmail !== S.me.email ? h.manager : ''].filter(Boolean).join(' · ')) + '</small></span>' +
+        esc([h.title, h.start ? (d != null && d < 0 ? 'started ' : 'starts ') + nice(h.start) : '', (S.me.admin || S.me.president) && h.managerEmail !== S.me.email ? h.manager : ''].filter(Boolean).join(' · ')) + '</small></span>' +
         (nx ? '<span class="hob-next">Next: ' + esc(nx.t) + '</span>' : '<span class="hob-next ok">Ready to complete</span>') +
         '<span class="hob-p"><span class="ob-bar"><i style="width:' + Math.round(t.done / Math.max(1, t.total) * 100) + '%"></i></span><small><b>' + t.done + '</b> of ' + t.total + ' done</small></span>' +
         '<span class="hob-days' + (d != null && d >= 0 && d <= 10 ? ' soon' : '') + '">' + esc(when) + '</span><span class="hob-go">›</span></a>';
