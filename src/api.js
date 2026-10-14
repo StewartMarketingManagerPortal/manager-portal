@@ -77,6 +77,8 @@ async function directory(env) {
     const rel = Object.values(mc.byTitle).find(c => c.type === 'board_relation');
     const ppl = Object.values(mc.byTitle).find(c => c.type === 'people');
     const st = mc.byTitle['status'];
+    const asst = mc.byTitle['assistant to'];   // Assistants group: the manager's name, exactly as on their row
+    const over = mc.byTitle['managers'];        // Presidents group: their managers' names, separated by commas
     // monday user emails for the Person column
     const uids = new Set();
     mItems.forEach(it => it.column_values.forEach(cv => { if (ppl && cv.id === ppl.id && cv.persons_and_teams) cv.persons_and_teams.forEach(p => uids.add(String(p.id))); }));
@@ -90,7 +92,14 @@ async function directory(env) {
       if (own && own.email) emails.add(own.email);
       if (ppl) (cv(ppl.id).persons_and_teams || []).forEach(p => users[p.id] && emails.add(users[p.id]));
       return { rowId: it.id, name: it.name.trim(), group: it.group.title, admin: /admin/i.test(it.group.title), paused: st ? /pause|inactive|off|no access/i.test(cv(st.id).text || '') : false,
-        emails: Array.from(emails), linked, self: own || null };
+        emails: Array.from(emails), linked, self: own || null,
+        assistant: /assistant/i.test(it.group.title), assistTo: asst ? (cv(asst.id).text || '').trim() : '',
+        president: /president/i.test(it.group.title), oversees: over ? (cv(over.id).text || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean) : [] };
+    });
+    // a president sees the teams of the managers named on their row (and those managers themselves)
+    managers.filter(m => m.president).forEach(m => {
+      m.under = m.oversees.map(n => managers.find(x => !x.assistant && !x.president && !x.admin && nk(x.name) === nk(n))).filter(Boolean);
+      m.missing = m.oversees.filter(n => !m.under.some(x => nk(x.name) === nk(n)));
     });
     return { managers, employees, relColId: rel ? rel.id : null, managersBoard: mb };
   });
@@ -123,12 +132,31 @@ async function whoAmI(request, env) {
   const row = dir.managers.find(m => m.emails.includes(email));
   if (!row) return { ok: false, email, error: 'You’re not on the Manager Portal list.' };
   if (row.paused) return { ok: false, email, error: 'Your access to the Manager Portal is paused.' };
-  return { ok: true, email, row, dir };
+  if (!row.assistant) return scoped({ ok: true, email, row, dir });
+  // an assistant signs in as their manager: same team, same lists (they're kept under the manager's email),
+  // and what they do is logged as "Jane for Vera"
+  const boss = row.assistTo && dir.managers.find(m => !m.assistant && nk(m.name) === nk(row.assistTo));
+  if (!boss) return { ok: false, email, error: 'You’re set up as an assistant, but the manager you assist isn’t found. Ask West Marketing to check “Assistant To” on your row.' };
+  if (boss.paused) return { ok: false, email, error: 'Access to ' + boss.name + '’s Manager Portal is paused.' };
+  const bossEmail = (boss.self && boss.self.email) || boss.emails[0];
+  if (!bossEmail) return { ok: false, email, error: boss.name + ' doesn’t have an email on the Manager Contacts board yet. Ask West Marketing.' };
+  return scoped({ ok: true, email: bossEmail, row: boss, dir, assistant: { name: row.name, email } });
 }
+// whose requests, new hires and onboarding this person sees: their own, plus (for a president) each of their managers'
+function scoped(me) {
+  const under = me.row.president ? me.row.under : [];
+  me.scope = { emails: new Set([me.email].concat(...under.map(m => m.emails.concat(m.self && m.self.email ? [m.self.email] : [])))), names: new Set([me.row.name].concat(under.map(m => m.name)).map(nk)) };
+  return me;
+}
+const inScope = (me, email, name) => me.row.admin || me.scope.emails.has(String(email || '').toLowerCase()) || (name != null && me.scope.names.has(nk(name)));
+// who did it, for notes on monday.com: the manager, or "Jane Smith for Vera Mendoza"
+const byName = me => me.assistant ? me.assistant.name + ' for ' + me.row.name : me.row.name;
 function teamOf(me) {
   const E = me.dir.employees;
   if (me.row.admin) return Object.values(E).filter(p => !p.skip);
-  return me.row.linked.map(i => E[i]).filter(p => p && !p.skip && (!me.row.self || p.id !== me.row.self.id));
+  const ids = new Set(me.row.linked);
+  if (me.row.president) me.row.under.forEach(m => { m.linked.forEach(i => ids.add(i)); if (m.self) ids.add(m.self.id); });
+  return Array.from(ids).map(i => E[i]).filter(p => p && !p.skip && (!me.row.self || p.id !== me.row.self.id));
 }
 async function profile(env, me) {
   const all = Object.values(me.dir.employees).filter(p => !p.skip);
@@ -137,7 +165,8 @@ async function profile(env, me) {
   all.forEach(p => { if (p.address1) offices[p.address1 + '|' + p.address2] = { address1: p.address1, address2: p.address2 }; if (p.title) titles[p.title] = 1; });
   const pub = p => ({ id: p.id, name: p.name, email: p.email, title: p.title });
   return {
-    name: me.row.name, email: me.email, admin: me.row.admin,
+    name: me.row.name, email: me.email, admin: me.row.admin, assistant: me.assistant ? me.assistant.name : '',
+    president: !!me.row.president, managers: me.row.president ? me.row.under.map(m => m.name) : [], missing: me.row.president ? me.row.missing : [],
     team: teamOf(me).map(pub).sort((a, b) => a.name.localeCompare(b.name)),
     offices: Object.values(offices).sort((a, b) => (a.address2 + a.address1).localeCompare(b.address2 + b.address1)),
     titles: Object.keys(titles).sort(),
@@ -153,15 +182,14 @@ async function myRequests(env, me) {
   const c = t => rc.byTitle[nk(t)];
   const want = ["Manager's Name", 'Managers Email', 'Full Name', 'Status', 'Order Date', 'Due Date', 'Project Name', 'Purpose of Project', 'Proof', 'CA or AZ'].map(c).filter(Boolean);
   const items = await allItems(env, rb, want.map(x => x.id));
-  const name = nk(me.row.name);
   const rows = items.map(it => {
     const v = {}; it.column_values.forEach(cv => { const col = want.find(w => w.id === cv.id); if (col) v[nk(col.title)] = { text: (cv.text || '').trim(), value: cv.value }; });
     const g = k => (v[nk(k)] || {}).text || '';
     let proofs = []; try { proofs = (JSON.parse((v['proof'] || {}).value || '{}').files || []).map(f => ({ id: String(f.assetId), name: f.name })); } catch (e) {}
     return { id: it.id, project: g('Project Name') || it.name, type: g('Purpose of Project'), forWho: g('Full Name'), status: g('Status') || 'New', ordered: g('Order Date'), due: g('Due Date'), state: g('CA or AZ'),
       manager: g("Manager's Name"), managerEmail: g('Managers Email').toLowerCase(), group: it.group.title, proofs, created: it.created_at };
-  }).filter(r => me.row.admin || r.managerEmail === me.email || nk(r.manager) === name)
-    .sort((a, b) => String(b.created).localeCompare(String(a.created))).slice(0, me.row.admin ? 150 : 100);
+  }).filter(r => inScope(me, r.managerEmail, r.manager))
+    .sort((a, b) => String(b.created).localeCompare(String(a.created))).slice(0, me.row.admin || me.row.president ? 150 : 100);
   // a link to look at the proof (monday gives a link that works for about an hour)
   const ids = rows.filter(r => /proof/i.test(r.status) && r.proofs.length).flatMap(r => r.proofs.map(p => p.id)).slice(0, 50);
   if (ids.length) {
@@ -170,7 +198,7 @@ async function myRequests(env, me) {
     rows.forEach(r => r.proofs.forEach(p => p.url = url[p.id] || null));
   }
   // new hires this manager submitted
-  const hires = Object.values(me.dir.employees).filter(p => p.requestedBy && (me.row.admin || p.requestedBy === me.email))
+  const hires = Object.values(me.dir.employees).filter(p => p.requestedBy && inScope(me, p.requestedBy))
     .map(p => ({ id: p.id, name: p.name, setup: p.setup, kind: 'newhire' }));
   return { requests: rows, newHires: hires };
 }
@@ -192,7 +220,7 @@ async function submitRequest(env, me, fd) {
   const { values, missing } = buildValues(rc, fields);
   const group = rc.groups.find(g => /incoming/i.test(g.title));
   const itemId = await createItem(env, rb, group ? group.id : null, f.projectName, values);
-  const notes = ['Submitted through the Manager Portal by ' + escHtml(me.row.name) + ' (' + escHtml(me.email) + ')'];
+  const notes = ['Submitted through the Manager Portal by ' + escHtml(byName(me)) + ' (' + escHtml(me.assistant ? me.assistant.email : me.email) + ')'];
   if (forPeople.length > 1) notes.push('For: ' + escHtml(forPeople.map(p => p.name + (p.email ? ' (' + p.email + ')' : '')).join(', ')));
   missing.forEach(t => notes.push(escHtml(t) + ': ' + escHtml(typeof fields[t] === 'object' ? JSON.stringify(fields[t]) : fields[t])));
   await addUpdate(env, itemId, notes.join('<br>'));
@@ -212,11 +240,11 @@ async function answerProof(env, me, b) {
   const rc = await columns(env, rb);
   const st = rc.byTitle['status'];
   if (b.action === 'approve') {
-    await addUpdate(env, b.id, '✅ Proof approved by ' + escHtml(me.row.name) + ' in the Manager Portal.' + (b.note ? '<br>' + escHtml(b.note) : ''));
+    await addUpdate(env, b.id, '✅ Proof approved by ' + escHtml(byName(me)) + ' in the Manager Portal.' + (b.note ? '<br>' + escHtml(b.note) : ''));
     if (st && env.APPROVED_STATUS) await gql(env, 'mutation($b:ID!,$i:ID!,$c:String!,$v:JSON!){change_column_value(board_id:$b,item_id:$i,column_id:$c,value:$v){id}}', { b: rb, i: String(b.id), c: st.id, v: JSON.stringify(colValue(st, env.APPROVED_STATUS)) });
   } else {
     if (!b.note) throw new Error('Tell us what to change.');
-    await addUpdate(env, b.id, '✏️ Changes requested by ' + escHtml(me.row.name) + ' in the Manager Portal:<br>' + escHtml(b.note));
+    await addUpdate(env, b.id, '✏️ Changes requested by ' + escHtml(byName(me)) + ' in the Manager Portal:<br>' + escHtml(b.note));
     if (st) await gql(env, 'mutation($b:ID!,$i:ID!,$c:String!,$v:JSON!){change_column_value(board_id:$b,item_id:$i,column_id:$c,value:$v){id}}', { b: rb, i: String(b.id), c: st.id, v: JSON.stringify(colValue(st, env.CHANGES_STATUS || 'Working On It')) });
   }
   return { ok: true };
@@ -248,7 +276,7 @@ async function submitNewHire(env, me, fd) {
   };
   const { values, missing } = buildValues(ec, fields);
   const itemId = await createItem(env, eb, null, name, values);
-  const notes = ['New hire submitted through the Manager Portal by ' + escHtml(me.row.name) + ' (' + escHtml(me.email) + ')'];
+  const notes = ['New hire submitted through the Manager Portal by ' + escHtml(byName(me)) + ' (' + escHtml(me.assistant ? me.assistant.email : me.email) + ')'];
   if (show.headshot === false) notes.push('No headshot on their materials.');
   missing.forEach(t => notes.push(escHtml(t) + ': ' + escHtml(fields[t])));
   await addUpdate(env, itemId, notes.join('<br>'));
@@ -269,7 +297,7 @@ async function submitNewHire(env, me, fd) {
     const areas = (f.areas || []).filter(a => a && typeof a === 'object' && /^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i.test(String(a.link || '')));
     if (b) for (const a of areas) {
       const v = {}; v[b.col.Employee] = name; v[b.col.Area] = String(a.area || '').trim(); v[b.col['Location Label']] = String(a.label || a.area || '').trim();
-      v[b.col['Altos Link']] = String(a.link).trim(); v[b.col.Active] = 'Yes'; v[b.col.Notes] = 'Added with the new hire by ' + me.row.name + ' in the Manager Portal ' + today();
+      v[b.col['Altos Link']] = String(a.link).trim(); v[b.col.Active] = 'Yes'; v[b.col.Notes] = 'Added with the new hire by ' + byName(me) + ' in the Manager Portal ' + today();
       await createItem(env, b.id, null, name + ' - ' + v[b.col.Area], v);
     }
     forget('areas');
@@ -277,7 +305,7 @@ async function submitNewHire(env, me, fd) {
   // their monthly newsletter / event calendar area(s) go onto the Newsletter Template board
   try {
     const nl = (f.nlAreas || []).filter(a => a && a.header);
-    for (const a of nl) await nlAdd(env, { name, email: f.email, phone: f.phone, title: f.title, company: f.company, address1: f.address1, address2: f.address2 }, a.header, a.location, me.row.name);
+    for (const a of nl) await nlAdd(env, { name, email: f.email, phone: f.phone, title: f.title, company: f.company, address1: f.address1, address2: f.address2 }, a.header, a.location, byName(me));
   } catch (e) { await addUpdate(env, itemId, 'Newsletter areas could not be added to the Newsletter Template board: ' + escHtml(String(e.message || e))).catch(() => {}); }
   // optional: invite them to monday.com as a guest and add them to the Employee Marketing Portal board
   let invite = null;
@@ -393,7 +421,7 @@ async function changeArea(env, me, body) {
   forget('areas');
   const areas = await allAreas(env, b);
   const mine = areas.filter(a => nk(a.employee) === nk(who.name));
-  const when = today(), by = me.row.name;
+  const when = today(), by = byName(me);
   const setVals = async (itemId, vals) => {
     const v = {}; Object.keys(vals).forEach(t => v[b.col[t]] = String(vals[t]));
     await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: String(itemId), v: JSON.stringify(v) });
@@ -602,7 +630,7 @@ async function welcomeMark(env, me, body) {
   const eb = await bid(env, 'employees');
   let ec = await columns(env, eb), col = ec.byTitle[nk('Welcome Posted')];
   if (!col) { await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:text){id}}', { b: String(eb), t: 'Welcome Posted' }); forget('cols:' + eb); ec = await columns(env, eb); col = ec.byTitle[nk('Welcome Posted')]; }
-  const v = body.posted ? 'Posted ' + today() + ' by ' + me.row.name : '';
+  const v = body.posted ? 'Posted ' + today() + ' by ' + byName(me) : '';
   const vals = {}; vals[col.id] = v;
   await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: String(eb), i: String(who.id), v: JSON.stringify(vals) });
   who.welcomePosted = v;
@@ -728,7 +756,7 @@ async function changeNl(env, me, body) {
   if (!b) throw new Error('The Newsletter Template board isn’t available. Ask West Marketing.');
   forget('nl');
   if (body.op === 'add') {
-    const r = await nlAdd(env, who, body.header, body.location, me.row.name);
+    const r = await nlAdd(env, who, body.header, body.location, byName(me));
     if (r.already) return { error: who.name + ' already has that area.' };
   } else if (body.op === 'remove' || body.op === 'active') {
     const row = (await nlAll(env, b)).find(r => r.id === String(body.id) && nk(r.name) === nk(who.name));
@@ -743,7 +771,7 @@ async function changeNl(env, me, body) {
       }
       const v = {}; v[col.id] = col.type === 'checkbox' ? (body.active ? { checked: 'true' } : null) : colValue(col, body.active ? 'Yes' : 'No');
       await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v,create_labels_if_missing:true){id}}', { b: String(b.id), i: row.id, v: JSON.stringify(v) });
-      await addUpdate(env, row.id, (body.active ? 'Turned back on' : 'Turned off') + ' by ' + escHtml(me.row.name) + ' in the Manager Portal ' + today()).catch(() => {});
+      await addUpdate(env, row.id, (body.active ? 'Turned back on' : 'Turned off') + ' by ' + escHtml(byName(me)) + ' in the Manager Portal ' + today()).catch(() => {});
     }
   } else return { error: 'Unknown change.' };
   forget('nl');
@@ -875,7 +903,7 @@ async function onbList(env, me) {
   const b = await onbBoard(env), rows = await onbRows(env, b);
   const mine = r => r.managerEmail === me.email;
   const contacts = (rows.find(r => r.kind === 'contacts' && mine(r)) || {}).data || {};
-  const hires = rows.filter(r => r.kind !== 'contacts' && (me.row.admin || mine(r))).sort((a, b) => String(b.start || '').localeCompare(String(a.start || '')));
+  const hires = rows.filter(r => r.kind !== 'contacts' && inScope(me, r.managerEmail)).sort((a, b) => String(b.start || '').localeCompare(String(a.start || '')));
   return { hires, contacts };
 }
 async function onbChange(env, me, body) {
@@ -885,7 +913,7 @@ async function onbChange(env, me, body) {
     const d = await gql(env, 'query($i:[ID!]){items(ids:$i){id board{id} column_values(ids:["' + C['Manager Email'] + '"]){text}}}', { i: [String(id)] });
     const it = d.items[0];
     if (!it || String(it.board.id) !== b.id) return false;
-    return me.row.admin || (it.column_values[0].text || '').toLowerCase() === me.email;
+    return inScope(me, it.column_values[0].text);
   };
   const set = (id, vals) => gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: String(id), v: JSON.stringify(vals) });
   if (body.op === 'create') {

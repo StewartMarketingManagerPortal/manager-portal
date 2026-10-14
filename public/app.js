@@ -72,8 +72,8 @@ function nav() {
   const open = S.reqs ? S.reqs.requests.filter(x => !/complete/i.test(x.status)).length : 0;
   const link = (h, label, extra) => '<a class="nav ' + ((r === h || (h === 'onboard' && (r === 'submitted' || r === 'newhire')) || (h === 'request' && r === 'sent')) ? 'on' : '') + '" href="#' + h + '">' + label + (extra ? '<span class="count">' + extra + '</span>' : '') + '</a>';
   return '<img class="logo" src="logo-light.png" alt="Stewart Title"><div class="tag">MANAGER PORTAL</div>' +
-    link('home', 'Home') + link('team', 'My Team') + link('onboard', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
-    '<div class="me"><span class="av">' + esc(initials(me.name)) + '</span><span class="who"><b>' + esc(me.name) + '</b><span>' + (me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
+    link('home', 'Home') + link('team', 'My Team') + link('onboard', 'Onboarding') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
+    '<div class="me"><span class="av">' + esc(initials(me.assistant || me.name)) + '</span><span class="who"><b>' + esc(me.assistant || me.name) + '</b><span>' + (me.assistant ? 'Assistant to ' + esc(me.name) : me.admin ? 'Portal admin' : me.president ? 'President' : 'Manager') + '</span></span>' +
     '<a href="/cdn-cgi/access/logout">Sign out</a></div>' +
     (!isInstalled() ? '<button class="install" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Install on this computer</button>' : '');
 }
@@ -131,7 +131,7 @@ function coreValue() {
   return CORE_VALUES[CV_NOW];
 }
 PAGES.home = () => {
-  const now = new Date(), hr = now.getHours(), first = S.me.name.split(' ')[0];
+  const now = new Date(), hr = now.getHours(), first = (S.me.assistant || S.me.name).split(' ')[0];
   const reqs = S.reqs ? S.reqs.requests : [];
   const proofs = reqs.filter(r => /proof/i.test(r.status)).length, open = reqs.filter(r => !/complete/i.test(r.status)).length;
   const cv = coreValue();
@@ -472,7 +472,7 @@ PAGES.sent = () => {
 
 // ----- my requests -----
 PAGES.mine = () => {
-  let h = '<div class="head"><div><h1>My requests</h1><div class="sub">' + (S.me.admin ? 'Every request on the Marketing Request board.' : 'Everything you’ve asked for, live from the marketing team’s board.') + '</div></div><a class="btn primary" href="#request">New request</a></div>';
+  let h = '<div class="head"><div><h1>My requests</h1><div class="sub">' + (S.me.admin ? 'Every request on the Marketing Request board.' : S.me.president ? 'Everything you and your managers have asked for, live from the marketing team’s board.' : 'Everything you’ve asked for, live from the marketing team’s board.') + '</div></div><a class="btn primary" href="#request">New request</a></div>';
   if (!S.reqs) return h + '<div class="card"><div class="empty"><span class="spin dark"></span></div></div>';
   const proofs = S.reqs.requests.filter(r => /proof/i.test(r.status));
   proofs.forEach(r => {
@@ -488,8 +488,8 @@ PAGES.mine = () => {
   const f = S.filter || 'open';
   const list = S.reqs.requests.filter(r => f === 'all' || (f === 'done' ? /complete/i.test(r.status) : !/complete/i.test(r.status)));
   h += '<section class="card"><div class="row" style="justify-content:space-between"><h2>All requests</h2><div class="seg">' + [['open', 'Open'], ['done', 'Complete'], ['all', 'All']].map(([k, l]) => '<button type="button" aria-pressed="' + (f === k) + '" data-act="filter" data-f="' + k + '">' + l + '</button>').join('') + '</div></div>' +
-    (list.length ? '<div style="overflow-x:auto"><table class="list"><thead><tr><th>REF #</th><th>PROJECT</th><th>TYPE</th><th>FOR</th>' + (S.me.admin ? '<th>MANAGER</th>' : '') + '<th>STATUS</th><th style="text-align:right">DUE</th></tr></thead><tbody>' +
-      list.map(r => '<tr><td class="muted">' + esc(r.id) + '</td><td style="font-weight:600">' + esc(r.project) + '</td><td class="muted2">' + esc(r.type) + '</td><td class="muted2">' + esc(r.forWho) + '</td>' + (S.me.admin ? '<td class="muted2">' + esc(r.manager) + '</td>' : '') +
+    (list.length ? '<div style="overflow-x:auto"><table class="list"><thead><tr><th>REF #</th><th>PROJECT</th><th>TYPE</th><th>FOR</th>' + (S.me.admin || S.me.president ? '<th>MANAGER</th>' : '') + '<th>STATUS</th><th style="text-align:right">DUE</th></tr></thead><tbody>' +
+      list.map(r => '<tr><td class="muted">' + esc(r.id) + '</td><td style="font-weight:600">' + esc(r.project) + '</td><td class="muted2">' + esc(r.type) + '</td><td class="muted2">' + esc(r.forWho) + '</td>' + (S.me.admin || S.me.president ? '<td class="muted2">' + esc(r.manager) + '</td>' : '') +
         '<td><span class="status ' + statusClass(r.status) + '">' + esc(/proof/i.test(r.status) ? 'Proof ready' : r.status) + '</span></td><td class="muted2" style="text-align:right">' + esc(nice(r.due)) + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="empty">Nothing here.</div>') + '</section>';
   if (S.reqs.newHires.length) h += '<section class="card"><h2>New hires you submitted</h2>' + S.reqs.newHires.map(p => '<div class="rq"><span class="av">' + esc(initials(p.name)) + '</span><span class="grow"><b>' + esc(p.name) + '</b><span class="meta">New hire package</span></span><span class="status ' + (/done/i.test(p.setup) ? 'done' : 'work') + '">' + (/done/i.test(p.setup) ? 'Ready on the portal' : 'Being designed') + '</span></div>').join('') + '</section>';
   return h;
@@ -707,7 +707,7 @@ ACT['tm-viewas'] = async el => {
 PAGES.team = () => {
   const t = tmState();
   if (!t.data && !t.err) loadTeam();
-  let h = '<div class="head"><div><h1>My Team</h1><div class="sub">' + (S.me.admin ? 'Everyone on the Main Employee Sheet' : 'The people linked to you on the Manager Contacts board') + '. Contact details are view only - ask West Marketing to change them. You can set birthdays and Stewart start dates.</div></div></div>';
+  let h = '<div class="head"><div><h1>My Team</h1><div class="sub">' + (S.me.admin ? 'Everyone on the Main Employee Sheet' : S.me.president ? 'Everyone on ' + esc(S.me.managers.join(', ').replace(/, ([^,]*)$/, ' and $1') || 'your managers') + '’s teams' + (S.me.missing.length ? ' (not found on the Manager Contacts board: ' + esc(S.me.missing.join(', ')) + ')' : '') : 'The people linked to you on the Manager Contacts board') + '. Contact details are view only - ask West Marketing to change them. You can set birthdays and Stewart start dates.</div></div></div>';
   if (t.err) return h + '<div class="card"><div class="err">' + esc(t.err) + '</div><button class="btn" data-act="tm-reload">Try again</button></div>';
   const team = t.data ? t.data.team : [];
   if (!t.sel && team[0]) t.sel = team[0].name;
@@ -779,7 +779,7 @@ function tmContent(p, kind, title, sub) {
   }).join('') + '</div></section>';
   return h;
 }
-// ---------- newsletter area form (My Team and New Hires) ----------
+// ---------- newsletter area form (My Team and Onboarding) ----------
 const nlName = h => String(h || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\s+Events$/i, '');
 function nlfState(scope) {
   if (scope === 'tm') { const t = tmState(); return t.nlf || (t.nlf = { header: '', other: '', loc: '' }); }
@@ -858,7 +858,7 @@ ACT['tm-remove'] = el => {
 ACT['tm-active'] = el => { const t = tmState(); tmChange({ op: 'active', employee: t.sel, id: el.dataset.id, active: el.checked }, el.checked ? 'Turned on' : 'Turned off - skipped until you turn it back on'); };
 
 
-// ---------- adding a market update area (My Team and New Hires use the same form) ----------
+// ---------- adding a market update area (My Team and Onboarding use the same form) ----------
 const ALTOS_SEARCH = 'https://altos.re/r/6a599414-73b5-40dd-a2ca-ab394e0b984d';
 const ALTOS_RX = /^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i;
 const arState = scope => scope === 'tm' ? tmState() : (S.nh.ar || (S.nh.ar = { link: '', area: '', label: '', check: null, checking: false }));
