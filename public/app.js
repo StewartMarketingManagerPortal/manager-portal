@@ -72,7 +72,7 @@ function nav() {
   const open = S.reqs ? S.reqs.requests.filter(x => !/complete/i.test(x.status)).length : 0;
   const link = (h, label, extra) => '<a class="nav ' + ((r === h || (h === 'onboard' && (r === 'submitted' || r === 'newhire')) || (h === 'request' && r === 'sent')) ? 'on' : '') + '" href="#' + h + '">' + label + (extra ? '<span class="count">' + extra + '</span>' : '') + '</a>';
   return '<img class="logo" src="logo-light.png" alt="Stewart Title"><div class="tag">MANAGER PORTAL</div>' +
-    link('home', 'Home') + link('team', 'My Team') + link('onboard', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
+    link('home', 'Home') + link('team', 'My Team') + link('onboard', 'Onboarding') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
     '<div class="me"><span class="av">' + esc(initials(me.assistant || me.name)) + '</span><span class="who"><b>' + esc(me.assistant || me.name) + '</b><span>' + (me.assistant ? 'Assistant to ' + esc(me.name) : me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
     '<a href="/cdn-cgi/access/logout">Sign out</a></div>' +
     (!isInstalled() ? '<button class="install" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Install on this computer</button>' : '');
@@ -779,7 +779,7 @@ function tmContent(p, kind, title, sub) {
   }).join('') + '</div></section>';
   return h;
 }
-// ---------- newsletter area form (My Team and New Hires) ----------
+// ---------- newsletter area form (My Team and Onboarding) ----------
 const nlName = h => String(h || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\s+Events$/i, '');
 function nlfState(scope) {
   if (scope === 'tm') { const t = tmState(); return t.nlf || (t.nlf = { header: '', other: '', loc: '' }); }
@@ -858,7 +858,7 @@ ACT['tm-remove'] = el => {
 ACT['tm-active'] = el => { const t = tmState(); tmChange({ op: 'active', employee: t.sel, id: el.dataset.id, active: el.checked }, el.checked ? 'Turned on' : 'Turned off - skipped until you turn it back on'); };
 
 
-// ---------- adding a market update area (My Team and New Hires use the same form) ----------
+// ---------- adding a market update area (My Team and Onboarding use the same form) ----------
 const ALTOS_SEARCH = 'https://altos.re/r/6a599414-73b5-40dd-a2ca-ab394e0b984d';
 const ALTOS_RX = /^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i;
 const arState = scope => scope === 'tm' ? tmState() : (S.nh.ar || (S.nh.ar = { link: '', area: '', label: '', check: null, checking: false }));

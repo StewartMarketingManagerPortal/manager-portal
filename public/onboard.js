@@ -85,7 +85,7 @@ function onbHash() { const p = (location.hash || '').slice(1).split('/'); return
 const OB_CK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const OB_MAIL = c => '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="' + (c || 'currentColor') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
 PAGES.onboard = () => {
-  if (!OB.list) { onbLoad(); return '<div class="head"><div><h1>New Hires</h1></div></div><div class="card"><span class="spin dark"></span></div>'; }
+  if (!OB.list) { onbLoad(); return '<div class="head"><div><h1>Onboarding</h1></div></div><div class="card"><span class="spin dark"></span></div>'; }
   const { id, step } = onbHash(), h = id ? onbHire(id) : null;
   if (!h) return onbPick();
   const s = ONB_STEPS.find(x => x.k === step) || onbFirstOpen(h);
@@ -148,7 +148,7 @@ function onbPick() {
   const taken = new Set(list.map(x => nk(x.name)));
   const recent = ((S.reqs && S.reqs.newHires) || []).filter(x => !taken.has(nk(x.name))).slice(0, 6);
   const titles = (S.me.titles || []).map(t => '<option ' + (t === f.title ? 'selected' : '') + '>' + esc(t) + '</option>').join('');
-  let out = '<div class="head"><div><h1>New Hires</h1><div class="sub">Everything for a new hire’s first 90 days, in order: supplies, marketing, day 1, tools and check-ins.</div></div></div>';
+  let out = '<div class="head"><div><h1>Onboarding</h1><div class="sub">Everything for a new hire’s first 90 days, in order: supplies, marketing, day 1, tools and check-ins.</div></div></div>';
   if (OB.err) out += '<div class="banner bad">' + esc(OB.err) + '</div>';
   out += '<div class="ob-pick">';
   if (list.length) {
