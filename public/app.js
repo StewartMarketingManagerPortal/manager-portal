@@ -73,7 +73,7 @@ function nav() {
   const link = (h, label, extra) => '<a class="nav ' + ((r === h || (h === 'onboard' && (r === 'submitted' || r === 'newhire')) || (h === 'request' && r === 'sent')) ? 'on' : '') + '" href="#' + h + '">' + label + (extra ? '<span class="count">' + extra + '</span>' : '') + '</a>';
   return '<img class="logo" src="logo-light.png" alt="Stewart Title"><div class="tag">MANAGER PORTAL</div>' +
     link('home', 'Home') + link('team', 'My Team') + link('onboard', 'New Hires') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
-    '<div class="me"><span class="av">' + esc(initials(me.name)) + '</span><span class="who"><b>' + esc(me.name) + '</b><span>' + (me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
+    '<div class="me"><span class="av">' + esc(initials(me.assistant || me.name)) + '</span><span class="who"><b>' + esc(me.assistant || me.name) + '</b><span>' + (me.assistant ? 'Assistant to ' + esc(me.name) : me.admin ? 'Portal admin' : 'Manager') + '</span></span>' +
     '<a href="/cdn-cgi/access/logout">Sign out</a></div>' +
     (!isInstalled() ? '<button class="install" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Install on this computer</button>' : '');
 }
@@ -131,7 +131,7 @@ function coreValue() {
   return CORE_VALUES[CV_NOW];
 }
 PAGES.home = () => {
-  const now = new Date(), hr = now.getHours(), first = S.me.name.split(' ')[0];
+  const now = new Date(), hr = now.getHours(), first = (S.me.assistant || S.me.name).split(' ')[0];
   const reqs = S.reqs ? S.reqs.requests : [];
   const proofs = reqs.filter(r => /proof/i.test(r.status)).length, open = reqs.filter(r => !/complete/i.test(r.status)).length;
   const cv = coreValue();
