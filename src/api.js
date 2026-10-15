@@ -982,7 +982,7 @@ async function viewAsLink(env, me, id) {
 // first time it's used. The samples themselves are drawn on screen from samples.js - nothing is saved but this row.
 // "Not hiring" deletes the row (and its photo); rows older than REC_DAYS are deleted the next time anyone opens Recruiting.
 const REC_NAME = 'Manager Portal Recruiting', REC_DAYS = 60;
-const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Added', 'text'], ['Photo', 'file']];
+const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Company', 'text'], ['Added', 'text'], ['Photo', 'file']];
 async function recBoard(env) {
   return cached('recBoard', 3600e3, async () => {
     let id = env.RECRUITING_BOARD_ID ? String(env.RECRUITING_BOARD_ID) : '';
@@ -1002,7 +1002,7 @@ async function recRows(env, b) {
   return items.map(it => {
     const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
     return { id: String(it.id), name: it.name.trim(), manager: v[b.col.Manager], managerEmail: (v[b.col['Manager Email']] || '').toLowerCase(), title: v[b.col.Title], area: v[b.col.Area],
-      phone: v[b.col.Phone], email: v[b.col.Email], added: v[b.col.Added] || String(it.created_at || '').slice(0, 10), photo: !!v[b.col.Photo] };
+      phone: v[b.col.Phone], email: v[b.col.Email], company: v[b.col.Company], added: v[b.col.Added] || String(it.created_at || '').slice(0, 10), photo: !!v[b.col.Photo] };
   });
 }
 async function recList(env, me) {
@@ -1030,7 +1030,7 @@ async function recAdd(env, me, fd) {
   if (!name) return { error: 'Add the candidate’s first and last name.' };
   const b = await recBoard(env), C = b.col, vals = {};
   vals[C.Manager] = me.row.name; vals[C['Manager Email']] = me.email; vals[C.Title] = txt(f.title); vals[C.Area] = txt(f.area);
-  vals[C.Phone] = txt(f.phone, 40); vals[C.Email] = txt(f.email, 120); vals[C.Added] = today();
+  vals[C.Phone] = txt(f.phone, 40); vals[C.Email] = txt(f.email, 120); vals[C.Company] = txt(f.company); vals[C.Added] = today();
   const id = String(await createItem(env, b.id, null, name, vals));
   const photo = fd.get('photo');
   if (photo && typeof photo !== 'string' && photo.size) {

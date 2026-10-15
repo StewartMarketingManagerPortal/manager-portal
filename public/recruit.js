@@ -3,7 +3,7 @@
 'use strict';
 
 const RC = { list: null, days: 60, err: '', form: null, busy: false, confirm: null, opening: false };
-const rcFresh = () => ({ firstName: '', lastName: '', title: 'Sales Representative', area: '', phone: '', email: '', file: null, cut: '', cutting: false, cutFail: false });
+const rcFresh = () => ({ firstName: '', lastName: '', company: '', title: 'Sales Representative', area: '', phone: '', email: '', file: null, cut: '', cutting: false, cutFail: false });
 async function rcLoad() {
   try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.err = ''; }
   catch (e) { RC.list = []; RC.err = e.message; }
@@ -30,7 +30,7 @@ PAGES.recruit = () => {
     const left = RC.days - rcAge(c);
     const av = c.photo ? '<span class="av tm-ph rc-av"><img data-center="1" src="' + esc(rcPhoto(c)) + '" alt=""></span>' : '<span class="av">' + esc(initials(c.name)) + '</span>';
     return '<div class="rq">' + av + '<div class="grow"><b>' + esc(c.name) + '</b><span class="meta">' +
-      esc(['Added ' + nice(c.added), many && c.manager ? 'for ' + c.manager : '', left <= 20 ? 'removed automatically in ' + plural(Math.max(0, left), 'day') : ''].filter(Boolean).join(' · ')) +
+      esc([c.company ? 'From ' + c.company : '', 'Added ' + nice(c.added), many && c.manager ? 'for ' + c.manager : '', left <= 20 ? 'removed automatically in ' + plural(Math.max(0, left), 'day') : ''].filter(Boolean).join(' · ')) +
       '</span></div><a class="btn small" href="#recruit/' + esc(c.id) + '">Show samples</a></div>';
   }).join('') + '</div>' : '<div class="empty">No candidates yet. Add one to make their samples.</div>';
   h += '<div class="small muted row" style="gap:8px;flex-wrap:nowrap;align-items:flex-start">' + RC_LOCK + '<span>Only you' + (S.me.president ? ', your managers' : ', your assistant and your president') + ' see these. Candidates left for ' + RC.days + ' days are removed automatically.</span></div></section>';
@@ -50,6 +50,7 @@ function rcForm(f) {
     '<div class="grid2 grow">' +
     '<label class="field">First name<input type="text" data-rc="firstName" value="' + esc(f.firstName) + '" autocomplete="off"></label>' +
     '<label class="field">Last name<input type="text" data-rc="lastName" value="' + esc(f.lastName) + '" autocomplete="off"></label>' +
+    '<label class="field" style="grid-column:1/-1">Current company<input type="text" data-rc="company" value="' + esc(f.company) + '" placeholder="Where they work now" autocomplete="off"></label>' +
     '<label class="field">Title they’d have<select data-rc="title">' + titles.map(t => '<option' + (t === f.title ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></label>' +
     '<label class="field">Area<input type="text" data-rc="area" value="' + esc(f.area) + '" placeholder="e.g. East Bay"></label>' +
     '<label class="field">Their phone<input type="tel" data-rc="phone" value="' + esc(f.phone) + '"></label>' +
@@ -96,7 +97,7 @@ ACT['rc-add'] = async el => {
   RC.busy = true; render();
   try {
     const fd = new FormData();
-    fd.append('fields', JSON.stringify({ firstName: f.firstName, lastName: f.lastName, title: f.title, area: f.area, phone: f.phone, email: f.email }));
+    fd.append('fields', JSON.stringify({ firstName: f.firstName, lastName: f.lastName, company: f.company, title: f.title, area: f.area, phone: f.phone, email: f.email }));
     if (f.cut) fd.append('photo', new File([await (await fetch(f.cut)).blob()], 'photo.png', { type: 'image/png' }));
     else if (f.file) fd.append('photo', f.file, f.file.name || 'photo.jpg');
     const r = await api('recruiting', { method: 'POST', body: fd });
