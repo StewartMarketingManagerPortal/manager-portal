@@ -17,6 +17,7 @@ const RC_LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" str
 
 PAGES.recruit = () => {
   if (!RC.list) { rcLoad(); return '<div class="head"><div><h1>Recruiting</h1></div></div><div class="card"><span class="spin dark"></span></div>'; }
+  after.push(() => Samples.fix(document.getElementById('main')));
   const id = rcHash();
   if (id) { const c = rcGet(id); return c ? rcSample(c) : '<div class="head"><div><a href="#recruit" style="font-weight:600;font-size:14px">‹ Recruiting</a><h1>Not found</h1><div class="sub">This candidate was removed.</div></div></div>'; }
   if (!RC.form) RC.form = rcFresh();
@@ -27,7 +28,7 @@ PAGES.recruit = () => {
   const many = S.me.admin || S.me.president;
   h += RC.list.length ? '<div>' + RC.list.map(c => {
     const left = RC.days - rcAge(c);
-    const av = c.photo ? '<span class="av tm-ph"><img src="' + esc(rcPhoto(c)) + '" alt="" loading="lazy"></span>' : '<span class="av">' + esc(initials(c.name)) + '</span>';
+    const av = c.photo ? '<span class="av tm-ph"><img data-center="1" src="' + esc(rcPhoto(c)) + '" alt=""></span>' : '<span class="av">' + esc(initials(c.name)) + '</span>';
     return '<div class="rq">' + av + '<div class="grow"><b>' + esc(c.name) + '</b><span class="meta">' +
       esc(['Added ' + nice(c.added), many && c.manager ? 'for ' + c.manager : '', left <= 20 ? 'removed automatically in ' + plural(Math.max(0, left), 'day') : ''].filter(Boolean).join(' · ')) +
       '</span></div><a class="btn small" href="#recruit/' + esc(c.id) + '">Show samples</a></div>';
@@ -130,7 +131,7 @@ document.addEventListener('change', async e => {
   if (!/^image\//.test(file.type)) { toast('Pick a photo (JPG or PNG).'); return; }
   if (f.cut) URL.revokeObjectURL(f.cut); if (f.raw) URL.revokeObjectURL(f.raw);
   Object.assign(f, { file, raw: URL.createObjectURL(file), cut: '', cutting: true, cutFail: false }); render();
-  try { const u = await Cutout.make(file); if (RC.form === f && f.file === file) f.cut = u; }
+  try { const u = await Samples.center(await Cutout.make(file)); if (RC.form === f && f.file === file) f.cut = u; }
   catch (x) { f.cutFail = true; }
   f.cutting = false; if (route() === 'recruit') render();
 });

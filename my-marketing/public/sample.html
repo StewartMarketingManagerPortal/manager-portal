@@ -56,6 +56,7 @@
       '<header class="shead"><div class="wrap"><div class="row1"><img src="logo-light.png" alt="Stewart Title"><nav aria-label="Sample sections"><b>Home</b><span>Branding</span><span>Flyers</span><span>Title Tips</span><span>Social</span><span>Newsletter</span><span>Videos</span></nav></div>' +
       '<div class="date">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div><h1>Hi ' + first + '</h1><p>Here’s what would be waiting for you, ready to share.</p></div></header>' +
       '<main class="sbody"><div class="wrap">' + Samples.html(c, c.photo ? '/api/sample/photo' : '', 'logo-dark.png') + '</div></main>';
+    Samples.fix(app);
     document.getElementById('exit').onclick = exit;
     tick(j.exp); timer = setInterval(() => tick(j.exp), 1000);
   }).catch(() => gone('This sample view couldn’t load.'));
