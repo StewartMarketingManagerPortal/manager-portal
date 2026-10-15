@@ -104,9 +104,29 @@ async function installApp() {
   document.body.appendChild(box);
   box.querySelector('button').focus();
 }
+// phones: a slim top bar (logo + account menu) and a tab bar along the bottom, in place of the sidebar
+const TAB_ICONS = {
+  home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+  team: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.2c3 .2 5 2.3 5 5.3"/>',
+  recruit: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c0-3.6 2.9-6 6.5-6 1.4 0 2.7.4 3.7 1"/><path d="M18 14v6M15 17h6"/>',
+  onboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 12l2 2 4-4"/><path d="M9 17h6"/>',
+  mine: '<path d="M4 13l2.5-8h11L20 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 13h4.5l1 2h5l1-2H20"/>',
+};
+function phoneBars() {
+  const r = route(), me = S.me, who = me.assistant || me.name;
+  const open = S.reqs ? S.reqs.requests.filter(x => !/complete/i.test(x.status)).length : 0;
+  const on = h => r === h || (h === 'onboard' && (r === 'submitted' || r === 'newhire')) || (h === 'mine' && (r === 'request' || r === 'sent'));
+  const tab = (h, label, extra) => '<a class="mtab' + (on(h) ? ' on' : '') + '" href="#' + h + '"' + (on(h) ? ' aria-current="page"' : '') + '><span class="mtab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + TAB_ICONS[h] + '</svg>' + (extra ? '<span class="count">' + extra + '</span>' : '') + '</span>' + label + '</a>';
+  return '<header class="mtop"><img class="logo" src="logo-light.png" alt="Stewart Title"><span class="tag">MANAGER PORTAL</span>' +
+    '<details class="macct"><summary aria-label="Account"><span class="av">' + esc(initials(who)) + '</span></summary><div class="macct-menu">' +
+    '<div class="macct-who"><b>' + esc(who) + '</b><span>' + (me.assistant ? 'Assistant to ' + esc(me.name) : me.admin ? 'Portal admin' : me.president ? 'President' : 'Manager') + '</span></div>' +
+    (!isInstalled() ? '<button type="button" onclick="installApp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Add to Home Screen</button>' : '') +
+    '<a href="/cdn-cgi/access/logout"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sign out</a></div></details></header>' +
+    '<nav class="mtabs" aria-label="Main">' + tab('home', 'Home') + tab('team', 'Team') + tab('recruit', 'Recruiting') + tab('onboard', 'Onboarding') + tab('mine', 'Requests', open || '') + '</nav>';
+}
 function render() {
   if (!S.me) return;
-  $('#app').innerHTML = '<nav class="side" aria-label="Main">' + nav() + '</nav><main id="main">' + (PAGES[route()] || PAGES.home)() + '</main>';
+  $('#app').innerHTML = phoneBars() + '<nav class="side" aria-label="Main">' + nav() + '</nav><main id="main">' + (PAGES[route()] || PAGES.home)() + '</main>';
   after.forEach(f => f()); after = [];
 }
 let after = [];
@@ -489,8 +509,8 @@ PAGES.mine = () => {
   const list = S.reqs.requests.filter(r => f === 'all' || (f === 'done' ? /complete/i.test(r.status) : !/complete/i.test(r.status)));
   h += '<section class="card"><div class="row" style="justify-content:space-between"><h2>All requests</h2><div class="seg">' + [['open', 'Open'], ['done', 'Complete'], ['all', 'All']].map(([k, l]) => '<button type="button" aria-pressed="' + (f === k) + '" data-act="filter" data-f="' + k + '">' + l + '</button>').join('') + '</div></div>' +
     (list.length ? '<div style="overflow-x:auto"><table class="list"><thead><tr><th>REF #</th><th>PROJECT</th><th>TYPE</th><th>FOR</th>' + (S.me.admin || S.me.president ? '<th>MANAGER</th>' : '') + '<th>STATUS</th><th style="text-align:right">DUE</th></tr></thead><tbody>' +
-      list.map(r => '<tr><td class="muted">' + esc(r.id) + '</td><td style="font-weight:600">' + esc(r.project) + '</td><td class="muted2">' + esc(r.type) + '</td><td class="muted2">' + esc(r.forWho) + '</td>' + (S.me.admin || S.me.president ? '<td class="muted2">' + esc(r.manager) + '</td>' : '') +
-        '<td><span class="status ' + statusClass(r.status) + '">' + esc(/proof/i.test(r.status) ? 'Proof ready' : r.status) + '</span></td><td class="muted2" style="text-align:right">' + esc(nice(r.due)) + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="empty">Nothing here.</div>') + '</section>';
+      list.map(r => '<tr><td class="muted c-ref">' + esc(r.id) + '</td><td class="c-proj" style="font-weight:600">' + esc(r.project) + '</td><td class="muted2 c-type">' + esc(r.type) + '</td><td class="muted2 c-for">' + esc(r.forWho) + '</td>' + (S.me.admin || S.me.president ? '<td class="muted2 c-mgr">' + esc(r.manager) + '</td>' : '') +
+        '<td class="c-st"><span class="status ' + statusClass(r.status) + '">' + esc(/proof/i.test(r.status) ? 'Proof ready' : r.status) + '</span></td><td class="muted2 c-due" style="text-align:right">' + esc(nice(r.due)) + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="empty">Nothing here.</div>') + '</section>';
   if (S.reqs.newHires.length) h += '<section class="card"><h2>New hires you submitted</h2>' + S.reqs.newHires.map(p => '<div class="rq"><span class="av">' + esc(initials(p.name)) + '</span><span class="grow"><b>' + esc(p.name) + '</b><span class="meta">New hire package</span></span><span class="status ' + (/done/i.test(p.setup) ? 'done' : 'work') + '">' + (/done/i.test(p.setup) ? 'Ready on the portal' : 'Being designed') + '</span></div>').join('') + '</section>';
   return h;
 };
