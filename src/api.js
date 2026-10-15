@@ -53,6 +53,11 @@ export async function onRequest(ctx) {
     if (route === 'welcome' && m === 'GET') return json(await welcomeList(env, me));
     if (route === 'welcome' && m === 'POST') { const r = await welcomeMark(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route.startsWith('welcome/') && m === 'GET') return await welcomeImg(env, me, route.split('/')[1]);
+    if (route === 'recruiting' && m === 'GET') return json(await recList(env, me));
+    if (route === 'recruiting' && m === 'POST') { const r = await recAdd(env, me, await request.formData()); return json(r, r.error ? 400 : 200); }
+    if (route === 'recruiting/remove' && m === 'POST') { const r = await recRemove(env, me, (await request.json()).id); return json(r, r.error ? 403 : 200); }
+    if (route.startsWith('recphoto/') && m === 'GET') return await recPhoto(env, me, route.split('/')[1]);
+    if (route.startsWith('recview/') && m === 'GET') { const r = await recViewLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
   } catch (e) {
@@ -970,6 +975,101 @@ async function viewAsLink(env, me, id) {
   const body = b64u(enc.encode(JSON.stringify({ uid, name: who.name, by: me.email, exp: Date.now() + 5 * 60e3 })));
   const sig = b64u(await crypto.subtle.sign('HMAC', key, enc.encode(body)));
   return { url: (env.MY_MARKETING_URL || MY_MARKETING) + '/api/viewas?t=' + body + '.' + sig };
+}
+
+// ---------- Recruiting: sample marketing for a candidate ----------
+// One row per candidate on the private "Manager Portal Recruiting" board (Stewart Marketing West workspace), made by the portal the
+// first time it's used. The samples themselves are drawn on screen from samples.js - nothing is saved but this row.
+// "Not hiring" deletes the row (and its photo); rows older than REC_DAYS are deleted the next time anyone opens Recruiting.
+const REC_NAME = 'Manager Portal Recruiting', REC_DAYS = 60;
+const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Added', 'text'], ['Photo', 'file']];
+async function recBoard(env) {
+  return cached('recBoard', 3600e3, async () => {
+    let id = env.RECRUITING_BOARD_ID ? String(env.RECRUITING_BOARD_ID) : '';
+    if (!id) { try { id = await boardId(env, REC_NAME, 'RECRUITING_BOARD_ID'); } catch (e) { forget('board:' + REC_NAME); } }
+    if (!id) id = String((await gql(env, 'mutation($n:String!,$w:ID,$d:String){create_board(board_name:$n,board_kind:private,workspace_id:$w,description:$d){id}}',
+      { n: REC_NAME, w: await wsWest(env), d: 'Candidates managers are recruiting, from the Manager Portal. Used only to show a candidate sample marketing. Kept private; rows are deleted when a manager clicks Not hiring, or after ' + REC_DAYS + ' days.' })).create_board.id);
+    let cols = await columns(env, id);
+    const missing = REC_COLS.filter(([t]) => !cols.byTitle[nk(t)]);
+    for (const [t, type] of missing) await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:' + type + '){id}}', { b: id, t });
+    if (missing.length) { forget('cols:' + id); cols = await columns(env, id); }
+    const col = {}; REC_COLS.forEach(([t]) => col[t] = cols.byTitle[nk(t)].id);
+    return { id, col };
+  });
+}
+async function recRows(env, b) {
+  const items = await allItems(env, b.id, Object.values(b.col));
+  return items.map(it => {
+    const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+    return { id: String(it.id), name: it.name.trim(), manager: v[b.col.Manager], managerEmail: (v[b.col['Manager Email']] || '').toLowerCase(), title: v[b.col.Title], area: v[b.col.Area],
+      phone: v[b.col.Phone], email: v[b.col.Email], added: v[b.col.Added] || String(it.created_at || '').slice(0, 10), photo: !!v[b.col.Photo] };
+  });
+}
+async function recList(env, me) {
+  const b = await recBoard(env);
+  let rows = await recRows(env, b);
+  const old = rows.filter(r => r.added && r.added < addDays(today(), -REC_DAYS));
+  for (const r of old) { try { await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: r.id }); } catch (e) {} }
+  if (old.length) rows = rows.filter(r => !old.includes(r));
+  return { days: REC_DAYS, candidates: rows.filter(r => inScope(me, r.managerEmail)).sort((a, b) => String(b.added).localeCompare(String(a.added))) };
+}
+async function recOwn(env, me, id) {
+  id = String(id || '').replace(/\D/g, '');
+  if (!id) return null;
+  const b = await recBoard(env);
+  const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){id name board{id} column_values(ids:$c){id text}}}', { i: [id], c: Object.values(b.col) });
+  const it = (d.items || [])[0];
+  if (!it || String(it.board.id) !== b.id) return null;
+  const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+  return inScope(me, v[b.col['Manager Email']]) ? { id, name: it.name.trim(), b } : null;
+}
+async function recAdd(env, me, fd) {
+  const f = JSON.parse(fd.get('fields') || '{}');
+  const txt = (x, n) => String(x == null ? '' : x).trim().slice(0, n || 120);
+  const name = [txt(f.firstName, 60), txt(f.lastName, 60)].filter(Boolean).join(' ');
+  if (!name) return { error: 'Add the candidate’s first and last name.' };
+  const b = await recBoard(env), C = b.col, vals = {};
+  vals[C.Manager] = me.row.name; vals[C['Manager Email']] = me.email; vals[C.Title] = txt(f.title); vals[C.Area] = txt(f.area);
+  vals[C.Phone] = txt(f.phone, 40); vals[C.Email] = txt(f.email, 120); vals[C.Added] = today();
+  const id = String(await createItem(env, b.id, null, name, vals));
+  const photo = fd.get('photo');
+  if (photo && typeof photo !== 'string' && photo.size) {
+    if (photo.size > 8e6) return { ok: true, id, warn: 'The photo was too big to save (8 MB at most).' };
+    try { await addFile(env, id, C.Photo, photo); } catch (e) { return { ok: true, id, warn: 'The photo didn’t save: ' + String(e.message || e) }; }
+  }
+  await addUpdate(env, id, 'Added in the Manager Portal by ' + escHtml(byName(me)) + '. Used only for sample marketing; delete this row to remove the candidate.').catch(() => {});
+  return { ok: true, id };
+}
+async function recRemove(env, me, id) {
+  const r = await recOwn(env, me, id);
+  if (!r) return { error: 'That candidate isn’t yours to remove.' };
+  await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: r.id });
+  return { ok: true };
+}
+async function recPhotoUrl(env, b, id) {
+  const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){assets(column_ids:$c){id public_url created_at}}}', { i: [String(id)], c: [b.col.Photo] });
+  const a = (((d.items || [])[0] || {}).assets || []).slice().sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
+  return a ? a.public_url : '';
+}
+async function recPhoto(env, me, id) {
+  const r = await recOwn(env, me, id);
+  if (!r) return fail('Not found', 404);
+  const url = await recPhotoUrl(env, r.b, r.id);
+  if (!url) return fail('No photo', 404);
+  const f = await fetch(url);
+  if (!f.ok) return fail('Could not load the photo', 502);
+  return new Response(f.body, { headers: { 'Content-Type': f.headers.get('Content-Type') || 'image/png', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
+}
+// a 5-minute pass for My Marketing's sample view, signed with its own purpose so it can't be used as a "view as" pass
+async function recViewLink(env, me, id) {
+  const r = await recOwn(env, me, id);
+  if (!r) return { error: 'That candidate isn’t yours.' };
+  const enc = new TextEncoder(), b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const raw = await crypto.subtle.digest('SHA-256', enc.encode((env.VIEW_AS_SECRET || '') + '|recruit-sample|' + env.MONDAY_TOKEN));
+  const key = await crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const body = b64u(enc.encode(JSON.stringify({ cid: r.id, by: byName(me), exp: Date.now() + 5 * 60e3 })));
+  const sig = b64u(await crypto.subtle.sign('HMAC', key, enc.encode(body)));
+  return { url: (env.MY_MARKETING_URL || MY_MARKETING) + '/api/sample?t=' + body + '.' + sig };
 }
 
 // ---------- Marketing Tools phone remote (portal admins only) ----------
