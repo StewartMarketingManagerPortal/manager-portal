@@ -1042,7 +1042,7 @@ async function recFwdItems(env, ids) {
     const assets = []; const seen = {};
     [it.assets || []].concat(ups.map(u => u.assets || [])).flat().forEach(a => { if (a && a.public_url && !seen[a.id]) { seen[a.id] = 1; assets.push(a); } });
     const by = it.creator || (ups[0] && ups[0].creator) || {};
-    return { id: String(it.id), subject: String(it.name || '').replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, '').trim(), text: unEnt(ups[0] ? ups[0].text_body : '').trim(),
+    return { id: String(it.id), subject: String(it.name || '').replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, '').trim(), text: unEnt(ups[0] ? ups[0].text_body : '').replace(/^\s*signatureImage\s*$/gim, '').trim(),
       sender: String(by.email || '').toLowerCase(), senderName: by.name || '', at: it.created_at || '', assets };
   });
 }
@@ -1077,7 +1077,8 @@ function recFwdDetails(f, c, from) {
 async function recFwdFile(env, b, f, c, by) {
   const from = recFwdFrom(f), saved = [];
   for (const a of f.assets.slice(0, 10)) {
-    if ((a.file_size || 0) > 25e6 || (/^image\d{3}\.(png|jpe?g|gif)$/i.test(a.name) && (a.file_size || 0) < 20e3)) continue;
+    // skip signature pictures Outlook adds (image001.png, signatureImage, Outlook-abc.png)
+    if ((a.file_size || 0) > 25e6 || (/^(image\d+|signatureimage[\w-]*|outlook-[\w-]+)(\.(png|jpe?g|gif))?$/i.test(a.name) && (a.file_size || 0) < 80e3)) continue;
     try { const r = await fetch(a.public_url); if (!r.ok) continue; await addFile(env, c.id, b.col.Files, new File([await r.arrayBuffer()], a.name, { type: r.headers.get('Content-Type') || 'application/octet-stream' })); saved.push(String(a.name).slice(0, 150)); } catch (e) {}
   }
   const det = recFwdDetails(f, c, from), keys = { phone: 'Phone', email: 'Email', workPhone: 'Work Phone', workEmail: 'Work Email' }, vals = {};
