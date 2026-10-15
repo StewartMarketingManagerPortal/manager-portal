@@ -627,3 +627,27 @@ select:disabled { opacity: .6; cursor: default; }
   table.list .c-for::before { content: 'For '; }
   table.list .c-mgr::before { content: 'Manager: '; }
 }
+/* Recruiting · email drop on the Details card */
+[data-rc-drop] { position: relative; }
+[data-rc-drop].hot { outline: 2.5px dashed var(--brand); outline-offset: -6px; background: var(--brand-tint); }
+[data-rc-drop].hot .cd-dz { border-color: var(--brand); color: var(--brand); background: #fff; }
+.cd-dz { border: 2px dashed var(--border); border-radius: 12px; padding: 11px 14px; display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.cd-dz svg { flex: none; width: 22px; height: 22px; } .cd-dz b { color: var(--ink); font-size: 13.5px; display: block; }
+.cd-pick { color: var(--brand); font-weight: 700; cursor: pointer; text-decoration: underline; }
+.cd-em { border: 1px solid #E4E1DC; border-radius: 12px; background: #fff; box-shadow: 0 10px 30px rgba(26,26,28,.10); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.cd-em .h { display: flex; gap: 10px; align-items: flex-start; }
+.cd-em .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--brand-tint); color: var(--brand); display: flex; align-items: center; justify-content: center; flex: none; }
+.cd-em .s { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; } .cd-em .f { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.cd-em .q { font-size: 13px; line-height: 1.5; background: var(--paper); border-radius: 9px; padding: 10px 12px; color: var(--muted2); max-height: 90px; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cd-em label { display: flex; gap: 9px; align-items: flex-start; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.cd-em label small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.cd-em input[type=checkbox] { accent-color: var(--brand); width: 16px; height: 16px; margin-top: 1px; flex: none; }
+.cd-em .att { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px; background: #fff; }
+.cd-files { display: flex; flex-direction: column; gap: 6px; }
+.cd-file { display: flex; align-items: center; gap: 10px; font-size: 13.5px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; color: var(--ink); text-decoration: none; }
+.cd-file:hover { border-color: var(--brand); }
+.cd-file b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .cd-file small { display: block; color: var(--muted); font-size: 12px; }
+.cd-file .t { width: 32px; height: 32px; border-radius: 7px; background: #FBEAEE; color: var(--brand); font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; }
+.cd-mail { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; font-weight: 700; color: var(--brand); background: var(--brand-tint); border-radius: 999px; padding: 3px 10px; margin-bottom: 3px; white-space: normal; }
+.cd-mail svg { width: 13px; height: 13px; flex: none; }
+.cd-from { font-size: 12px; color: var(--muted); margin-bottom: 4px; white-space: normal; }
