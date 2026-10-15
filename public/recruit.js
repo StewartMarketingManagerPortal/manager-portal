@@ -5,7 +5,7 @@
 const RC = { list: null, days: 60, err: '', form: null, busy: false, confirm: null, opening: false, log: {}, note: {}, edit: null, meet: null, mail: null, called: null, saving: false };
 const rcFresh = () => ({ firstName: '', lastName: '', company: '', title: 'Sales Representative', area: '', phone: '', email: '', file: null, cut: '', cutting: false, cutFail: false });
 async function rcLoad() {
-  try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.board = r.board || null; RC.err = ''; }
+  try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.board = r.board || null; RC.fwd = r.forwarded || []; RC.err = ''; if (r.moved) toast(r.moved === 1 ? 'A forwarded email was saved to its candidate.' : r.moved + ' forwarded emails were saved to their candidates.', 6000); }
   catch (e) { RC.list = []; RC.err = e.message; }
   if (route() === 'recruit') render();
 }
@@ -25,6 +25,7 @@ PAGES.recruit = () => {
     '<a class="btn primary" href="#" data-act="rc-focus">+ Add a candidate</a></div>';
   if (RC.err) h += '<div class="err">' + esc(RC.err) + '</div>';
   h += '<div class="cols"><section class="card col2"><h2>Your candidates</h2>';
+  h += rcFwdBox();
   const many = S.me.admin || S.me.president;
   h += RC.list.length ? '<div>' + RC.list.map(c => {
     const left = RC.days - rcAge(c);
@@ -37,6 +38,16 @@ PAGES.recruit = () => {
   h += rcForm(RC.form) + '</div>';
   return h;
 };
+// emails forwarded to the board's address that couldn't be matched to a candidate
+function rcFwdBox() {
+  const list = RC.fwd || [];
+  if (!list.length) return '';
+  const opts = '<option value="">Pick a candidate…</option>' + (RC.list || []).map(c => '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>').join('');
+  return '<div class="rc-fwd"><div class="cd-sec">Forwarded emails to file</div><div class="small muted">These came in from your phone, but the portal couldn’t tell which candidate they’re about.</div>' +
+    list.map(f => '<div class="rc-fwd-r"><div class="grow" style="min-width:0"><b>' + esc(f.subject || '(no subject)') + '</b><span class="meta">' + esc([f.from, f.at ? rcDay(f.at) : '', f.files ? plural(f.files, 'attachment') : ''].filter(Boolean).join(' · ')) + '</span></div>' +
+      '<select data-rc-fwd="' + esc(f.id) + '">' + opts + '</select><button type="button" class="btn small primary" data-act="rc-fwd-save" data-f="' + esc(f.id) + '"' + (RC.busy ? ' disabled' : '') + '>Save</button>' +
+      '<button type="button" class="cd-x" data-act="rc-fwd-del" data-f="' + esc(f.id) + '" title="Delete this email" aria-label="Delete this email">×</button></div>').join('') + '</div>';
+}
 function rcBoardLine() {
   if (!RC.board) return '';
   const bd = RC.board;
@@ -337,6 +348,19 @@ ACT['rc-mail-save'] = async el => {
     if (r.entry) log.notes.unshift(r.entry); log.files = r.files || log.files;
     RC.mailIn = null; render(); toast(r.warn ? 'Saved, but ' + r.warn + '.' : 'Saved to ' + (c ? c.name.split(' ')[0] : 'the candidate') + '.', r.warn ? 8000 : 3000);
   } catch (e) { x.busy = false; render(); toast(e.message, 7000); }
+};
+ACT['rc-fwd-save'] = async el => {
+  const sel = document.querySelector('[data-rc-fwd="' + el.dataset.f + '"]'), cid = sel && sel.value;
+  if (!cid) { toast('Pick the candidate first.'); return; }
+  RC.busy = true; render();
+  try { await api('recruiting/forwarded', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fid: el.dataset.f, cid }) });
+    RC.fwd = RC.fwd.filter(f => f.id !== el.dataset.f); delete RC.log[cid]; RC.busy = false; render(); toast('Saved to ' + ((rcGet(cid) || {}).name || 'the candidate') + '.'); }
+  catch (e) { RC.busy = false; render(); toast(e.message, 7000); }
+};
+ACT['rc-fwd-del'] = async el => {
+  if (!confirm('Delete this forwarded email?')) return;
+  try { await api('recruiting/forwarded', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fid: el.dataset.f, remove: true }) }); RC.fwd = RC.fwd.filter(f => f.id !== el.dataset.f); render(); }
+  catch (e) { toast(e.message, 7000); }
 };
 ACT['rc-ask'] = el => { RC.confirm = el.dataset.id; render(); };
 ACT['rc-keep'] = () => { RC.confirm = null; render(); };

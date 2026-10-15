@@ -60,6 +60,7 @@ export async function onRequest(ctx) {
     if (route.startsWith('recruiting/log/') && m === 'GET') { const r = await recLog(env, me, route.split('/')[2]); return json(r, r.error ? 403 : 200); }
     if (route === 'recruiting/log' && m === 'POST') { const r = await recLogAdd(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'recruiting/log/remove' && m === 'POST') { const r = await recLogRemove(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'recruiting/forwarded' && m === 'POST') { const r = await recForwardAct(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'recruiting/email' && m === 'POST') { const r = await recEmail(env, me, await request.formData()); return json(r, r.error ? 400 : 200); }
     if (route.startsWith('recfile/') && m === 'GET') return await recFile(env, me, route.split('/')[1], route.split('/')[2]);
     if (route.startsWith('recphoto/') && m === 'GET') return await recPhoto(env, me, route.split('/')[1]);
@@ -1021,9 +1022,94 @@ async function recList(env, me) {
   const old = rows.filter(r => r.added && r.added < addDays(today(), -REC_DAYS));
   for (const r of old) { try { await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: r.id }); } catch (e) {} }
   if (old.length) rows = rows.filter(r => !old.includes(r));
-  const out = { days: REC_DAYS, candidates: rows.filter(r => inScope(me, r.managerEmail)).sort((a, b) => String(b.added).localeCompare(String(a.added))) };
+  let mine = rows.filter(r => r.managerEmail && inScope(me, r.managerEmail));
+  // rows with no manager are emails forwarded to the board's email address: file the ones this person sent
+  const fwd = await recForwards(env, me, b, rows.filter(r => !r.managerEmail), mine).catch(e => ({ moved: 0, waiting: [], err: String(e.message || e) }));
+  if (fwd.moved) mine = (await recRows(env, b)).filter(r => r.managerEmail && inScope(me, r.managerEmail));
+  const out = { days: REC_DAYS, candidates: mine.sort((a, b) => String(b.added).localeCompare(String(a.added))), forwarded: fwd.waiting, moved: fwd.moved };
   if (me.row.admin) out.board = await recBoardInfo(env, b.id).catch(() => null);
   return out;
+}
+// ---------- Emails forwarded from a phone to the Recruiting board's email address ----------
+// monday makes a row named after the subject, with the email as its first update and the attachments on it.
+// The portal moves each one onto the candidate it's about (matched by their email address, or their name), then deletes the row.
+const recSenders = me => [me.email, me.assistant && me.assistant.email].filter(Boolean).map(x => String(x).toLowerCase());
+async function recFwdItems(env, ids) {
+  if (!ids.length) return [];
+  const d = await gql(env, 'query($i:[ID!]){items(ids:$i){id name created_at creator{name email} assets{id name public_url file_size} updates(limit:10){id text_body created_at creator{name email} assets{id name public_url file_size}}}}', { i: ids.map(String) });
+  return (d.items || []).map(it => {
+    const ups = (it.updates || []).slice().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    const assets = []; const seen = {};
+    [it.assets || []].concat(ups.map(u => u.assets || [])).flat().forEach(a => { if (a && a.public_url && !seen[a.id]) { seen[a.id] = 1; assets.push(a); } });
+    const by = it.creator || (ups[0] && ups[0].creator) || {};
+    return { id: String(it.id), subject: String(it.name || '').replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, '').trim(), text: unEnt(ups[0] ? ups[0].text_body : '').trim(),
+      sender: String(by.email || '').toLowerCase(), senderName: by.name || '', at: it.created_at || '', assets };
+  });
+}
+// the original sender, from the forwarded header ("From: Name <email>"); otherwise the person who forwarded it
+function recFwdFrom(f) {
+  const m = f.text.match(/From:\s*"?([^"<\n]*?)"?\s*<?([^\s<>@]+@[^\s<>]+?)>?\s*(\n|$|Sent:|Date:)/i);
+  const date = (f.text.match(/(?:Sent|Date):\s*([^\n]+)/i) || [])[1];
+  const d = date ? new Date(date.replace(/ at /i, ' ')) : null;
+  return { name: m ? m[1].trim() : f.senderName, email: m ? m[2].toLowerCase() : f.sender, date: d && !isNaN(d) ? d.toISOString() : f.at };
+}
+function recFwdMatch(f, cands) {
+  const hay = (f.subject + '\n' + f.text).toLowerCase();
+  const byMail = cands.filter(c => [c.email, c.workEmail].some(e => e && hay.includes(String(e).toLowerCase())));
+  if (byMail.length === 1) return byMail[0];
+  if (byMail.length > 1) return null;
+  const byName = cands.filter(c => c.name && hay.includes(c.name.toLowerCase()));
+  return byName.length === 1 ? byName[0] : null;
+}
+// new contact details from the email: their address, and the last phone number near the end of their part of it
+function recFwdDetails(f, c, from) {
+  const det = {}, ours = e => /@stewart\.com$/i.test(e || '') || e === f.sender;
+  const known = [c.email, c.workEmail].map(x => String(x || '').toLowerCase());
+  if (from.email && !ours(from.email) && !known.includes(from.email)) det[c.email ? 'workEmail' : 'email'] = from.email;
+  if (from.email && !ours(from.email)) {
+    const digits = s => String(s || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+    const body = f.text.slice(Math.max(0, f.text.search(/From:\s/i)));
+    const p = (body.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g) || []).map(digits).filter(x => x.length === 10 && x !== digits(c.phone) && x !== digits(c.workPhone))[0];
+    if (p) det[c.phone ? 'workPhone' : 'phone'] = '(' + p.slice(0, 3) + ') ' + p.slice(3, 6) + '-' + p.slice(6);
+  }
+  return det;
+}
+async function recFwdFile(env, b, f, c, by) {
+  const from = recFwdFrom(f), saved = [];
+  for (const a of f.assets.slice(0, 10)) {
+    if ((a.file_size || 0) > 25e6 || (/^image\d{3}\.(png|jpe?g|gif)$/i.test(a.name) && (a.file_size || 0) < 20e3)) continue;
+    try { const r = await fetch(a.public_url); if (!r.ok) continue; await addFile(env, c.id, b.col.Files, new File([await r.arrayBuffer()], a.name, { type: r.headers.get('Content-Type') || 'application/octet-stream' })); saved.push(String(a.name).slice(0, 150)); } catch (e) {}
+  }
+  const det = recFwdDetails(f, c, from), keys = { phone: 'Phone', email: 'Email', workPhone: 'Work Phone', workEmail: 'Work Email' }, vals = {};
+  for (const k in det) vals[b.col[keys[k]]] = det[k];
+  if (Object.keys(vals).length) await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: c.id, v: JSON.stringify(vals) });
+  const entry = { text: f.text.slice(0, 3000), by, at: new Date().toISOString(), mail: { subject: f.subject.slice(0, 200), from: [from.name, from.email ? '<' + from.email + '>' : ''].filter(Boolean).join(' ').slice(0, 160), date: from.date }, files: saved, via: 'forward' };
+  await gql(env, 'mutation($i:ID!,$b:String!){create_update(item_id:$i,body:$b){id}}', { i: c.id, b: escHtml('[portal:note] ' + JSON.stringify(entry)) });
+  await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: f.id });
+}
+async function recForwards(env, me, b, fwdRows, mine) {
+  const senders = recSenders(me), out = { moved: 0, waiting: [] };
+  if (!fwdRows.length) return out;
+  const items = (await recFwdItems(env, fwdRows.map(r => r.id))).filter(f => senders.includes(f.sender));
+  for (const f of items) {
+    const c = recFwdMatch(f, mine);
+    if (c) { await recFwdFile(env, b, f, c, byName(me)); out.moved++; }
+    else { const from = recFwdFrom(f); out.waiting.push({ id: f.id, subject: f.subject, from: [from.name, from.email].filter(Boolean).join(' · '), at: f.at, files: f.assets.length }); }
+  }
+  return out;
+}
+// file a forwarded email the portal couldn't match, or delete it
+async function recForwardAct(env, me, body) {
+  const b = await recBoard(env), fid = String((body && body.fid) || '').replace(/\D/g, '');
+  const f = (await recFwdItems(env, fid ? [fid] : []))[0];
+  if (!f || !recSenders(me).includes(f.sender)) return { error: 'That forwarded email is already gone.' };
+  const rows = await recRows(env, b);
+  if (rows.find(r => r.id === f.id && r.managerEmail)) return { error: 'That isn’t a forwarded email.' };
+  if (body.remove) { await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: f.id }); return { ok: true }; }
+  const c = rows.find(r => r.id === String(body.cid) && r.managerEmail && inScope(me, r.managerEmail));
+  if (!c) return { error: 'Pick one of your candidates.' };
+  await recFwdFile(env, b, f, c, byName(me));
+  return { ok: true };
 }
 // for Portal Admins: where the board is, so it can be found in monday.com
 async function recBoardInfo(env, id) {
