@@ -17,6 +17,7 @@ const RC_LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" str
 
 PAGES.recruit = () => {
   if (!RC.list) { rcLoad(); return '<div class="head"><div><h1>Recruiting</h1></div></div><div class="card"><span class="spin dark"></span></div>'; }
+  after.push(() => Samples.fix(document.getElementById('main')));
   const id = rcHash();
   if (id) { const c = rcGet(id); return c ? rcSample(c) : '<div class="head"><div><a href="#recruit" style="font-weight:600;font-size:14px">‹ Recruiting</a><h1>Not found</h1><div class="sub">This candidate was removed.</div></div></div>'; }
   if (!RC.form) RC.form = rcFresh();
@@ -27,7 +28,8 @@ PAGES.recruit = () => {
   const many = S.me.admin || S.me.president;
   h += RC.list.length ? '<div>' + RC.list.map(c => {
     const left = RC.days - rcAge(c);
-    return '<div class="rq"><span class="av">' + esc(initials(c.name)) + '</span><div class="grow"><b>' + esc(c.name) + '</b><span class="meta">' +
+    const av = c.photo ? '<span class="av tm-ph"><img data-center="1" src="' + esc(rcPhoto(c)) + '" alt=""></span>' : '<span class="av">' + esc(initials(c.name)) + '</span>';
+    return '<div class="rq">' + av + '<div class="grow"><b>' + esc(c.name) + '</b><span class="meta">' +
       esc(['Added ' + nice(c.added), many && c.manager ? 'for ' + c.manager : '', left <= 20 ? 'removed automatically in ' + plural(Math.max(0, left), 'day') : ''].filter(Boolean).join(' · ')) +
       '</span></div><a class="btn small" href="#recruit/' + esc(c.id) + '">Show samples</a></div>';
   }).join('') + '</div>' : '<div class="empty">No candidates yet. Add one to make their samples.</div>';
@@ -49,13 +51,25 @@ function rcForm(f) {
     '<label class="field">First name<input type="text" data-rc="firstName" value="' + esc(f.firstName) + '" autocomplete="off"></label>' +
     '<label class="field">Last name<input type="text" data-rc="lastName" value="' + esc(f.lastName) + '" autocomplete="off"></label>' +
     '<label class="field">Title they’d have<select data-rc="title">' + titles.map(t => '<option' + (t === f.title ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></label>' +
-    '<label class="field">Area <span class="hint">e.g. East Bay</span><input type="text" data-rc="area" value="' + esc(f.area) + '"></label>' +
+    '<label class="field">Area<input type="text" data-rc="area" value="' + esc(f.area) + '" placeholder="e.g. East Bay"></label>' +
     '<label class="field">Their phone<input type="tel" data-rc="phone" value="' + esc(f.phone) + '"></label>' +
     '<label class="field">Their email<input type="email" data-rc="email" value="' + esc(f.email) + '"></label>' +
     '</div></div>' +
+    '<div class="preview rc-prev"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock" id="rc-cblock">' + rcBlock(f) + '</div>' +
+    '<div class="small" style="color:var(--border)">How their details will look on the sample flyers and email signature.</div></div>' +
     '<div class="rc-note"><b>Samples use their own phone and email.</b> Stewart email and phone are never on them, and there are no downloads, so they can’t be used as real marketing.</div>' +
     '<div class="row" style="justify-content:space-between"><a href="#" data-act="rc-clear" style="font-weight:600">Clear</a><button type="button" class="btn primary" data-act="rc-add"' + (RC.busy || f.cutting ? ' disabled' : '') + '>' +
     (RC.busy ? '<span class="spin"></span> Saving…' : 'Make ' + esc(f.firstName.trim() ? f.firstName.trim() + '’s' : 'their') + ' samples ›') + '</button></div></section>';
+}
+// the same contact block the new hire form previews, with the candidate's own phone and email
+function rcBlock(f) {
+  const name = (f.firstName + ' ' + f.lastName).trim();
+  const pic = f.cut ? '<img src="' + esc(f.cut) + '" alt="">' : f.raw ? '<img class="raw" src="' + esc(f.raw) + '" alt="">' : '<span class="cblk-ini">' + esc(initials(name) || '?') + '</span>';
+  return '<div class="cblk mini"><div class="cblk-pic">' + pic + '</div><div class="cblk-txt">' +
+    '<div class="cblk-name">' + esc(name || 'Their name') + '</div><div class="cblk-title">' + esc(f.title || 'Title') + (f.area.trim() ? ' · ' + esc(f.area.trim()) : '') + '</div><div class="cblk-lines">' +
+    (f.phone.trim() ? '<div>' + CB_ICONS.phone + '<span>' + esc(fmtPhone(f.phone)) + '</span></div>' : '') +
+    (f.email.trim() ? '<div>' + CB_ICONS.mail + '<span>' + esc(f.email.trim()) + '</span></div>' : '') + '</div>' +
+    '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></div>';
 }
 function rcSample(c) {
   const first = c.name.split(' ')[0];
@@ -108,16 +122,16 @@ ACT['rc-remove'] = async el => {
   catch (e) { RC.busy = false; render(); toast(e.message, 7000); }
 };
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && RC.confirm) { RC.confirm = null; render(); } });
-document.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.rc; if (k && RC.form) { RC.form[k] = e.target.value; if (k === 'firstName') { const b = document.querySelector('[data-act=rc-add]'); if (b && !RC.busy) b.textContent = 'Make ' + (RC.form.firstName.trim() ? RC.form.firstName.trim() + '’s' : 'their') + ' samples ›'; } } });
+document.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.rc; if (k && RC.form) { RC.form[k] = e.target.value; const pv = document.getElementById('rc-cblock'); if (pv) pv.innerHTML = rcBlock(RC.form); if (k === 'firstName') { const b = document.querySelector('[data-act=rc-add]'); if (b && !RC.busy) b.textContent = 'Make ' + (RC.form.firstName.trim() ? RC.form.firstName.trim() + '’s' : 'their') + ' samples ›'; } } });
 document.addEventListener('change', async e => {
   const t = e.target;
-  if (t.dataset && t.dataset.rc && t.tagName === 'SELECT' && RC.form) { RC.form[t.dataset.rc] = t.value; return; }
+  if (t.dataset && t.dataset.rc && t.tagName === 'SELECT' && RC.form) { RC.form[t.dataset.rc] = t.value; const pv = document.getElementById('rc-cblock'); if (pv) pv.innerHTML = rcBlock(RC.form); return; }
   if (!(t.dataset && t.dataset.rcPhoto) || !t.files || !t.files[0] || !RC.form) return;
   const f = RC.form, file = t.files[0];
   if (!/^image\//.test(file.type)) { toast('Pick a photo (JPG or PNG).'); return; }
   if (f.cut) URL.revokeObjectURL(f.cut); if (f.raw) URL.revokeObjectURL(f.raw);
   Object.assign(f, { file, raw: URL.createObjectURL(file), cut: '', cutting: true, cutFail: false }); render();
-  try { const u = await Cutout.make(file); if (RC.form === f && f.file === file) f.cut = u; }
+  try { const u = await Samples.center(await Cutout.make(file)); if (RC.form === f && f.file === file) f.cut = u; }
   catch (x) { f.cutFail = true; }
   f.cutting = false; if (route() === 'recruit') render();
 });

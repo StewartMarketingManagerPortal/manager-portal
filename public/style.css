@@ -505,3 +505,5 @@ select:disabled { opacity: .6; cursor: default; }
 .rc-mm-hi h3 { margin: 0; font-size: 30px; font-weight: 800; } .rc-mm-hi p { margin: 4px 0 0; font-size: 14px; color: var(--navtext); }
 .rc-mm-body { padding: 4px 24px 24px; }
 @media (max-width: 640px) { .rc-mm-body { padding: 4px 14px 18px; } .rc-mm-hd, .rc-mm-hi { padding-left: 16px; padding-right: 16px; } }
+.rc-prev .cblock { max-width: 480px; }
+.rc-prev .cblk-pic img:not(.raw) { height: 90%; }

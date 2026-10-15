@@ -49,7 +49,7 @@ const Samples = (() => {
     const name = c.name || 'Candidate', first = esc(name.split(' ')[0]), N = esc(name);
     const title = esc(c.title || 'Sales Representative'), area = esc(c.area || ''), phone = esc(c.phone || ''), email = esc(c.email || '');
     // no photo: a plain silhouette, so the pieces still read as "your photo goes here"
-    const P = photo ? '<img class="sp-ph" src="' + esc(photo) + '" alt="" draggable="false">' : '<svg class="sp-in" viewBox="0 0 100 120" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><circle cx="50" cy="42" r="22" fill="#B9B5AF"/><path d="M8 120c2-30 18-48 42-48s40 18 42 48z" fill="#B9B5AF"/></svg>';
+    const P = photo ? '<img class="sp-ph" data-center="1" src="' + esc(photo) + '" alt="" draggable="false">' : '<svg class="sp-in" viewBox="0 0 100 120" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><circle cx="50" cy="42" r="22" fill="#B9B5AF"/><path d="M8 120c2-30 18-48 42-48s40 18 42 48z" fill="#B9B5AF"/></svg>';
     const L = '<img class="lg" src="' + esc(logo) + '" alt="Stewart Title" draggable="false">';
     const R = '<span class="sp-rib">SAMPLE</span>';
     const reach = [phone, email].filter(Boolean);
@@ -76,5 +76,42 @@ const Samples = (() => {
       piece(flyer(month + ' · SAMPLE AREA', 'Your monthly newsletter', true, email || phone), 'Newsletter · sample events') +
       '</div></section></div>';
   }
-  return { html };
+  // Cutouts are trimmed to the whole person, so a turned body or a clipped shoulder leaves the face off center.
+  // center(url) pads the cutout with clear space so the head sits in the middle; photos with no clear background come back as they are.
+  const centered = {};
+  function center(url) {
+    if (!url) return Promise.resolve(url);
+    return centered[url] || (centered[url] = new Promise(res => {
+      const im = new Image();
+      im.onload = () => {
+        try {
+          const w = im.naturalWidth, h = im.naturalHeight, cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0); const d = cx.getImageData(0, 0, w, h).data;
+          let top = -1, clear = 0;
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const a = d[(y * w + x) * 4 + 3]; if (a < 20) clear++; else if (a > 120 && top < 0) top = y; }
+          if (top < 0 || clear < w * h * 0.05) return res(url);
+          // head = the opaque pixels in the top quarter of the person
+          const band = top + Math.max(4, Math.round((h - top) * 0.25));
+          let sx = 0, n = 0, x0 = w, x1 = 0;
+          for (let y = top; y < band; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 120) { sx += x; n++; }
+          for (let y = top; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+          const hx = sx / n, half = Math.ceil(Math.max(hx - x0, x1 - hx)) + 2;
+          if (Math.abs(hx - (x0 + x1) / 2) < w * 0.02) return res(url);
+          const out = document.createElement('canvas'); out.width = half * 2; out.height = h - top;
+          out.getContext('2d').drawImage(cv, 0, top, w, h - top, Math.round(half - hx), 0, w, h - top);
+          out.toBlob(b => res(b ? URL.createObjectURL(b) : url), 'image/png');
+        } catch (x) { res(url); }
+      };
+      im.onerror = () => res(url);
+      im.src = url;
+    }));
+  }
+  // swaps every img[data-center] under root for its centered version
+  function fix(root) {
+    (root || document).querySelectorAll('img[data-center]').forEach(el => {
+      const u = el.getAttribute('src'); el.removeAttribute('data-center');
+      center(u).then(v => { if (v !== u && el.getAttribute('src') === u) el.src = v; });
+    });
+  }
+  return { html, center, fix };
 })();
