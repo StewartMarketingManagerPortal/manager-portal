@@ -594,7 +594,8 @@ select:disabled { opacity: .6; cursor: default; }
   .mmenu .mm-close, .mmenu[open] .mm-open, .mmenu[open] .mm-dot { display: none; }
   .mmenu[open] .mm-close { display: block; }
   .mm-dot { position: absolute; top: 9px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--brand); border: 2px solid var(--ink); box-sizing: content-box; }
-  .mmenu-list { position: absolute; left: 0; right: 0; top: 100%; background: var(--ink); padding: 6px 12px 16px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 18px 40px rgba(0, 0, 0, .35); max-height: calc(100vh - 64px); overflow-y: auto; }
+  .mmenu-list { position: absolute; right: 0; top: 100%; z-index: 2; width: 75%; height: calc(100vh - 64px); height: calc(100dvh - 64px - env(safe-area-inset-top)); background: var(--ink); padding: 6px 12px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 2px; box-shadow: -12px 0 32px rgba(0, 0, 0, .3); overflow-y: auto; }
+  .mm-scrim { position: absolute; left: 0; right: 0; top: 100%; z-index: 1; height: 100vh; background: rgba(26, 26, 28, .45); }
   .mlink { display: flex; align-items: center; min-height: 48px; padding: 0 14px; border-radius: 10px; color: var(--navtext); text-decoration: none; font-size: 16px; font-weight: 500; }
   .mlink:hover { color: #fff; }
   .mlink.on { background: var(--brand); color: #fff; font-weight: 600; }

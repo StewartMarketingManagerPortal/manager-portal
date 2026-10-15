@@ -116,10 +116,10 @@ function phoneBars() {
     '<nav class="mmenu-list" aria-label="Main">' + link('home', 'Home') + link('team', 'My Team') + link('recruit', 'Recruiting') + link('onboard', 'Onboarding') + link('request', 'Marketing Requests') + link('mine', 'My Requests', open || '') +
     '<div class="mm-me"><span class="av">' + esc(initials(who)) + '</span><span class="who"><b>' + esc(who) + '</b><span>' + (me.assistant ? 'Assistant to ' + esc(me.name) : me.admin ? 'Portal admin' : me.president ? 'President' : 'Manager') + '</span></span><a href="/cdn-cgi/access/logout">Sign out</a></div>' +
     (!isInstalled() ? '<button type="button" class="mm-inst" onclick="installApp()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Add to Home Screen</button>' : '') +
-    '</nav></details></header>';
+    '</nav><span class="mm-scrim" aria-hidden="true"></span></details></header>';
 }
 // tapping outside the open phone menu closes it
-document.addEventListener('click', e => { const m = document.querySelector('details.mmenu[open]'); if (m && !m.contains(e.target)) m.open = false; });
+document.addEventListener('click', e => { const m = document.querySelector('details.mmenu[open]'); if (m && (!m.contains(e.target) || e.target.classList.contains('mm-scrim'))) m.open = false; });
 function render() {
   if (!S.me) return;
   $('#app').innerHTML = phoneBars() + '<nav class="side" aria-label="Main">' + nav() + '</nav><main id="main">' + (PAGES[route()] || PAGES.home)() + '</main>';
