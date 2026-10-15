@@ -28,7 +28,7 @@ PAGES.recruit = () => {
   const many = S.me.admin || S.me.president;
   h += RC.list.length ? '<div>' + RC.list.map(c => {
     const left = RC.days - rcAge(c);
-    const av = c.photo ? '<span class="av tm-ph"><img data-center="1" src="' + esc(rcPhoto(c)) + '" alt=""></span>' : '<span class="av">' + esc(initials(c.name)) + '</span>';
+    const av = c.photo ? '<span class="av tm-ph rc-av"><img data-center="1" src="' + esc(rcPhoto(c)) + '" alt=""></span>' : '<span class="av">' + esc(initials(c.name)) + '</span>';
     return '<div class="rq">' + av + '<div class="grow"><b>' + esc(c.name) + '</b><span class="meta">' +
       esc(['Added ' + nice(c.added), many && c.manager ? 'for ' + c.manager : '', left <= 20 ? 'removed automatically in ' + plural(Math.max(0, left), 'day') : ''].filter(Boolean).join(' · ')) +
       '</span></div><a class="btn small" href="#recruit/' + esc(c.id) + '">Show samples</a></div>';
