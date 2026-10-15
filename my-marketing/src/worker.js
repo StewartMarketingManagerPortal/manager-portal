@@ -28,6 +28,7 @@ async function route(request, env, ctx, url) {
   if (method === 'POST' && path === '/api/logout') return json({ ok: true }, 200, { 'Set-Cookie': cookie('', 0) });
   if (method === 'GET' && path === '/api/viewas') return viewAs(env, url);
   if (method === 'POST' && path === '/api/viewas/exit') return json({ ok: true }, 200, { 'Set-Cookie': viewCookie('', 0) });
+  if (path.startsWith('/api/sample')) return sampleRoute(request, env, url);
 
   const s = await session(request, env);
   if (!s) return fail(401, 'Please sign in.', { signin: true });
@@ -126,6 +127,64 @@ async function viewAs(env, url) {
   if (!p || !p.uid || !(p.exp > Date.now())) return bad('The pass has expired (they last 5 minutes).');
   const token = await sign(env, { uid: String(p.uid), name: String(p.name || ''), email: '', ro: true, by: String(p.by || ''), exp: Date.now() + 2 * 3600e3 });
   return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': viewCookie(token, 7200), 'Cache-Control': 'no-store' } });
+}
+// ---------- recruiting samples: a manager shows a candidate sample marketing (read only) from the Manager Portal ----------
+// The portal signs a 5-minute pass for one row on its private "Manager Portal Recruiting" board. Opening it gives this browser a
+// 30-minute sample view of that candidate only; it is never a sign-in, and nothing is saved here.
+const SAMPLE_MIN = 30;
+function sampleCookie(v, maxAge) {
+  return 'mm_r=' + v + '; Path=/; HttpOnly; Secure; SameSite=Lax' + (maxAge === 0 ? '; Max-Age=0' : '; Max-Age=' + maxAge);
+}
+async function sampleKey(env) {
+  const raw = await crypto.subtle.digest('SHA-256', enc.encode((env.VIEW_AS_SECRET || '') + '|recruit-sample|' + env.MONDAY_TOKEN));
+  return crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+}
+const unb64 = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+async function readSigned(k, t) {
+  const m = String(t || '').match(/^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/);
+  if (!m) return null;
+  if (!(await crypto.subtle.verify('HMAC', k, unb64(m[2]), enc.encode(m[1])))) return null;
+  try { return JSON.parse(new TextDecoder().decode(unb64(m[1]))); } catch (e) { return null; }
+}
+async function sampleRow(env, cid) {
+  const b = await boardByName(env, 'Manager Portal Recruiting');
+  if (!b) return null;
+  const want = ['Title', 'Area', 'Phone', 'Email', 'Photo'].map(t => b.cols[t]).filter(Boolean);
+  const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){id name state board{id} column_values(ids:$c){id text} assets{id public_url created_at}}}', { i: [String(cid)], c: want });
+  const it = (d.items || [])[0];
+  if (!it || String(it.board.id) !== b.id || (it.state && it.state !== 'active')) return null;
+  const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+  const photoId = b.cols.Photo, hasPhoto = photoId && v[photoId];
+  const asset = hasPhoto ? (it.assets || []).slice().sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0] : null;
+  return { name: it.name.trim(), title: v[b.cols.Title] || '', area: v[b.cols.Area] || '', phone: v[b.cols.Phone] || '', email: v[b.cols.Email] || '', photoUrl: asset ? asset.public_url : '' };
+}
+async function sampleRoute(request, env, url) {
+  const path = url.pathname, method = request.method, k = await sampleKey(env);
+  if (method === 'GET' && path === '/api/sample') {
+    const p = await readSigned(k, url.searchParams.get('t'));
+    const bad = msg => new Response('<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:40px;color:#1A1A1C"><h2>Can’t open this sample</h2><p>' + msg + '</p><p>Go back to the Manager Portal and click “Show on My Marketing” again.</p>', { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    if (!p || !p.cid) return bad('The link is missing its pass, or it didn’t check out.');
+    if (!(p.exp > Date.now())) return bad('The pass has expired (they last 5 minutes).');
+    const exp = Date.now() + SAMPLE_MIN * 60e3;
+    const body = b64u(enc.encode(JSON.stringify({ cid: String(p.cid), by: String(p.by || ''), exp })));
+    const tok = body + '.' + b64u(await crypto.subtle.sign('HMAC', k, enc.encode(body)));
+    return new Response(null, { status: 302, headers: { Location: '/sample.html', 'Set-Cookie': sampleCookie(tok, SAMPLE_MIN * 60), 'Cache-Control': 'no-store' } });
+  }
+  if (method === 'POST' && path === '/api/sample/exit') return json({ ok: true }, 200, { 'Set-Cookie': sampleCookie('', 0) });
+  if (method !== 'GET') return fail(403, 'This is a read-only sample.');
+  const ck = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)mm_r=([A-Za-z0-9_.-]+)/);
+  const s = ck ? await readSigned(k, ck[1]) : null;
+  if (!s || !s.cid || !(s.exp > Date.now())) return fail(401, 'This sample view has closed.');
+  const row = await sampleRow(env, s.cid);
+  if (!row) return fail(404, 'This candidate was removed.');
+  if (path === '/api/sample/data') return json({ by: s.by, exp: s.exp, candidate: { name: row.name, title: row.title, area: row.area, phone: row.phone, email: row.email, photo: !!row.photoUrl } });
+  if (path === '/api/sample/photo') {
+    if (!row.photoUrl) return fail(404, 'No photo');
+    const r = await fetch(row.photoUrl);
+    if (!r.ok) return fail(502, 'Could not load the photo');
+    return new Response(r.body, { headers: { 'Content-Type': r.headers.get('Content-Type') || 'image/png', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
+  }
+  return fail(404, 'Not found');
 }
 async function session(request, env) {
   const ck = request.headers.get('Cookie') || '';

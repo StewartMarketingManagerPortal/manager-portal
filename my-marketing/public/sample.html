@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Sample · My Marketing · Stewart Title</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<meta name="theme-color" content="#1A1A1C">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.sbar { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; background: #1A1A1C; color: #D8D6D2; font-size: 13.5px; padding: 9px 16px; border-bottom: 3px solid #A30C33; text-align: center; }
+.sbar b { color: #fff; }
+.sbar button { font: inherit; font-size: 12.5px; font-weight: 700; color: #1A1A1C; background: #fff; border: none; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.shead { background: var(--ink); color: #fff; padding: 24px 20px 28px; }
+.shead .row1 { display: flex; align-items: center; gap: 24px; }
+.shead .row1 img { width: 130px; height: auto; }
+.shead nav { display: flex; gap: 18px; font-size: 14px; color: var(--on-dark); font-weight: 600; flex-wrap: wrap; }
+.shead nav b { color: #fff; border-bottom: 2px solid var(--brand); padding-bottom: 3px; }
+.shead .date { font-size: 12px; color: var(--muted-dark); margin-top: 22px; }
+.shead h1 { margin: 4px 0 0; font-size: 32px; font-weight: 800; }
+.shead p { margin: 6px 0 0; font-size: 14px; color: var(--on-dark); }
+.sbody { padding: 4px 20px 40px; }
+.sgone { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.sgone div { max-width: 420px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+@media (max-width: 760px) { .shead nav { display: none; } }
+@media (min-width: 900px) { .shead, .sbody { padding-left: 28px; padding-right: 28px; } }
+</style>
+</head>
+<body oncontextmenu="return false">
+<div id="app"><div class="boot"><img src="logo-light.png" alt="Stewart Title" width="176"></div></div>
+<script src="samples.js"></script>
+<script>
+'use strict';
+// A candidate's sample marketing, opened from the Manager Portal's Recruiting page. Read only: nothing here can be downloaded or shared.
+(function () {
+  const app = document.getElementById('app');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const gone = msg => { app.innerHTML = '<div class="sgone"><div><img src="logo-dark.png" alt="Stewart Title" width="180"><h2>' + esc(msg) + '</h2><p class="sub">Go back to the Manager Portal and click “Show on My Marketing” again.</p></div></div>'; };
+  let timer = null;
+  function tick(exp) {
+    const el = document.getElementById('left'); if (!el) return;
+    const s = Math.max(0, Math.round((exp - Date.now()) / 1000));
+    el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    if (!s) { clearInterval(timer); exit(); }
+  }
+  function exit() { fetch('/api/sample/exit', { method: 'POST', credentials: 'same-origin' }).catch(() => {}).then(() => { gone('This sample view has closed.'); window.close(); }); }
+  fetch('/api/sample/data', { credentials: 'same-origin' }).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(({ ok, j }) => {
+    if (!ok) return gone(j.error || 'This sample view isn’t available.');
+    const c = j.candidate, now = new Date(), first = esc(String(c.name || '').split(' ')[0]);
+    app.innerHTML = '<div class="sbar"><span><b>Sample</b> for ' + esc(c.name) + ' · read only · opened by ' + esc(j.by || 'their manager') + ' from the Manager Portal · closes in <b id="left"></b></span><button type="button" id="exit">Exit</button></div>' +
+      '<header class="shead"><div class="wrap"><div class="row1"><img src="logo-light.png" alt="Stewart Title"><nav aria-label="Sample sections"><b>Home</b><span>Branding</span><span>Flyers</span><span>Title Tips</span><span>Social</span><span>Newsletter</span><span>Videos</span></nav></div>' +
+      '<div class="date">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div><h1>Hi ' + first + '</h1><p>Here’s what would be waiting for you, ready to share.</p></div></header>' +
+      '<main class="sbody"><div class="wrap">' + Samples.html(c, c.photo ? '/api/sample/photo' : '', 'logo-dark.png') + '</div></main>';
+    document.getElementById('exit').onclick = exit;
+    tick(j.exp); timer = setInterval(() => tick(j.exp), 1000);
+  }).catch(() => gone('This sample view couldn’t load.'));
+})();
+</script>
+</body>
+</html>

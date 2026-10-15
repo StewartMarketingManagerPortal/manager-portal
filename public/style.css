@@ -494,3 +494,14 @@ select:disabled { opacity: .6; cursor: default; }
 
 .hl-pic.wp-pic { height: auto; aspect-ratio: 4 / 5; background: #1A1A1C; align-self: flex-start; }
 .hl-pic.wp-pic img { object-fit: contain; height: 100%; width: 100%; }
+
+/* ---------- recruiting ---------- */
+.rc-note { background: #FFF1D6; color: #7A4B00; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
+.rc-mm { background: var(--paper); border: 1px solid #E4E1DC; border-radius: 18px; overflow: hidden; }
+.rc-mm-hd { background: var(--ink); padding: 20px 24px 0; display: flex; align-items: center; gap: 16px; }
+.rc-mm-hd img { width: 130px; height: auto; }
+.rc-tag { margin-left: auto; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .12em; padding: 6px 10px; border-radius: 8px; }
+.rc-mm-hi { background: var(--ink); color: #fff; padding: 14px 24px 24px; }
+.rc-mm-hi h3 { margin: 0; font-size: 30px; font-weight: 800; } .rc-mm-hi p { margin: 4px 0 0; font-size: 14px; color: var(--navtext); }
+.rc-mm-body { padding: 4px 24px 24px; }
+@media (max-width: 640px) { .rc-mm-body { padding: 4px 14px 18px; } .rc-mm-hd, .rc-mm-hi { padding-left: 16px; padding-right: 16px; } }
