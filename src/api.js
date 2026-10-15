@@ -56,6 +56,10 @@ export async function onRequest(ctx) {
     if (route === 'recruiting' && m === 'GET') return json(await recList(env, me));
     if (route === 'recruiting' && m === 'POST') { const r = await recAdd(env, me, await request.formData()); return json(r, r.error ? 400 : 200); }
     if (route === 'recruiting/remove' && m === 'POST') { const r = await recRemove(env, me, (await request.json()).id); return json(r, r.error ? 403 : 200); }
+    if (route === 'recruiting/edit' && m === 'POST') { const r = await recEdit(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route.startsWith('recruiting/log/') && m === 'GET') { const r = await recLog(env, me, route.split('/')[2]); return json(r, r.error ? 403 : 200); }
+    if (route === 'recruiting/log' && m === 'POST') { const r = await recLogAdd(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'recruiting/log/remove' && m === 'POST') { const r = await recLogRemove(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route.startsWith('recphoto/') && m === 'GET') return await recPhoto(env, me, route.split('/')[1]);
     if (route.startsWith('recview/') && m === 'GET') { const r = await recViewLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
@@ -1044,6 +1048,65 @@ async function recRemove(env, me, id) {
   const r = await recOwn(env, me, id);
   if (!r) return { error: 'That candidate isn’t yours to remove.' };
   await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: r.id });
+  return { ok: true };
+}
+// Edit a candidate's details from their page (name and text columns; the photo stays as it is).
+async function recEdit(env, me, body) {
+  const r = await recOwn(env, me, body && body.id);
+  if (!r) return { error: 'That candidate isn’t yours to change.' };
+  const f = body.fields || {}, C = r.b.col, txt = (x, n) => String(x == null ? '' : x).trim().slice(0, n || 120);
+  const name = [txt(f.firstName, 60), txt(f.lastName, 60)].filter(Boolean).join(' ');
+  if (!name) return { error: 'Add the candidate’s first and last name.' };
+  const vals = { name };
+  vals[C.Title] = txt(f.title); vals[C.Area] = txt(f.area); vals[C.Phone] = txt(f.phone, 40); vals[C.Email] = txt(f.email, 120); vals[C.Company] = txt(f.company);
+  await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: r.b.id, i: r.id, v: JSON.stringify(vals) });
+  return { ok: true };
+}
+// Meetings and notes are kept as updates on the candidate's row ("[portal:meeting] {...}"), so they go when the row goes.
+const REC_LOG = /^\s*\[portal:(meeting|note)\]\s*/;
+const unEnt = s => String(s || '').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+async function recUpdates(env, id) {
+  const d = await gql(env, 'query($i:[ID!]){items(ids:$i){updates(limit:100){id text_body created_at}}}', { i: [String(id)] });
+  return (((d.items || [])[0] || {}).updates || []);
+}
+async function recLog(env, me, id) {
+  const r = await recOwn(env, me, id);
+  if (!r) return { error: 'That candidate isn’t yours.' };
+  const meetings = [], notes = [];
+  for (const u of await recUpdates(env, r.id)) {
+    const t = unEnt(u.text_body), k = t.match(REC_LOG);
+    if (!k) continue;
+    let o; try { o = JSON.parse(t.replace(REC_LOG, '')); } catch (e) { continue; }
+    o.id = String(u.id); o.at = o.at || u.created_at;
+    (k[1] === 'meeting' ? meetings : notes).push(o);
+  }
+  meetings.sort((a, b) => String(a.date + a.time).localeCompare(String(b.date + b.time)));
+  notes.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { meetings, notes };
+}
+async function recLogAdd(env, me, body) {
+  const r = await recOwn(env, me, body && body.id);
+  if (!r) return { error: 'That candidate isn’t yours.' };
+  const d = body.data || {}, txt = (x, n) => String(x == null ? '' : x).trim().slice(0, n || 120);
+  let o;
+  if (body.kind === 'note') {
+    o = { text: txt(d.text, 3000), by: byName(me), at: new Date().toISOString() };
+    if (!o.text) return { error: 'Write a note first.' };
+  } else if (body.kind === 'meeting') {
+    o = { type: txt(d.type, 40) || 'Meeting', date: /^\d{4}-\d{2}-\d{2}$/.test(d.date) ? d.date : '', time: /^\d{2}:\d{2}$/.test(d.time) ? d.time : '',
+      where: txt(d.where, 200), who: txt(d.who, 200), notes: txt(d.notes, 1000), done: !!d.done, by: byName(me), at: new Date().toISOString() };
+    if (!o.date) return { error: 'Pick a date for the meeting.' };
+  } else return { error: 'Unknown entry.' };
+  const res = await gql(env, 'mutation($i:ID!,$b:String!){create_update(item_id:$i,body:$b){id}}', { i: r.id, b: escHtml('[portal:' + body.kind + '] ' + JSON.stringify(o)) });
+  o.id = String(res.create_update.id);
+  return { ok: true, entry: o };
+}
+async function recLogRemove(env, me, body) {
+  const r = await recOwn(env, me, body && body.id);
+  if (!r) return { error: 'That candidate isn’t yours.' };
+  const u = (await recUpdates(env, r.id)).find(x => String(x.id) === String(body.uid) && REC_LOG.test(unEnt(x.text_body)));
+  if (!u) return { error: 'That entry is already gone.' };
+  await gql(env, 'mutation($u:ID!){delete_update(id:$u){id}}', { u: u.id });
   return { ok: true };
 }
 async function recPhotoUrl(env, b, id) {
