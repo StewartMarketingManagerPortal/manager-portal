@@ -5,7 +5,7 @@
 const RC = { list: null, days: 60, err: '', form: null, busy: false, confirm: null, opening: false, log: {}, note: {}, edit: null, meet: null, mail: null, called: null, saving: false };
 const rcFresh = () => ({ firstName: '', lastName: '', company: '', title: 'Sales Representative', area: '', phone: '', email: '', file: null, cut: '', cutting: false, cutFail: false });
 async function rcLoad() {
-  try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.err = ''; }
+  try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.board = r.board || null; RC.err = ''; }
   catch (e) { RC.list = []; RC.err = e.message; }
   if (route() === 'recruit') render();
 }
@@ -33,10 +33,16 @@ PAGES.recruit = () => {
       esc([c.company ? 'From ' + c.company : '', 'Added ' + nice(c.added), many && c.manager ? 'for ' + c.manager : '', left <= 20 ? 'removed automatically in ' + plural(Math.max(0, left), 'day') : ''].filter(Boolean).join(' · ')) +
       '</span></div><a class="btn small" href="#recruit/' + esc(c.id) + '">Show samples</a></div>';
   }).join('') + '</div>' : '<div class="empty">No candidates yet. Add one to make their samples.</div>';
-  h += '<div class="small muted row" style="gap:8px;flex-wrap:nowrap;align-items:flex-start">' + RC_LOCK + '<span>Only you' + (S.me.president ? ', your managers' : ', your assistant and your president') + ' see these. Candidates left for ' + RC.days + ' days are removed automatically.</span></div></section>';
+  h += '<div class="small muted row" style="gap:8px;flex-wrap:nowrap;align-items:flex-start">' + RC_LOCK + '<span>Only you' + (S.me.president ? ', your managers' : ', your assistant and your president') + ' see these. Candidates left for ' + RC.days + ' days are removed automatically.</span></div>' + rcBoardLine() + '</section>';
   h += rcForm(RC.form) + '</div>';
   return h;
 };
+function rcBoardLine() {
+  if (!RC.board) return '';
+  const bd = RC.board;
+  return '<div class="small muted rc-board"><b>Portal admins:</b> candidates are kept on the private board “' + esc(bd.name) + '” in ' + esc(bd.workspace) + '. ' +
+      (bd.url ? '<a href="' + esc(bd.url) + '" target="_blank" rel="noopener">Open it in monday.com ›</a>' : '') + (bd.inWest ? '' : ' <span class="rc-warn">It should be in Stewart West Marketing. In monday.com, open the board’s menu and use Move to workspace.</span>') + '</div>';
+}
 function rcForm(f) {
   const titles = Array.from(new Set(['Sales Representative'].concat(S.me.titles || [])));
   const pic = f.cut ? '<img src="' + esc(f.cut) + '" alt="" style="width:100%;height:100%;object-fit:contain;object-position:bottom">' :

@@ -651,3 +651,4 @@ select:disabled { opacity: .6; cursor: default; }
 .cd-mail { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; font-weight: 700; color: var(--brand); background: var(--brand-tint); border-radius: 999px; padding: 3px 10px; margin-bottom: 3px; white-space: normal; }
 .cd-mail svg { width: 13px; height: 13px; flex: none; }
 .cd-from { font-size: 12px; color: var(--muted); margin-bottom: 4px; white-space: normal; }
+.rc-board { line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; } .rc-board a { font-weight: 700; } .rc-warn { color: var(--brand); font-weight: 700; }

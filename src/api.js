@@ -481,8 +481,13 @@ async function checkAltos(link) {
 // plus any Amy adds to the "Highlight Designs" board (Status = Live; "Ready for review" ones show to Portal Admins only).
 // "Mark as posted" is kept on the "Team Highlights" board (one row per person, kind and year).
 const HL_AHEAD = 7, HL_AFTER = 2;
+// Every board the portal makes goes in the Stewart West Marketing workspace (the words in either order). If it can't be found, nothing is made.
+const isWest = name => { const w = nk(name).split(' '); return ['stewart', 'west', 'marketing'].every(x => w.includes(x)); };
 async function wsWest(env) {
-  try { const w = await gql(env, 'query{workspaces(limit:100){id name}}', {}); const hit = w.workspaces.find(x => nk(x.name) === 'stewart marketing west'); return hit ? String(hit.id) : null; } catch (e) { return null; }
+  const w = await gql(env, 'query{workspaces(limit:200){id name}}', {});
+  const hit = (w.workspaces || []).find(x => isWest(x.name));
+  if (!hit) throw new Error('The Stewart West Marketing workspace wasn’t found in monday.com, so the board wasn’t made. Ask West Marketing.');
+  return String(hit.id);
 }
 async function ensureBoard(env, name, envKey, desc, cols) {
   return cached('hlb:' + name, 3600e3, async () => {
@@ -888,8 +893,7 @@ async function onbBoard(env) {
     let id = env.ONBOARDING_BOARD_ID ? String(env.ONBOARDING_BOARD_ID) : '';
     if (!id) { try { id = await boardId(env, ONB_NAME, 'ONBOARDING_BOARD_ID'); } catch (e) { forget('board:' + ONB_NAME); } }
     if (!id) {
-      let ws = null;
-      try { const w = await gql(env, 'query{workspaces(limit:100){id name}}', {}); const hit = w.workspaces.find(x => nk(x.name) === 'stewart marketing west'); if (hit) ws = String(hit.id); } catch (e) {}
+      const ws = await wsWest(env);
       id = String((await gql(env, 'mutation($n:String!,$w:ID,$d:String){create_board(board_name:$n,board_kind:private,workspace_id:$w,description:$d){id}}',
         { n: ONB_NAME, w: ws, d: 'Full onboarding checklists from the Manager Portal. One row per new hire, plus a Contacts row per manager. Kept up to date by the portal.' })).create_board.id);
     }
@@ -984,7 +988,7 @@ async function viewAsLink(env, me, id) {
 }
 
 // ---------- Recruiting: sample marketing for a candidate ----------
-// One row per candidate on the private "Manager Portal Recruiting" board (Stewart Marketing West workspace), made by the portal the
+// One row per candidate on the private "Manager Portal Recruiting" board (Stewart West Marketing workspace), made by the portal the
 // first time it's used. The samples themselves are drawn on screen from samples.js - nothing is saved but this row.
 // "Not hiring" deletes the row (and its photo); rows older than REC_DAYS are deleted the next time anyone opens Recruiting.
 const REC_NAME = 'Manager Portal Recruiting', REC_DAYS = 60;
@@ -1017,7 +1021,15 @@ async function recList(env, me) {
   const old = rows.filter(r => r.added && r.added < addDays(today(), -REC_DAYS));
   for (const r of old) { try { await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: r.id }); } catch (e) {} }
   if (old.length) rows = rows.filter(r => !old.includes(r));
-  return { days: REC_DAYS, candidates: rows.filter(r => inScope(me, r.managerEmail)).sort((a, b) => String(b.added).localeCompare(String(a.added))) };
+  const out = { days: REC_DAYS, candidates: rows.filter(r => inScope(me, r.managerEmail)).sort((a, b) => String(b.added).localeCompare(String(a.added))) };
+  if (me.row.admin) out.board = await recBoardInfo(env, b.id).catch(() => null);
+  return out;
+}
+// for Portal Admins: where the board is, so it can be found in monday.com
+async function recBoardInfo(env, id) {
+  const d = await gql(env, 'query($b:[ID!]){me{account{slug}} boards(ids:$b){name workspace{id name}}}', { b: [id] });
+  const bd = (d.boards || [])[0] || {}, ws = bd.workspace || null, slug = ((d.me || {}).account || {}).slug;
+  return { id, name: bd.name || REC_NAME, url: slug ? 'https://' + slug + '.monday.com/boards/' + id : '', workspace: ws ? ws.name : 'Main workspace', inWest: !!(ws && isWest(ws.name)) };
 }
 async function recOwn(env, me, id) {
   id = String(id || '').replace(/\D/g, '');
