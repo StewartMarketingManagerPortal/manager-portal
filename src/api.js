@@ -60,6 +60,8 @@ export async function onRequest(ctx) {
     if (route.startsWith('recruiting/log/') && m === 'GET') { const r = await recLog(env, me, route.split('/')[2]); return json(r, r.error ? 403 : 200); }
     if (route === 'recruiting/log' && m === 'POST') { const r = await recLogAdd(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'recruiting/log/remove' && m === 'POST') { const r = await recLogRemove(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'recruiting/email' && m === 'POST') { const r = await recEmail(env, me, await request.formData()); return json(r, r.error ? 400 : 200); }
+    if (route.startsWith('recfile/') && m === 'GET') return await recFile(env, me, route.split('/')[1], route.split('/')[2]);
     if (route.startsWith('recphoto/') && m === 'GET') return await recPhoto(env, me, route.split('/')[1]);
     if (route.startsWith('recview/') && m === 'GET') { const r = await recViewLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
@@ -986,7 +988,7 @@ async function viewAsLink(env, me, id) {
 // first time it's used. The samples themselves are drawn on screen from samples.js - nothing is saved but this row.
 // "Not hiring" deletes the row (and its photo); rows older than REC_DAYS are deleted the next time anyone opens Recruiting.
 const REC_NAME = 'Manager Portal Recruiting', REC_DAYS = 60;
-const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Company', 'text'], ['Added', 'text'], ['Photo', 'file']];
+const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Company', 'text'], ['Added', 'text'], ['Photo', 'file'], ['Work Email', 'text'], ['Work Phone', 'text'], ['Files', 'file']];
 async function recBoard(env) {
   return cached('recBoard', 3600e3, async () => {
     let id = env.RECRUITING_BOARD_ID ? String(env.RECRUITING_BOARD_ID) : '';
@@ -1006,7 +1008,7 @@ async function recRows(env, b) {
   return items.map(it => {
     const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
     return { id: String(it.id), name: it.name.trim(), manager: v[b.col.Manager], managerEmail: (v[b.col['Manager Email']] || '').toLowerCase(), title: v[b.col.Title], area: v[b.col.Area],
-      phone: v[b.col.Phone], email: v[b.col.Email], company: v[b.col.Company], added: v[b.col.Added] || String(it.created_at || '').slice(0, 10), photo: !!v[b.col.Photo] };
+      phone: v[b.col.Phone], email: v[b.col.Email], company: v[b.col.Company], workEmail: v[b.col['Work Email']], workPhone: v[b.col['Work Phone']], added: v[b.col.Added] || String(it.created_at || '').slice(0, 10), photo: !!v[b.col.Photo] };
   });
 }
 async function recList(env, me) {
@@ -1059,6 +1061,7 @@ async function recEdit(env, me, body) {
   if (!name) return { error: 'Add the candidate’s first and last name.' };
   const vals = { name };
   vals[C.Title] = txt(f.title); vals[C.Area] = txt(f.area); vals[C.Phone] = txt(f.phone, 40); vals[C.Email] = txt(f.email, 120); vals[C.Company] = txt(f.company);
+  vals[C['Work Email']] = txt(f.workEmail, 120); vals[C['Work Phone']] = txt(f.workPhone, 40);
   await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: r.b.id, i: r.id, v: JSON.stringify(vals) });
   return { ok: true };
 }
@@ -1082,7 +1085,7 @@ async function recLog(env, me, id) {
   }
   meetings.sort((a, b) => String(a.date + a.time).localeCompare(String(b.date + b.time)));
   notes.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-  return { meetings, notes };
+  return { meetings, notes, files: await recFiles(env, r.b, r.id) };
 }
 async function recLogAdd(env, me, body) {
   const r = await recOwn(env, me, body && body.id);
@@ -1108,6 +1111,46 @@ async function recLogRemove(env, me, body) {
   if (!u) return { error: 'That entry is already gone.' };
   await gql(env, 'mutation($u:ID!){delete_update(id:$u){id}}', { u: u.id });
   return { ok: true };
+}
+// An email dropped on the candidate page: the browser reads it (public/mail.js) and sends what the manager ticked.
+async function recFiles(env, b, id) {
+  const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){assets(column_ids:$c){id name file_extension file_size created_at}}}', { i: [String(id)], c: [b.col.Files] });
+  return (((d.items || [])[0] || {}).assets || []).map(a => ({ id: String(a.id), name: a.name, ext: a.file_extension || '', size: a.file_size || 0, at: a.created_at })).sort((x, y) => String(y.at).localeCompare(String(x.at)));
+}
+async function recEmail(env, me, fd) {
+  const f = JSON.parse(fd.get('fields') || '{}'), txt = (x, n) => String(x == null ? '' : x).trim().slice(0, n || 120);
+  const r = await recOwn(env, me, f.id);
+  if (!r) return { error: 'That candidate isn’t yours.' };
+  const C = r.b.col, files = fd.getAll('file').filter(x => x && typeof x !== 'string' && x.size), warn = [];
+  const d = f.details || {}, vals = {}, keys = { phone: [C.Phone, 40], email: [C.Email, 120], workPhone: [C['Work Phone'], 40], workEmail: [C['Work Email'], 120] };
+  for (const k in keys) if (d[k]) vals[keys[k][0]] = txt(d[k], keys[k][1]);
+  if (Object.keys(vals).length) await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: r.b.id, i: r.id, v: JSON.stringify(vals) });
+  const saved = [];
+  for (const file of files.slice(0, 10)) {
+    if (file.size > 25e6) { warn.push(file.name + ' is too big to save (25 MB at most)'); continue; }
+    try { await addFile(env, r.id, C.Files, file); saved.push(txt(file.name, 150)); } catch (e) { warn.push(file.name + ' didn’t save'); }
+  }
+  let entry = null;
+  if (f.note) {
+    const n = f.note;
+    entry = { text: txt(n.text, 3000), by: byName(me), at: new Date().toISOString(), mail: { subject: txt(n.subject, 200), from: txt(n.from, 160), date: /^\d{4}-\d{2}-\d{2}T/.test(n.date || '') ? n.date : '' }, files: saved };
+    const res = await gql(env, 'mutation($i:ID!,$b:String!){create_update(item_id:$i,body:$b){id}}', { i: r.id, b: escHtml('[portal:note] ' + JSON.stringify(entry)) });
+    entry.id = String(res.create_update.id);
+  }
+  return { ok: true, entry, files: await recFiles(env, r.b, r.id), warn: warn.join('; ') };
+}
+async function recFile(env, me, id, aid) {
+  const r = await recOwn(env, me, id);
+  if (!r) return fail('Not found', 404);
+  const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){assets(column_ids:$c){id name public_url}}}', { i: [r.id], c: [r.b.col.Files] });
+  const a = ((((d.items || [])[0] || {}).assets) || []).find(x => String(x.id) === String(aid));
+  if (!a || !a.public_url) return fail('Not found', 404);
+  const up = await fetch(a.public_url);
+  if (!up.ok) return fail('Could not load the file', 502);
+  // PDFs and pictures open in the browser; anything else downloads
+  const ct = (up.headers.get('Content-Type') || '').split(';')[0].toLowerCase(), view = /^(application\/pdf|image\/(png|jpe?g|gif|webp))$/.test(ct);
+  return new Response(up.body, { headers: { 'Content-Type': view ? ct : 'application/octet-stream', 'Content-Disposition': (view ? 'inline' : 'attachment') + "; filename*=UTF-8''" + encodeURIComponent(a.name),
+    'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox" } });
 }
 async function recPhotoUrl(env, b, id) {
   const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){assets(column_ids:$c){id public_url created_at}}}', { i: [String(id)], c: [b.col.Photo] });

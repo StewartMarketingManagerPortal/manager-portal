@@ -108,7 +108,7 @@ function rcSample(c) {
 }
 function rcDetails(c, first) {
   const id = esc(c.id), e = RC.edit && RC.edit.id === c.id ? RC.edit : null;
-  let h = '<section class="card"><div class="cd-hd"><span class="cardlabel">Details</span>' + (e ? '' : '<span class="cd-btns"><button type="button" class="btn small" data-act="rc-edit" data-id="' + id + '">Edit</button><button type="button" class="btn small cd-rm" data-act="rc-ask" data-id="' + id + '">Remove</button></span>') + '</div>';
+  let h = '<section class="card"' + (e ? '' : ' data-rc-drop="' + id + '"') + '><div class="cd-hd"><span class="cardlabel">Details</span>' + (e ? '' : '<span class="cd-btns"><button type="button" class="btn small" data-act="rc-edit" data-id="' + id + '">Edit</button><button type="button" class="btn small cd-rm" data-act="rc-ask" data-id="' + id + '">Remove</button></span>') + '</div>';
   const ph = c.photo ? '<img data-center="1" src="' + esc(rcPhoto(c)) + '" alt="">' : '<span class="cd-ini">' + esc(initials(c.name)) + '</span>';
   h += '<div class="cd-top"><div class="cd-ph' + (c.photo ? '' : ' none') + '">' + ph + '</div><div style="min-width:0"><div class="cd-nm">' + esc(c.name) + '</div>' + (c.company ? '<div class="cd-sub">Now at ' + esc(c.company) + '</div>' : '') +
     '<a href="#" class="cd-link" data-act="rc-open" data-id="' + id + '">' + (RC.opening ? 'Opening…' : 'Show on My Marketing ›') + '</a></div></div>';
@@ -117,7 +117,7 @@ function rcDetails(c, first) {
     const fld = (k, l, t, full) => '<label' + (full ? ' class="full"' : '') + '>' + l + '<input type="' + (t || 'text') + '" data-rce="' + k + '" value="' + esc(e[k]) + '" autocomplete="off"></label>';
     return h + '<div class="cd-form">' + fld('firstName', 'First name') + fld('lastName', 'Last name') + fld('company', 'Current company', '', true) +
       '<label class="full">Title they’d have<select data-rce="title">' + titles.map(t => '<option' + (t === e.title ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></label>' +
-      fld('area', 'Area', '', true) + fld('phone', 'Phone', 'tel') + fld('email', 'Email', 'email') +
+      fld('area', 'Area', '', true) + fld('phone', 'Phone', 'tel') + fld('email', 'Email', 'email') + fld('workPhone', 'Work phone', 'tel') + fld('workEmail', 'Work email', 'email') +
       '<div class="full cd-row"><button type="button" class="btn small" data-act="rc-edit-x">Cancel</button><button type="button" class="btn small primary" data-act="rc-edit-save" data-id="' + id + '"' + (RC.saving ? ' disabled' : '') + '>' + (RC.saving ? 'Saving…' : 'Save') + '</button></div></div></section>';
   }
   const tel = String(c.phone || '').replace(/[^\d+]/g, '');
@@ -126,9 +126,62 @@ function rcDetails(c, first) {
     (c.email ? '<button type="button" class="cd-a' + (RC.mail === c.id ? ' on' : '') + '" data-act="rc-mail" data-id="' + id + '" aria-expanded="' + (RC.mail === c.id) + '">' + RC_ICON.mail + 'Email</button>' : dis('', 'Email', RC_ICON.mail)) + '</div>';
   if (RC.mail === c.id) h += '<div class="cd-menu"><div class="hd">Opens in Outlook, ready to change and send</div>' + rcMails(c).map(m => '<a class="i" href="' + esc(m.href) + '" data-act="rc-mail-x">' + esc(m.t) + (m.d ? '<small>' + esc(m.d) + '</small>' : '') + '</a>').join('') + '</div>';
   if (RC.called === c.id) h += '<div class="cd-log"><span>Called ' + esc(first) + ' just now. Add it to Meetings?</span><span class="cd-btns"><button type="button" class="btn small" data-act="rc-call-x">No</button><button type="button" class="btn small primary" data-act="rc-call-log" data-id="' + id + '">Log the call</button></span></div>';
+  h += RC.mailIn && RC.mailIn.id === c.id ? rcMailReview(c, first) :
+    '<div class="cd-dz">' + RC_ICON.mail + '<span><b>Drag an email here</b>From Outlook, to save it to ' + esc(first) + '’s notes. <label class="cd-pick">Or choose a file<input type="file" accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook,application/pdf,image/*,.doc,.docx" data-rc-mailfile="' + id + '" hidden></label></span></div>';
   const row = (l, v) => v ? '<dt>' + l + '</dt><dd>' + esc(v) + '</dd>' : '';
-  h += '<dl class="cd-dl">' + row('Title they’d have', c.title) + row('Area', c.area) + row('Current company', c.company) + row('Phone', fmtPhone(c.phone)) + row('Email', c.email) + row('Added by', c.manager) + row('Added', nice(c.added)) + '</dl>';
+  h += '<dl class="cd-dl">' + row('Title they’d have', c.title) + row('Area', c.area) + row('Current company', c.company) + row('Phone', fmtPhone(c.phone)) + row('Email', c.email) + row('Work phone', fmtPhone(c.workPhone)) + row('Work email', c.workEmail) + row('Added by', c.manager) + row('Added', nice(c.added)) + '</dl>';
+  const files = (RC.log[c.id] && RC.log[c.id].files) || [];
+  if (files.length) h += '<div class="cd-sec">Files</div><div class="cd-files">' + files.map(f => '<a class="cd-file" href="/api/recfile/' + id + '/' + esc(f.id) + '" target="_blank" rel="noopener"><span class="t">' + esc((f.ext || 'file').slice(0, 4).toUpperCase()) + '</span>' +
+    '<span class="grow" style="min-width:0"><b>' + esc(f.name) + '</b><small>' + esc([rcSize(f.size), rcDay(f.at)].filter(Boolean).join(' · ')) + '</small></span><span class="btn small">Open</span></a>').join('') + '</div>';
   return h + '</section>';
+}
+const rcDay = s => { const d = new Date(s || ''); return isNaN(d) ? '' : nice(iso(d)); };
+const rcSize = n => !n ? '' : n < 1e6 ? Math.max(1, Math.round(n / 1e3)) + ' KB' : (n / 1e6).toFixed(1) + ' MB';
+const rcOurs = e => /@stewart\.com$/i.test(e || '') || (S.me.email && String(e).toLowerCase() === String(S.me.email).toLowerCase());
+const rcDigits = s => String(s || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+// what an email adds to Details: their address (from them, or to them when it's one the manager sent) and the last phone in their signature
+function rcMailDetails(c, m) {
+  const det = {};
+  if (!m) return det;
+  const them = rcOurs(m.from.email) ? (m.to || []).find(t => !rcOurs(t.email)) : m.from;
+  const known = [c.email, c.workEmail].map(x => String(x || '').toLowerCase());
+  if (them && them.email && !known.includes(them.email)) det[c.email ? 'workEmail' : 'email'] = them.email;
+  if (them === m.from) {
+    const ph = (m.latest.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g) || []).map(rcDigits).filter(d => d.length === 10);
+    const p = ph.reverse().find(d => d !== rcDigits(c.phone) && d !== rcDigits(c.workPhone));
+    if (p) det[c.phone ? 'workPhone' : 'phone'] = fmtPhone(p);
+  }
+  return det;
+}
+const RC_DET = { phone: 'Phone', email: 'Email', workPhone: 'Work phone', workEmail: 'Work email' };
+function rcMailReview(c, first) {
+  const x = RC.mailIn, m = x.m, id = esc(c.id);
+  let h = '<div class="cd-em">';
+  if (x.reading) return h + '<span class="spin dark"></span> <span class="small muted">Reading the email…</span></div>';
+  if (m) h += '<div class="h"><span class="ic">' + RC_ICON.mail + '</span><div style="min-width:0"><div class="s">' + esc(m.subject || '(no subject)') + '</div><div class="f">' +
+    esc(['From ' + ([m.from.name, m.from.email ? '<' + m.from.email + '>' : ''].filter(Boolean).join(' ') || 'unknown'), rcDay(m.date)].filter(Boolean).join(' · ')) + '</div></div></div>' +
+    (m.latest ? '<div class="q">' + esc(m.latest.slice(0, 400)) + '</div>' : '') +
+    '<label><input type="checkbox" data-rc-mi="note"' + (x.note ? ' checked' : '') + '><span>Save the email to Notes<small>Subject, date and the message</small></span></label>';
+  else h += '<div class="s">Save ' + (x.files.length === 1 ? 'this file' : 'these files') + ' to ' + esc(first) + '?</div>';
+  x.files.forEach((f, i) => { h += '<label><input type="checkbox" data-rc-mi="f' + i + '"' + (f.keep ? ' checked' : '') + (f.size > 25e6 ? ' disabled' : '') + '><span>' + (m ? 'Save the attachment' : 'Save the file') +
+    '<small><span class="att">' + esc(f.name) + ' · ' + rcSize(f.size) + '</span>' + (f.size > 25e6 ? ' Too big to save (25 MB at most)' : f.inline ? ' A picture in the email' : '') + '</small></span></label>'; });
+  const dk = Object.keys(x.det);
+  if (dk.length) h += '<label><input type="checkbox" data-rc-mi="det"' + (x.detKeep ? ' checked' : '') + '><span>Add what’s new to Details<small>' + esc(dk.map(k => RC_DET[k] + ' ' + x.det[k]).join(' · ')) + '</small></span></label>';
+  return h + '<div class="cd-row"><button type="button" class="btn small" data-act="rc-mail-cancel">Cancel</button><button type="button" class="btn small primary" data-act="rc-mail-save" data-id="' + id + '"' + (x.busy ? ' disabled' : '') + '>' +
+    (x.busy ? '<span class="spin"></span> Saving…' : 'Save to ' + esc(first)) + '</button></div></div>';
+}
+const rcIsMail = f => /\.(eml|msg)$/i.test(f.name || '') || /^message\/rfc822$|ms-outlook/i.test(f.type || '');
+async function rcTakeFiles(id, list) {
+  const c = rcGet(id); list = [...(list || [])].filter(f => f && f.size != null);
+  if (!c || !list.length) return;
+  const mail = list.find(rcIsMail);
+  RC.mailIn = { id, reading: true, files: [], det: {} }; render();
+  let m = null;
+  if (mail) { try { m = await MailFile.read(mail); } catch (e) { RC.mailIn = null; render(); toast('Couldn’t read that email. Try saving it from Outlook as a file, then choose it here.', 8000); return; } }
+  const atts = m ? m.attachments.filter(a => !a.inline || a.size >= 20e3) : list.map(f => ({ name: f.name, type: f.type, size: f.size, inline: false, file: f }));
+  RC.mailIn = { id, m, note: !!m, files: atts.slice(0, 10).map(a => Object.assign(a, { keep: !a.inline && a.size <= 25e6 })), det: rcMailDetails(c, m), detKeep: true };
+  if (!m && !RC.mailIn.files.length) RC.mailIn = null;
+  render();
 }
 function rcMeetings(c, log) {
   const id = esc(c.id), f = RC.meet && RC.meet.id === c.id ? RC.meet : null;
@@ -158,8 +211,10 @@ function rcNotes(c, first, log) {
   let h = '<section class="card"><div class="cd-hd"><span class="cardlabel">Notes</span></div>' +
     '<textarea class="cd-ta" data-rcn="1" placeholder="Add a note about ' + esc(first) + '…">' + esc(RC.note[c.id] || '') + '</textarea>' +
     '<div class="cd-row"><button type="button" class="btn small primary" data-act="rc-note" data-id="' + id + '"' + (RC.saving ? ' disabled' : '') + '>Save note</button></div>';
-  if (log && log.notes) h += log.notes.map(n => '<div class="cd-note"><div class="by"><span class="grow">' + esc([n.by, nice(String(n.at).slice(0, 10))].filter(Boolean).join(' · ')) + '</span>' +
-    '<button type="button" class="cd-x" data-act="rc-log-del" data-id="' + id + '" data-u="' + esc(n.id) + '" title="Remove this note" aria-label="Remove this note">×</button></div>' + esc(n.text) + '</div>').join('');
+  if (log && log.notes) h += log.notes.map(n => '<div class="cd-note"><div class="by"><span class="grow">' + esc([n.by, rcDay(n.at)].filter(Boolean).join(' · ')) + '</span>' +
+    '<button type="button" class="cd-x" data-act="rc-log-del" data-id="' + id + '" data-u="' + esc(n.id) + '" title="Remove this note" aria-label="Remove this note">×</button></div>' +
+    (n.mail ? '<div class="cd-mail">' + RC_ICON.mail + '<span>' + esc(n.mail.subject || '(no subject)') + '</span></div><div class="cd-from">' + esc(['From ' + (n.mail.from || 'unknown'), rcDay(n.mail.date)].filter(Boolean).join(' · ')) + '</div>' : '') +
+    esc(n.text) + (n.files && n.files.length ? '<div class="cd-from">Attached: ' + esc(n.files.join(', ')) + '</div>' : '') + '</div>').join('');
   return h + '</section>';
 }
 // right side: the phone view and what they'd get, then every piece grouped by when it comes
@@ -222,7 +277,7 @@ ACT['rc-open'] = async el => {
   RC.opening = false; render();
 };
 ACT['rc-edit'] = el => { const c = rcGet(el.dataset.id); if (!c) return; const [fn, ...ln] = c.name.split(' ');
-  RC.edit = { id: c.id, firstName: fn, lastName: ln.join(' '), company: c.company || '', title: c.title || 'Sales Representative', area: c.area || '', phone: c.phone || '', email: c.email || '' }; RC.mail = null; render(); };
+  RC.edit = { id: c.id, firstName: fn, lastName: ln.join(' '), company: c.company || '', title: c.title || 'Sales Representative', area: c.area || '', phone: c.phone || '', email: c.email || '', workPhone: c.workPhone || '', workEmail: c.workEmail || '' }; RC.mail = null; render(); };
 ACT['rc-edit-x'] = () => { RC.edit = null; render(); };
 ACT['rc-edit-save'] = async el => {
   const e = RC.edit; if (!e) return;
@@ -230,7 +285,7 @@ ACT['rc-edit-save'] = async el => {
   RC.saving = true; render();
   try {
     await api('recruiting/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id, fields: e }) });
-    const c = rcGet(e.id); if (c) Object.assign(c, { name: (e.firstName.trim() + ' ' + e.lastName.trim()), company: e.company.trim(), title: e.title, area: e.area.trim(), phone: e.phone.trim(), email: e.email.trim() });
+    const c = rcGet(e.id); if (c) Object.assign(c, { name: (e.firstName.trim() + ' ' + e.lastName.trim()), company: e.company.trim(), title: e.title, area: e.area.trim(), phone: e.phone.trim(), email: e.email.trim(), workPhone: e.workPhone.trim(), workEmail: e.workEmail.trim() });
     RC.edit = null; RC.saving = false; render(); toast('Saved.');
   } catch (x) { RC.saving = false; render(); toast(x.message, 7000); }
 };
@@ -260,6 +315,23 @@ ACT['rc-log-del'] = async el => {
     if (log) { log.notes = log.notes.filter(n => n.id !== u); log.meetings = log.meetings.filter(m => m.id !== u); } render(); }
   catch (e) { toast(e.message, 7000); }
 };
+ACT['rc-mail-cancel'] = () => { RC.mailIn = null; render(); };
+ACT['rc-mail-save'] = async el => {
+  const x = RC.mailIn, id = el.dataset.id; if (!x || x.busy) return;
+  const m = x.m, files = x.files.filter(f => f.keep), det = x.detKeep ? x.det : {};
+  if (!(m && x.note) && !files.length && !Object.keys(det).length) { toast('Tick something to save.'); return; }
+  x.busy = true; render();
+  try {
+    const fd = new FormData();
+    fd.append('fields', JSON.stringify({ id, details: det, note: m && x.note ? { subject: m.subject, from: [m.from.name, m.from.email ? '<' + m.from.email + '>' : ''].filter(Boolean).join(' '), date: m.date, text: m.latest || m.text } : null }));
+    files.forEach(f => fd.append('file', f.file, f.name));
+    const r = await api('recruiting/email', { method: 'POST', body: fd });
+    const c = rcGet(id); if (c) Object.assign(c, det);
+    const log = RC.log[id] || (RC.log[id] = { meetings: [], notes: [], files: [] });
+    if (r.entry) log.notes.unshift(r.entry); log.files = r.files || log.files;
+    RC.mailIn = null; render(); toast(r.warn ? 'Saved, but ' + r.warn + '.' : 'Saved to ' + (c ? c.name.split(' ')[0] : 'the candidate') + '.', r.warn ? 8000 : 3000);
+  } catch (e) { x.busy = false; render(); toast(e.message, 7000); }
+};
 ACT['rc-ask'] = el => { RC.confirm = el.dataset.id; render(); };
 ACT['rc-keep'] = () => { RC.confirm = null; render(); };
 ACT['rc-x'] = (el, e) => { if (e.target === el) { RC.confirm = null; render(); } };
@@ -277,6 +349,8 @@ document.addEventListener('input', e => { const d = e.target.dataset || {};
   const k = d.rc; if (k && RC.form) { RC.form[k] = e.target.value; const pv = document.getElementById('rc-cblock'); if (pv) pv.innerHTML = rcBlock(RC.form); if (k === 'firstName') { const b = document.querySelector('[data-act=rc-add]'); if (b && !RC.busy) b.textContent = 'Make ' + (RC.form.firstName.trim() ? RC.form.firstName.trim() + '’s' : 'their') + ' samples ›'; } } });
 document.addEventListener('change', async e => {
   const t = e.target;
+  if (t.dataset && t.dataset.rcMi && RC.mailIn) { const k = t.dataset.rcMi; if (k === 'note') RC.mailIn.note = t.checked; else if (k === 'det') RC.mailIn.detKeep = t.checked; else RC.mailIn.files[+k.slice(1)].keep = t.checked; return; }
+  if (t.dataset && t.dataset.rcMailfile) { rcTakeFiles(t.dataset.rcMailfile, t.files); return; }
   if (t.dataset && t.dataset.rc && t.tagName === 'SELECT' && RC.form) { RC.form[t.dataset.rc] = t.value; const pv = document.getElementById('rc-cblock'); if (pv) pv.innerHTML = rcBlock(RC.form); return; }
   if (!(t.dataset && t.dataset.rcPhoto) || !t.files || !t.files[0] || !RC.form) return;
   const f = RC.form, file = t.files[0];
@@ -286,4 +360,17 @@ document.addEventListener('change', async e => {
   try { const u = await Samples.center(await Cutout.make(file)); if (RC.form === f && f.file === file) f.cut = u; }
   catch (x) { f.cutFail = true; }
   f.cutting = false; if (route() === 'recruit') render();
+});
+
+// drag an email (or a file) from Outlook or Finder onto a candidate's Details card
+const rcDropAt = e => e.target && e.target.closest && e.target.closest('[data-rc-drop]');
+const rcHasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].some(t => t === 'Files' || /FileGroupDescriptor|x-moz-file|filepromise/i.test(t));
+document.addEventListener('dragover', e => { const z = rcDropAt(e); if (!z || !rcHasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; z.classList.add('hot'); });
+document.addEventListener('dragleave', e => { const z = rcDropAt(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove('hot'); });
+document.addEventListener('drop', e => {
+  const z = rcDropAt(e); if (!z) return;
+  e.preventDefault(); z.classList.remove('hot');
+  const files = e.dataTransfer && e.dataTransfer.files;
+  if (!files || !files.length) { toast('That didn’t come through as an email. In Outlook, drag the email to your desktop first, then drag that file here.', 9000); return; }
+  rcTakeFiles(z.dataset.rcDrop, files);
 });
