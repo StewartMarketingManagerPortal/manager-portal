@@ -142,6 +142,7 @@ async function load(fresh) {
   }
   catch (e) { S.data = null; if (e.status !== 401) S.err = e.message; }
   S.loading = false; render();
+  if (S.data) popup();
 }
 // ================= first sign-in: a welcome, then our core values one at a time, then their home page =================
 const CORE_VALUES = [
@@ -549,6 +550,44 @@ document.addEventListener('click', async e => {
   if (d.act === 'hide-install') { store.set('installHidden', '1'); render(); }
   if (d.act === 'install' && S.installEvt) { const ev = S.installEvt; ev.prompt(); try { await ev.userChoice; } catch (x) {} S.installEvt = null; render(); }
 });
+// ================= pop-ups Marketing writes in Stewart Marketing Tools (Publish › Pop-ups) =================
+// Shows on the next load until they close it with the x or tap its button (then it's gone on every device).
+const POP_ICONS = { film: 'film', chart: 'chart', bulb: 'bulb', doc: 'doc', star: 'star', cal: 'cal', person: 'person' };
+async function popup() {
+  if (S.viewAs || $('#mmpop') || $('#intro')) return;
+  let p = null;
+  try { p = (await api('popup')).popup; } catch (e) { return; }
+  if (!p || $('#mmpop') || $('#intro') || S.viewAs || (S.popDone || []).includes(p.id)) return;
+  const ic = (I[POP_ICONS[p.picture] || 'star'] || I.star).replace(/width="\d+" height="\d+"/, 'width="26" height="26"');
+  const el = document.createElement('div'); el.id = 'mmpop'; el.className = 'mmpop-bg';
+  el.innerHTML = '<div class="mmpop" role="dialog" aria-modal="true" aria-labelledby="mmpop-h" tabindex="-1">' +
+    '<button class="x" data-pop="close" aria-label="Close">' + I.x + '</button>' +
+    '<div class="ic">' + ic + '</div><div class="ey">From Marketing</div>' +
+    '<h2 id="mmpop-h">' + esc(p.title) + '</h2>' + (p.message ? '<p>' + esc(p.message).replace(/\n/g, '<br>') + '</p>' : '') +
+    (p.link ? '<button class="btn primary block" data-pop="tap">' + esc(p.button || 'Show me') + '</button>' : '<button class="btn primary block" data-pop="close">' + esc(p.button || 'Got it') + '</button>') + '</div>';
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-pop]'); if (!b) return;
+    const how = b.dataset.pop;
+    (S.popDone = S.popDone || []).push(p.id);
+    api('popup', { method: 'POST', body: JSON.stringify({ id: p.id, how }) }).catch(() => {});
+    el.remove(); document.body.classList.remove('pop-open');
+    if (how === 'tap') popGo(p.link);
+  });
+  document.body.appendChild(el); document.body.classList.add('pop-open');
+  api('popup', { method: 'POST', body: JSON.stringify({ id: p.id, how: 'seen' }) }).catch(() => {});
+  const d = el.querySelector('.mmpop'); if (d) d.focus({ preventScroll: true });
+}
+// where the button goes: home, make (Make a video), search, or c:<category name>
+function popGo(link) {
+  const l = String(link || '');
+  if (/^c:/i.test(l)) {
+    const want = nk(l.slice(2)), c = (S.data.categories || []).find(x => nk(x.name) === want) || (S.data.categories || []).find(x => nk(x.name).includes(want) || want.includes(nk(x.name)));
+    go(c ? 'c/' + slug(c.name) : 'home'); return;
+  }
+  go(['make', 'search', 'home'].includes(l) ? l : 'home');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#mmpop')) { const x = $('#mmpop .x'); if (x) x.click(); } });
+
 function confirmSignout() { return window.confirm('Signed in as ' + S.data.name + '.\n\nSign out of My Marketing on this device?'); }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.data) render(); });
 window.addEventListener('appinstalled', () => { S.installEvt = null; store.set('installHidden', '1'); if (S.data) render(); });

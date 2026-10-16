@@ -43,6 +43,8 @@ async function route(request, env, ctx, url) {
   }
   if (method === 'GET' && path === '/api/scripts') return json(await scripts(env, s));
   if (method === 'POST' && path === '/api/video') return uploadVideo(request, env, s, url);
+  if (method === 'GET' && path === '/api/popup') return json({ popup: s.ro ? null : await popupFor(env, s).catch(() => null) });
+  if (method === 'POST' && path === '/api/popup') return popupMark(request, env, ctx, s);
   const m = path.match(/^\/api\/file\/(\d+)$/);
   if (method === 'GET' && m) return file(request, env, ctx, s, m[1], url.searchParams.get('dl') === '1');
   return fail(404, 'Not found');
@@ -298,6 +300,66 @@ async function file(request, env, ctx, s, assetId, download) {
   return new Response(up.body, { status: up.status, headers: head });
 }
 
+// ---------- pop-ups Marketing writes in Stewart Marketing Tools (Publish › Pop-ups) ----------
+// One row per pop-up on the "My Marketing Pop-ups" board: Message, Link (where the button goes), Button, Picture,
+// Who ("Everyone" or a manager's name = that manager's team), Start / End (YYYY-MM-DD), State (Live / Stopped).
+// Each person sees a pop-up until they close it or tap its button, on any device. Who saw / tapped / closed it is kept
+// in a Gate per pop-up, and the counts go back on the row (Seen, Tapped, Closed) for Marketing Tools to show.
+const POPUP_BOARD = 'My Marketing Pop-ups';
+const todayLA = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+async function popupList(env) {
+  return cached('popups', 120e3, async () => {
+    const b = await boardByName(env, POPUP_BOARD);
+    if (!b) return [];
+    const d = await gql(env, 'query($b:[ID!]){boards(ids:$b){items_page(limit:200){items{id name column_values{id text}}}}}', { b: [b.id] });
+    const col = t => b.cols[t];
+    return d.boards[0].items_page.items.map(it => {
+      const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+      const g = t => col(t) ? v[col(t)] || '' : '';
+      return { id: String(it.id), title: it.name.trim(), message: g('Message'), link: g('Link'), button: g('Button'), picture: g('Picture'),
+        who: g('Who'), start: g('Start'), end: g('End'), live: /^live$/i.test(g('State')) };
+    });
+  });
+}
+// the manager's name on this person's row of the Main Employee Sheet (Manager column)
+async function managerOf(env, name) {
+  return cached('mgr:' + nk(name), 3600e3, async () => {
+    const b = await boardByName(env, 'Main Employee Sheet');
+    const col = b && Object.keys(b.cols).find(t => nk(t) === 'manager');
+    if (!col) return '';
+    const qp = '{rules:[{column_id:"name",compare_value:[' + JSON.stringify(name) + '],operator:contains_text}]}';
+    const d = await gql(env, 'query($b:[ID!],$c:[String!]){boards(ids:$b){items_page(limit:20,query_params:' + qp + '){items{name column_values(ids:$c){text}}}}}', { b: [b.id], c: [b.cols[col]] });
+    const it = ((d.boards[0] && d.boards[0].items_page.items) || []).find(x => nk(x.name) === nk(name));
+    return it ? String((it.column_values[0] || {}).text || '').trim() : '';
+  });
+}
+async function popupFor(env, s) {
+  const today = todayLA();
+  const list = (await popupList(env)).filter(p => p.live && p.title && (!p.start || p.start <= today) && (!p.end || today <= p.end))
+    .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+  for (const p of list) {
+    if (p.who && !/^everyone$/i.test(p.who) && nk(p.who) !== nk(s.name) && nk(await managerOf(env, s.name).catch(() => '')) !== nk(p.who)) continue;
+    const st = await gateCall(env, 'pop:' + p.id, { op: 'popGet', uid: String(s.uid) });
+    if (st.done) continue;
+    return { id: p.id, title: p.title, message: p.message, link: p.link, button: p.button, picture: p.picture };
+  }
+  return null;
+}
+async function popupMark(request, env, ctx, s) {
+  const b = await request.json().catch(() => ({}));
+  const id = String(b.id || ''), how = String(b.how || '');
+  if (!/^\d+$/.test(id) || !['seen', 'close', 'tap'].includes(how)) return fail(400, 'Which pop-up?');
+  if (!(await popupList(env)).some(p => p.id === id)) return json({ ok: true });
+  const c = await gateCall(env, 'pop:' + id, { op: 'popMark', uid: String(s.uid), how });
+  ctx.waitUntil((async () => {
+    const pb = await boardByName(env, POPUP_BOARD);
+    if (!pb) return;
+    const v = {}; [['Seen', c.seen], ['Tapped', c.tapped], ['Closed', c.closed]].forEach(([t, n]) => { if (pb.cols[t]) v[pb.cols[t]] = String(n || 0); });
+    if (Object.keys(v).length) await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: pb.id, i: id, v: JSON.stringify(v) });
+  })().catch(e => console.error('popup counts', e && e.message)));
+  return json({ ok: true });
+}
+
 // ---------- Make a video: scripts to record, and the phone recordings people send in ----------
 const SCRIPTS_BOARD = 'Video Scripts', UPLOADS_BOARD = 'Phone Video Uploads';
 const MAX_UPLOAD = 95 * 1024 * 1024;   // Cloudflare takes up to 100 MB in one request
@@ -424,6 +486,18 @@ export class Gate {
       const code = String(n).padStart(6, '0');
       await st.put('code', { hash: await sha(code), exp: now + CODE_MINUTES * 60e3, tries: 0, uid: b.uid, name: b.name });
       return Response.json({ ok: true, code });
+    }
+    // pop-ups: who saw it, and who closed it or tapped its button (then it's done for them on every device)
+    if (b.op === 'popGet') {
+      const p = (await st.get('pop')) || { seen: [], tapped: [], closed: [] };
+      return Response.json({ done: p.tapped.includes(b.uid) || p.closed.includes(b.uid) });
+    }
+    if (b.op === 'popMark') {
+      const p = (await st.get('pop')) || { seen: [], tapped: [], closed: [] };
+      const add = k => { if (!p[k].includes(b.uid)) p[k].push(b.uid); };
+      add('seen'); if (b.how === 'tap') add('tapped'); if (b.how === 'close') add('closed');
+      await st.put('pop', p);
+      return Response.json({ seen: p.seen.length, tapped: p.tapped.length, closed: p.closed.length });
     }
     if (b.op === 'check') {
       const c = await st.get('code');

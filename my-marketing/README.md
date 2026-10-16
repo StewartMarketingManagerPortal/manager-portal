@@ -23,6 +23,13 @@ Rows on the portal board whose **Person** column is them. Columns are matched by
 - "NEW" = row created in the last 14 days; for Market Update, the Date column in the last 7 days.
 - Files are streamed through the site, so a person can only open files on their own rows.
 
+## Pop-ups from Marketing
+Marketing writes pop-ups in Stewart Marketing Tools (**Publish › Pop-ups**); each is a row on the **My Marketing Pop-ups** board
+(Message, Link, Button, Picture, Who, Start, End, State). A Live pop-up between its dates shows to Everyone, or to one manager's team
+(the **Manager** column on the Main Employee Sheet), the next time someone opens or refreshes the site. Once they close it with the x
+or tap its button it's gone for them on every device (kept in the `Gate` Durable Object, `pop:<row id>`), and the Seen / Tapped / Closed
+counts go back on the row. Not shown in the read-only view from the Manager Portal.
+
 ## Cloudflare settings (Workers & Pages → my-marketing → Settings)
 - **Build:** root directory `my-marketing`, deploy command `npx wrangler deploy`.
 - **Variables and Secrets (runtime):**
