@@ -326,16 +326,24 @@ async function scripts(env, s) {
 async function myUploads(env, s) {
   const u = await boardByName(env, UPLOADS_BOARD);
   if (!u || !u.cols.Email) return { filmed: [], reshoot: [], items: [] };
-  const ids = [u.cols.Script, u.cols.Status, u.cols.Note].filter(Boolean);
+  const ids = [u.cols.Script, u.cols.Status, u.cols.Note, u.cols.Redo].filter(Boolean);
   const d = await gql(env, 'query($b:ID!,$c:String!,$v:[String]!,$i:[String!]){items_page_by_column_values(board_id:$b,limit:200,columns:[{column_id:$c,column_values:$v}]){items{id column_values(ids:$i){id text}}}}',
     { b: u.id, c: u.cols.Email, v: [s.email], i: ids });
-  const items = d.items_page_by_column_values.items.map(it => { const v = {}; it.column_values.forEach(c => v[c.id] = c.text || ''); return { id: String(it.id), script: v[u.cols.Script] || '', status: v[u.cols.Status] || '', note: u.cols.Note ? v[u.cols.Note] || '' : '' }; });
+  const items = d.items_page_by_column_values.items.map(it => { const v = {}; it.column_values.forEach(c => v[c.id] = c.text || ''); return { id: String(it.id), script: v[u.cols.Script] || '', status: v[u.cols.Status] || '', note: u.cols.Note ? v[u.cols.Note] || '' : '', redo: u.cols.Redo ? v[u.cols.Redo] || '' : '' }; });
   const re = items.filter(x => /^reshoot$/i.test(x.status));
-  return { filmed: items.filter(x => !/^(reshoot|reshot)$/i.test(x.status)).map(x => x.script), reshoot: re.map(x => ({ script: x.script, note: x.note })), items: re, board: u };
+  // a reshoot of just one part of a recording made in parts: Redo holds that part's number
+  return { filmed: items.filter(x => !/^(reshoot|reshot|uploading)$/i.test(x.status)).map(x => x.script),
+    reshoot: re.map(x => ({ script: x.script, note: x.note, part: /^\d+$/.test(x.redo.trim()) ? Number(x.redo) : 0, id: x.id })), items: re, board: u };
 }
+// A script recorded in parts sends one request per part (part=1..of): the first makes the monday item (Status "Uploading"),
+// the rest add their file to it (item=…), and the last one marks it New so Marketing Tools brings it in and joins the parts.
+// redo=<item> is one part recorded again after a part reshoot request; Marketing Tools takes the other parts from that item.
 async function uploadVideo(request, env, s, url) {
   const script = String(url.searchParams.get('script') || '').trim().slice(0, 200);
   if (!script) return fail(400, 'Which script is this for?');
+  const of = Math.min(6, Math.max(1, Number(url.searchParams.get('of')) || 1)), part = Math.min(of, Math.max(1, Number(url.searchParams.get('part')) || 1));
+  const itemId = /^\d+$/.test(url.searchParams.get('item') || '') ? url.searchParams.get('item') : '';
+  const redo = /^\d+$/.test(url.searchParams.get('redo') || '') ? url.searchParams.get('redo') : '';
   const len = Number(request.headers.get('Content-Length') || 0);
   if (len > MAX_UPLOAD) return fail(413, 'That video is too long to send. Keep it under 3 minutes and try again.');
   const type = String(request.headers.get('Content-Type') || 'video/mp4').split(';')[0];
@@ -345,16 +353,30 @@ async function uploadVideo(request, env, s, url) {
   if (body.byteLength > MAX_UPLOAD) return fail(413, 'That video is too long to send. Keep it under 3 minutes and try again.');
   const b = await boardByName(env, UPLOADS_BOARD);
   if (!b || !b.cols.Video) return fail(500, 'Video uploads aren’t set up yet. Ask West Marketing.');
-  const vals = {};
-  if (b.cols.Person) vals[b.cols.Person] = s.name;
-  if (b.cols.Email) vals[b.cols.Email] = s.email;
-  if (b.cols.Script) vals[b.cols.Script] = script;
-  if (b.cols.Status) vals[b.cols.Status] = 'New';
-  if (b.cols.Uploaded) vals[b.cols.Uploaded] = new Date().toISOString().slice(0, 16).replace('T', ' ');
-  const it = (await gql(env, 'mutation($b:ID!,$n:String!,$v:JSON!){create_item(board_id:$b,item_name:$n,column_values:$v){id}}', { b: b.id, n: s.name + ' - ' + script, v: JSON.stringify(vals) })).create_item;
+  const last = redo || part === of;
+  const setCols = async (id, vals) => gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: id, v: JSON.stringify(vals) });
+  let id = itemId;
+  if (id) {
+    // a later part: it has to be this person's own recording of the same script, still uploading
+    const d = await gql(env, 'query($i:[ID!]){items(ids:$i){id board{id} column_values{id text}}}', { i: [id] });
+    const it = d.items && d.items[0], v = {};
+    if (it) it.column_values.forEach(c => v[c.id] = c.text || '');
+    if (!it || String(it.board.id) !== String(b.id) || String(v[b.cols.Email] || '').toLowerCase() !== String(s.email || '').toLowerCase() || (v[b.cols.Script] || '').trim() !== script || !/^uploading$/i.test(v[b.cols.Status] || ''))
+      return fail(400, 'That recording couldn’t be added to. Please record it again.');
+  } else {
+    const vals = {};
+    if (b.cols.Person) vals[b.cols.Person] = s.name;
+    if (b.cols.Email) vals[b.cols.Email] = s.email;
+    if (b.cols.Script) vals[b.cols.Script] = script;
+    if (b.cols.Status) vals[b.cols.Status] = last ? 'New' : 'Uploading';
+    if (b.cols.Uploaded) vals[b.cols.Uploaded] = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    if (b.cols.Parts && of > 1) vals[b.cols.Parts] = String(of);
+    if (b.cols.Redo && redo) vals[b.cols.Redo] = part + ' of ' + redo;
+    id = String((await gql(env, 'mutation($b:ID!,$n:String!,$v:JSON!){create_item(board_id:$b,item_name:$n,column_values:$v){id}}', { b: b.id, n: s.name + ' - ' + script, v: JSON.stringify(vals) })).create_item.id);
+  }
   const fd = new FormData();
-  fd.append('query', 'mutation ($file: File!) { add_file_to_column (item_id: ' + it.id + ', column_id: "' + b.cols.Video + '", file: $file) { id } }');
-  const name = (s.name + ' - ' + script).replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.' + ext;
+  fd.append('query', 'mutation ($file: File!) { add_file_to_column (item_id: ' + id + ', column_id: "' + b.cols.Video + '", file: $file) { id } }');
+  const name = (s.name + ' - ' + script + (of > 1 ? ' (part ' + part + ' of ' + of + (redo ? ', redo ' + redo : '') + ')' : '')).replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.' + ext;
   fd.append('variables[file]', new File([body], name, { type }));
   const r = await fetch('https://api.monday.com/v2/file', { method: 'POST', headers: { Authorization: env.MONDAY_TOKEN, 'API-Version': '2024-10' }, body: fd });
   const j = await r.json().catch(() => ({}));
@@ -362,16 +384,18 @@ async function uploadVideo(request, env, s, url) {
     console.error('upload failed', r.status, JSON.stringify(j).slice(0, 400));
     return fail(502, 'The video didn’t finish sending. Please try again.');
   }
+  if (!last) return json({ ok: true, item: id, more: true });
+  if (itemId && b.cols.Status) { const v = {}; v[b.cols.Status] = 'New'; await setCols(id, v); }
   // a new take clears any reshoot request for that script
   try {
     const m = await myUploads(env, s);
     for (const x of m.items.filter(x => x.script.trim().toLowerCase() === script.toLowerCase())) {
       const v = {}; v[m.board.cols.Status] = 'Reshot';
-      await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: m.board.id, i: x.id, v: JSON.stringify(v) });
+      await setCols(x.id, v);
     }
   } catch (e) { console.error('reshoot clear failed', e.message); }
   forget('filmed:' + s.uid);
-  return json({ ok: true });
+  return json({ ok: true, item: id });
 }
 
 // ---------- sign-in codes and rate limits ----------
