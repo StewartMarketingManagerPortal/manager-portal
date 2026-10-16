@@ -656,3 +656,20 @@ select:disabled { opacity: .6; cursor: default; }
 .rc-fwd-r { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid #F0DFC0; padding-top: 8px; }
 .rc-fwd-r b { display: block; font-size: 14px; overflow-wrap: anywhere; } .rc-fwd-r .meta { font-size: 12.5px; color: var(--muted); }
 .rc-fwd-r select { border: 1.5px solid var(--field); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 13px; background: #fff; max-width: 180px; }
+
+/* Ideas for marketing (ideas.js) */
+.id-card h2 { margin: 0; }
+.id-form { display: grid; grid-template-columns: 1fr 220px; gap: 10px; }
+.id-form textarea { grid-column: 1 / -1; min-height: 70px; }
+.id-btns { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
+.id-list { display: flex; flex-direction: column; gap: 4px; }
+.id-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line, #ECEAE6); }
+.id-row b { display: block; font-size: 15px; }
+.id-row .meta { display: block; font-size: 13px; color: var(--muted); }
+.id-row .status { white-space: nowrap; }
+.status.id-new { background: #F1EFEC; color: #4A4845; }
+.status.id-done { background: #E3F1E8; color: #1B6B3C; }
+.status.id-lib { background: #E6EEF6; color: #1F4E79; }
+.id-err { font-size: 14px; color: var(--brand); }
+@media (max-width: 700px) { .id-form { grid-template-columns: 1fr; } .id-row { flex-wrap: wrap; gap: 6px; } .id-row .grow { flex-basis: 100%; } }
+.id-btns .lnk { font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); background: none; border: 0; cursor: pointer; text-decoration: underline; padding: 4px; }

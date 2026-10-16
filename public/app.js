@@ -161,6 +161,7 @@ PAGES.home = () => {
   if (window.onbHomeCard) h += onbHomeCard();
   if (window.wpHomeCard) h += wpHomeCard();
   if (window.hlHomeCard) h += hlHomeCard();
+  if (window.ideasHomeCard) h += ideasHomeCard();
   h += '<div class="cols"><section class="card col3"><div class="row"><h2 class="grow">Your requests</h2><a href="#mine" style="font-size:14px;font-weight:600">See all</a></div>' + reqList(reqs.slice(0, 5)) + '</section>' +
     '<section class="card col2"><h2>Good to know</h2><div class="muted2" style="font-size:14px;line-height:1.6">Most requests are ready within 7 days. You’ll get an email when your proof is ready to approve.</div>' +
     '<div class="muted2" style="font-size:14px;line-height:1.6">Best headshots: shoulders up, plain background, facing the camera.</div>' +
