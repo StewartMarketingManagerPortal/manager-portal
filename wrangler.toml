@@ -11,3 +11,7 @@ run_worker_first = ["/api/*"]
 
 [observability]
 enabled = true
+
+# every 5 minutes: reminders for social posts whose time has come (src/api.js socialReminders)
+[triggers]
+crons = ["*/5 * * * *"]

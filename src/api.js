@@ -67,6 +67,14 @@ export async function onRequest(ctx) {
     if (route.startsWith('recview/') && m === 'GET') { const r = await recViewLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route === 'ideas' && m === 'GET') return json(await ideaList(env, me));
     if (route === 'ideas' && m === 'POST') { const r = await ideaAdd(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'social' || route.startsWith('social/')) {
+      if (!me.row.admin) return fail('The social calendar is for West Marketing only.', 403);
+      const parts = route.split('/').slice(1);
+      if (!parts.length && m === 'GET') return json(await soList(env, me));
+      if (parts[0] === 'img' && m === 'GET') return await soImage(env, parts[1], parts[2], new URL(request.url).searchParams.get('dl'));
+      if (parts[0] === 'posted' && m === 'POST') { const r = await soPosted(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+      return fail('Not found', 404);
+    }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
   } catch (e) {
@@ -1368,3 +1376,95 @@ async function remoteRoute(env, me, sub, m, request) {
   }
   return { error: 'Not found' };
 }
+
+// ---------- Projects › Social: posts for the Stewart Title of California pages ----------
+// Marketing Tools puts finished projects on the private "Social Posts" board (Stewart West Marketing). Nothing here posts to Facebook,
+// Instagram or LinkedIn: at post time a monday reminder goes out, and the phone remote (/remote/#post/…) has the pictures and captions
+// ready to save, copy and post by hand, then marks it posted.
+const SO_NAME = 'Social Posts';
+const SO_TITLES = ['Project', 'Apps', 'Post At', 'Caption IG', 'Caption LI', 'Images', 'Remind', 'Remind Names', 'Posted IG', 'Posted LI', 'Reminded', 'By', 'Market'];
+const PORTAL_URL = 'https://manager-portal.keving-stewart.workers.dev';
+async function soBoard(env) {
+  const b = await cached('soBoard', 3600e3, async () => {
+    const ws = await wsWest(env);
+    const bs = await gql(env, 'query($w:[ID!]){boards(workspace_ids:$w,state:active,limit:500){id name}}', { w: [ws] });
+    const id = env.SOCIAL_BOARD_ID ? String(env.SOCIAL_BOARD_ID) : ((bs.boards || []).find(x => nk(x.name) === nk(SO_NAME)) || {}).id;
+    if (!id) return null;
+    const cols = await columns(env, String(id)), col = {};
+    SO_TITLES.forEach(t => { const c = cols.byTitle[nk(t)]; if (c) col[t] = c.id; });
+    return { id: String(id), col };
+  });
+  if (!b) forget('soBoard');
+  return b;
+}
+const soWho = t => { const p = String(t || '').split('|'); return p[0] ? { by: p[0], at: p[1] || '' } : null; };
+async function soRows(env, b) {
+  const items = await allItems(env, b.id, Object.values(b.col));
+  return items.map(it => {
+    const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+    const g = t => b.col[t] ? v[b.col[t]] || '' : '';
+    let images = []; try { images = JSON.parse(g('Images') || '[]'); } catch (e) {}
+    return { id: String(it.id), name: it.name.trim(), apps: g('Apps').split(',').filter(x => x === 'ig' || x === 'li'), at: g('Post At'), capIg: g('Caption IG'), capLi: g('Caption LI'),
+      images: (Array.isArray(images) ? images : []).map(i => ({ id: String(i.id), name: String(i.name || ''), video: !!i.video })), remind: g('Remind').split(',').filter(Boolean), remindNames: g('Remind Names'),
+      posted: { ig: soWho(g('Posted IG')), li: soWho(g('Posted LI')) }, reminded: g('Reminded'), by: g('By') };
+  });
+}
+const soAllPosted = p => p.apps.length > 0 && p.apps.every(a => p.posted[a]);
+async function soList(env, me) {
+  const b = await soBoard(env);
+  if (!b) return { posts: [], missing: true };
+  const now = Date.now();
+  // what's waiting (any time), plus the last two weeks of posted ones
+  const rows = (await soRows(env, b)).filter(p => p.at && (!soAllPosted(p) || Date.parse(p.at) > now - 14 * 864e5));
+  rows.forEach(p => { p.mine = { ig: !!(p.posted.ig && p.posted.ig.by === me.email), li: !!(p.posted.li && p.posted.li.by === me.email) }; });
+  return { posts: rows.sort((x, y) => x.at.localeCompare(y.at)), me: me.email, now };
+}
+// the pictures come through here, so the phone can save them (same site) and monday's links stay private
+async function soImage(env, postId, assetId, dl) {
+  const b = await soBoard(env); if (!b) return fail('Not found', 404);
+  const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){board{id} column_values(ids:$c){id text}}}', { i: [String(postId)], c: [b.col.Images] });
+  const it = d.items && d.items[0];
+  if (!it || String(it.board.id) !== b.id) return fail('Not found', 404);
+  let imgs = []; try { imgs = JSON.parse((it.column_values[0] || {}).text || '[]'); } catch (e) {}
+  const img = imgs.find(x => String(x.id) === String(assetId)); if (!img) return fail('Not found', 404);
+  const a = (await gql(env, 'query($i:[ID!]!){assets(ids:$i){id name file_extension public_url}}', { i: [String(assetId)] })).assets[0];
+  if (!a || !a.public_url) return fail('Not found', 404);
+  const r = await fetch(a.public_url);
+  if (!r.ok) return fail('The picture couldn’t be read from monday.com.', 502);
+  const ext = String(a.file_extension || a.name.split('.').pop() || '').replace('.', '').toLowerCase();
+  const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/x-m4v' }[ext] || r.headers.get('Content-Type') || 'application/octet-stream';
+  const name = String(img.name || a.name).replace(/["\\\r\n]/g, '');
+  return new Response(r.body, { headers: { 'Content-Type': type, 'Cache-Control': 'private, max-age=3600', 'Content-Disposition': (dl ? 'attachment' : 'inline') + '; filename="' + name + '"' } });
+}
+async function soPosted(env, me, body) {
+  const b = await soBoard(env); if (!b) return { error: 'The social calendar isn’t set up yet.' };
+  if (body.app !== 'ig' && body.app !== 'li') return { error: 'Instagram or LinkedIn?' };
+  const col = b.col[body.app === 'ig' ? 'Posted IG' : 'Posted LI']; if (!col) return { error: 'The board is missing a column. Open Projects › Social on the Manager’s Mac once.' };
+  const v = {}; v[col] = body.undo ? '' : me.email + '|' + new Date().toISOString();
+  await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: String(body.id), v: JSON.stringify(v) });
+  return { ok: true };
+}
+// every few minutes (Cloudflare cron): a post whose time has come gets one reminder, as a monday update with the phone link
+// and a notification to each person picked for it. Posts more than a day late are left alone.
+export async function socialReminders(env) {
+  if (!env.MONDAY_TOKEN) return { skipped: 'no token' };
+  const b = await soBoard(env); if (!b || !b.col.Reminded) return { skipped: 'no board' };
+  const now = Date.now(), due = (await soRows(env, b)).filter(p => p.at && !p.reminded && !soAllPosted(p) && Date.parse(p.at) <= now && Date.parse(p.at) > now - 864e5);
+  const sent = [];
+  for (const p of due) {
+    const link = PORTAL_URL + '/remote/#post/' + p.id, apps = p.apps.map(a => a === 'ig' ? 'Instagram + Facebook' : 'LinkedIn').join(' and ');
+    try {
+      // mark it first, so a slow run never reminds twice
+      const v = {}; v[b.col.Reminded] = new Date().toISOString();
+      await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: p.id, v: JSON.stringify(v) });
+      const up = await gql(env, 'mutation($i:ID!,$b:String!){create_update(item_id:$i,body:$b){id}}', { i: p.id,
+        b: '<p><b>Time to post: ' + escHtml(p.name) + '</b> (' + escHtml(apps) + ')</p><p>Open it on your phone to save the pictures and copy the caption: <a href="' + link + '">' + link + '</a></p><p>Then tap Mark posted.</p>' });
+      for (const uid of p.remind) {
+        try { await gql(env, 'mutation($u:ID!,$t:ID!,$x:String!){create_notification(user_id:$u,target_id:$t,text:$x,target_type:Post){text}}', { u: String(uid), t: String(up.create_update.id), x: 'Time to post: ' + p.name + '. Tap to open it, then use the link to post from your phone.' }); } catch (e) {}
+      }
+      sent.push(p.id);
+    } catch (e) { console.log('social reminder ' + p.id + ': ' + e.message); }
+  }
+  return { sent };
+}
+
