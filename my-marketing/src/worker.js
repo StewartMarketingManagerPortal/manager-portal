@@ -319,21 +319,24 @@ async function scripts(env, s) {
   const visible = list.filter(x => /^live$/i.test(x.stage) || (/^testing$/i.test(x.stage) && me && x.testers.includes(me)))
     .map(x => ({ id: x.id, name: x.name, text: x.text, secs: x.secs, testing: /^testing$/i.test(x.stage) }));
   // which ones this person has already sent in, and any West Marketing asked them to record again
-  let mine = { filmed: [], reshoot: [] };
+  // and the ones West Marketing asked them to record (Publish › Video in Stewart Marketing Tools)
+  let mine = { filmed: [], reshoot: [], asked: [] };
   try { mine = await cached('filmed:' + s.uid, 60e3, () => myUploads(env, s)); } catch (e) {}
-  return { scripts: visible, filmed: mine.filmed, reshoot: mine.reshoot };
+  return { scripts: visible, filmed: mine.filmed, reshoot: mine.reshoot, asked: mine.asked || [] };
 }
 async function myUploads(env, s) {
   const u = await boardByName(env, UPLOADS_BOARD);
-  if (!u || !u.cols.Email) return { filmed: [], reshoot: [], items: [] };
+  if (!u || !u.cols.Email) return { filmed: [], reshoot: [], asked: [], items: [] };
   const ids = [u.cols.Script, u.cols.Status, u.cols.Note, u.cols.Redo].filter(Boolean);
   const d = await gql(env, 'query($b:ID!,$c:String!,$v:[String]!,$i:[String!]){items_page_by_column_values(board_id:$b,limit:200,columns:[{column_id:$c,column_values:$v}]){items{id column_values(ids:$i){id text}}}}',
     { b: u.id, c: u.cols.Email, v: [s.email], i: ids });
   const items = d.items_page_by_column_values.items.map(it => { const v = {}; it.column_values.forEach(c => v[c.id] = c.text || ''); return { id: String(it.id), script: v[u.cols.Script] || '', status: v[u.cols.Status] || '', note: u.cols.Note ? v[u.cols.Note] || '' : '', redo: u.cols.Redo ? v[u.cols.Redo] || '' : '' }; });
   const re = items.filter(x => /^reshoot$/i.test(x.status));
   // a reshoot of just one part of a recording made in parts: Redo holds that part's number
-  return { filmed: items.filter(x => !/^(reshoot|reshot|uploading)$/i.test(x.status)).map(x => x.script),
-    reshoot: re.map(x => ({ script: x.script, note: x.note, part: /^\d+$/.test(x.redo.trim()) ? Number(x.redo) : 0, id: x.id })), items: re, board: u };
+  const ask = items.filter(x => /^asked$/i.test(x.status));
+  return { filmed: items.filter(x => !/^(reshoot|reshot|uploading|asked|cancelled)$/i.test(x.status)).map(x => x.script),
+    reshoot: re.map(x => ({ script: x.script, note: x.note, part: /^\d+$/.test(x.redo.trim()) ? Number(x.redo) : 0, id: x.id })),
+    asked: ask.map(x => ({ script: x.script, note: x.note, id: x.id })), items: re, askItems: ask, board: u };
 }
 // A script recorded in parts sends one request per part (part=1..of): the first makes the monday item (Status "Uploading"),
 // the rest add their file to it (item=…), and the last one marks it New so Marketing Tools brings it in and joins the parts.
@@ -364,6 +367,8 @@ async function uploadVideo(request, env, s, url) {
     if (!it || String(it.board.id) !== String(b.id) || String(v[b.cols.Email] || '').toLowerCase() !== String(s.email || '').toLowerCase() || (v[b.cols.Script] || '').trim() !== script || !/^uploading$/i.test(v[b.cols.Status] || ''))
       return fail(400, 'That recording couldn’t be added to. Please record it again.');
   } else {
+    // West Marketing asked for this script: the recording goes on the row they made for the ask
+    if (!redo) try { const m = await myUploads(env, s); const a = m.askItems.find(x => x.script.trim().toLowerCase() === script.toLowerCase()); if (a) id = a.id; } catch (e) { console.error('ask lookup failed', e.message); }
     const vals = {};
     if (b.cols.Person) vals[b.cols.Person] = s.name;
     if (b.cols.Email) vals[b.cols.Email] = s.email;
@@ -372,7 +377,8 @@ async function uploadVideo(request, env, s, url) {
     if (b.cols.Uploaded) vals[b.cols.Uploaded] = new Date().toISOString().slice(0, 16).replace('T', ' ');
     if (b.cols.Parts && of > 1) vals[b.cols.Parts] = String(of);
     if (b.cols.Redo && redo) vals[b.cols.Redo] = part + ' of ' + redo;
-    id = String((await gql(env, 'mutation($b:ID!,$n:String!,$v:JSON!){create_item(board_id:$b,item_name:$n,column_values:$v){id}}', { b: b.id, n: s.name + ' - ' + script, v: JSON.stringify(vals) })).create_item.id);
+    if (id) await setCols(id, vals);
+    else id = String((await gql(env, 'mutation($b:ID!,$n:String!,$v:JSON!){create_item(board_id:$b,item_name:$n,column_values:$v){id}}', { b: b.id, n: s.name + ' - ' + script, v: JSON.stringify(vals) })).create_item.id);
   }
   const fd = new FormData();
   fd.append('query', 'mutation ($file: File!) { add_file_to_column (item_id: ' + id + ', column_id: "' + b.cols.Video + '", file: $file) { id } }');

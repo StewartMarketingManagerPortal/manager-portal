@@ -3,7 +3,7 @@
 // Each part can be redone before sending; the parts go up together and Marketing Tools joins them.
 // The camera records as-is (no background blur). MediaPipe finds the person only to show the "lined up" guide.
 'use strict';
-const V = { list: null, filmed: [], reshoot: [], err: '', takes: [], cur: 0, forId: '', redoOne: false, sending: 0, sent: false, speed: 1, size: 1, upItem: '', upNext: 0 };
+const V = { list: null, filmed: [], reshoot: [], asked: [], err: '', takes: [], cur: 0, forId: '', redoOne: false, sending: 0, sent: false, speed: 1, size: 1, upItem: '', upNext: 0 };
 // ---------- script parts ----------
 const vParts = t => { const out = [[]]; String(t || '').replace(/\r\n?/g, '\n').split('\n').forEach(l => { if (/^\s*-{3,}\s*$/.test(l)) out.push([]); else out[out.length - 1].push(l); }); return out.map(x => x.join('\n').trim()).filter(Boolean); };
 const vPartName = (i, n) => n < 2 ? '' : i === 0 ? 'Hook' : i === n - 1 ? 'Call to action' : n > 3 ? 'The point ' + i : 'The point';
@@ -33,28 +33,35 @@ const vScript = id => (V.list || []).find(x => x.id === id);
 const vLen = s => s ? 'About ' + (s < 60 ? s + ' sec' : Math.floor(s / 60) + ' min ' + (s % 60 ? s % 60 + ' sec' : '')) : '';
 async function vLoad(force) {
   if (V.list && !force) return;
-  try { const r = await api('scripts'); V.list = r.scripts || []; V.filmed = (r.filmed || []).map(nk); V.reshoot = r.reshoot || []; V.err = ''; }
+  try { const r = await api('scripts'); V.list = r.scripts || []; V.filmed = (r.filmed || []).map(nk); V.reshoot = r.reshoot || []; V.asked = r.asked || []; V.err = ''; }
   catch (e) { V.err = e.message; V.list = V.list || []; }
   if (/^(make|film|home)$/.test(route().page)) render();
 }
 
 // West Marketing asked for these to be recorded again
 const vRe = name => V.reshoot.find(x => nk(x.script) === nk(name));
+const vAsk = name => V.asked.find(x => nk(x.script) === nk(name));
 function vReshootHtml() {
-  if (!V.reshoot.length) return '';
-  return V.reshoot.map(x => { const s = (V.list || []).find(y => nk(y.name) === nk(x.script));
+  // West Marketing asked for these (new ones first), then the reshoots
+  const ask = V.asked.filter(x => (V.list || []).some(y => nk(y.name) === nk(x.script))).map(x => { const s = V.list.find(y => nk(y.name) === nk(x.script));
+    return '<a class="vre vask" href="#film/' + esc(s.id) + '"><span class="vic">' + I.film + '</span><span><b>Please record “' + esc(x.script) + '”</b>' +
+      '<span>' + esc(x.note || 'West Marketing asked you for this video.') + '</span></span><span class="vchev">' + I.next + '</span></a>'; }).join('');
+  if (!V.reshoot.length) return ask;
+  return ask + V.reshoot.map(x => { const s = (V.list || []).find(y => nk(y.name) === nk(x.script));
     return '<a class="vre" href="' + (s ? '#film/' + esc(s.id) : '#make') + '"><span class="vic">' + I.film + '</span><span><b>Please record ' + (x.part ? 'part ' + x.part + ' of ' : '') + '“' + esc(x.script) + '” again</b>' +
       '<span>' + esc(x.note || 'West Marketing couldn’t use the last take.') + '</span></span><span class="vchev">' + I.next + '</span></a>'; }).join('');
 }
 // Home: one quiet line under the header until they've opened Make a video and seen the request
-const vKey = x => nk(x.script) + '|' + (x.note || '');
+const vKey = x => nk(x.script) + '|' + (x.note || '') + (x.part != null ? '' : '|ask');
 function vSeen() { try { return JSON.parse(localStorage.getItem('vseen') || '[]'); } catch (e) { return []; } }
 function vHomeNote() {
-  const seen = vSeen(), un = V.reshoot.filter(x => !seen.includes(vKey(x)));
-  if (!un.length) return '';
-  return '<section class="blk vnblk"><div class="wrap"><a class="vnote" href="#make"><i></i><span>' + (un.length === 1 ? 'West Marketing asked for a reshoot' : un.length + ' videos to reshoot') + '</span><u>View ›</u></a></div></section>';
+  const seen = vSeen(), un = V.reshoot.filter(x => !seen.includes(vKey(x))), ua = V.asked.filter(x => !seen.includes(vKey(x)));
+  if (!un.length && !ua.length) return '';
+  const t = ua.length && !un.length ? (ua.length === 1 ? 'West Marketing asked you for a video' : 'West Marketing asked you for ' + ua.length + ' videos')
+    : un.length && !ua.length ? (un.length === 1 ? 'West Marketing asked for a reshoot' : un.length + ' videos to reshoot') : (un.length + ua.length) + ' videos to record';
+  return '<section class="blk vnblk"><div class="wrap"><a class="vnote" href="#make"><i></i><span>' + t + '</span><u>View ›</u></a></div></section>';
 }
-function vMarkSeen() { if (!V.reshoot.length) return; try { localStorage.setItem('vseen', JSON.stringify(V.reshoot.map(vKey))); } catch (e) {} }
+function vMarkSeen() { if (!V.reshoot.length && !V.asked.length) return; try { localStorage.setItem('vseen', JSON.stringify(V.reshoot.concat(V.asked).map(vKey))); } catch (e) {} }
 // ---------- 1 · scripts ----------
 function makeHtml() {
   const t = tabs('make');
@@ -66,7 +73,7 @@ function makeHtml() {
   else if (!V.list.length) h += '<div class="empty">No scripts yet. West Marketing will add them here.</div>';
   else { vMarkSeen(); h += vReshootHtml() + '<div class="vlist">' + V.list.map(s => '<a class="vrow" href="#film/' + esc(s.id) + '"><span class="vic">' + I.film + '</span><span class="vtx"><b>' + esc(s.name) + '</b><small>' + esc(vLen(s.secs)) + (vParts(s.text).length > 1 ? ' · ' + vParts(s.text).length + ' parts' : '') +
     (s.testing ? '<span class="vpill test">Testing · only you see this</span>' : '') +
-    (vRe(s.name) ? '<span class="vpill re">Please reshoot</span>' : V.filmed.includes(nk(s.name)) ? '<span class="vpill">Sent</span>' : '') + '</small></span><span class="vchev">' + I.next + '</span></a>').join('') + '</div>'; }
+    (vRe(s.name) ? '<span class="vpill re">Please reshoot</span>' : vAsk(s.name) ? '<span class="vpill re">Asked for you</span>' : V.filmed.includes(nk(s.name)) ? '<span class="vpill">Sent</span>' : '') + '</small></span><span class="vchev">' + I.next + '</span></a>').join('') + '</div>'; }
   return h + '</div></div>' + foot() + '</div>' + t.bottom;
 }
 // ---------- 2 · before you film ----------
@@ -276,6 +283,7 @@ async function vSend() {
   V.sent = true; V.sending = 0; V.upItem = ''; V.upNext = 0;
   if (!V.filmed.includes(nk(s.name))) V.filmed.push(nk(s.name));
   V.reshoot = V.reshoot.filter(x => nk(x.script) !== nk(s.name));
+  V.asked = V.asked.filter(x => nk(x.script) !== nk(s.name));
   render();
 }
 
