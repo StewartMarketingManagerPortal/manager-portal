@@ -51,6 +51,7 @@ function makeHtml() {
   else if (V.err) h += '<div class="err">' + esc(V.err) + '</div>';
   else if (!V.list.length) h += '<div class="empty">No scripts yet. West Marketing will add them here.</div>';
   else { vMarkSeen(); h += vReshootHtml() + '<div class="vlist">' + V.list.map(s => '<a class="vrow" href="#film/' + esc(s.id) + '"><span class="vic">' + I.film + '</span><span class="vtx"><b>' + esc(s.name) + '</b><small>' + esc(vLen(s.secs)) +
+    (s.testing ? '<span class="vpill test">Testing · only you see this</span>' : '') +
     (vRe(s.name) ? '<span class="vpill re">Please reshoot</span>' : V.filmed.includes(nk(s.name)) ? '<span class="vpill">Sent</span>' : '') + '</small></span><span class="vchev">' + I.next + '</span></a>').join('') + '</div>'; }
   return h + '</div></div>' + foot() + '</div>' + t.bottom;
 }

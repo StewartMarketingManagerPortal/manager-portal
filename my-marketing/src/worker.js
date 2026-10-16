@@ -308,13 +308,20 @@ async function scripts(env, s) {
     const d = await gql(env, 'query($b:[ID!]){boards(ids:$b){items_page(limit:500){items{id name column_values{id text}}}}}', { b: [b.id] });
     return d.boards[0].items_page.items.map(it => {
       const v = {}; it.column_values.forEach(c => v[c.id] = c.text || '');
-      return { id: String(it.id), name: it.name.trim(), text: (v[b.cols.Script] || '').trim(), secs: Number(v[b.cols.Seconds]) || 0, active: !/^n/i.test(v[b.cols.Active] || 'Yes') };
+      // Stage (set by Stewart Marketing Tools): Live = everyone, Testing = only the Testers (the manager), Needs template = nobody.
+      // Before the Stage column exists every active script shows, as it always has.
+      const stage = b.cols.Stage ? (v[b.cols.Stage] || '').trim() : 'Live';
+      const testers = b.cols.Testers ? (v[b.cols.Testers] || '').toLowerCase().split(/[,\s;]+/).filter(Boolean) : [];
+      return { id: String(it.id), name: it.name.trim(), text: (v[b.cols.Script] || '').trim(), secs: Number(v[b.cols.Seconds]) || 0, active: !/^n/i.test(v[b.cols.Active] || 'Yes'), stage, testers };
     }).filter(x => x.active && x.text).sort((a, b) => a.name.localeCompare(b.name));
   });
+  const me = String(s.email || '').toLowerCase();
+  const visible = list.filter(x => /^live$/i.test(x.stage) || (/^testing$/i.test(x.stage) && me && x.testers.includes(me)))
+    .map(x => ({ id: x.id, name: x.name, text: x.text, secs: x.secs, testing: /^testing$/i.test(x.stage) }));
   // which ones this person has already sent in, and any West Marketing asked them to record again
   let mine = { filmed: [], reshoot: [] };
   try { mine = await cached('filmed:' + s.uid, 60e3, () => myUploads(env, s)); } catch (e) {}
-  return { scripts: list, filmed: mine.filmed, reshoot: mine.reshoot };
+  return { scripts: visible, filmed: mine.filmed, reshoot: mine.reshoot };
 }
 async function myUploads(env, s) {
   const u = await boardByName(env, UPLOADS_BOARD);
