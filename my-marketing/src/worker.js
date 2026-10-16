@@ -248,6 +248,7 @@ async function content(env, s) {
       pieces.push({
         id: String(a.id), item: String(it.id), row: tidy(it.name), title: cleanTitle(a.name, it.name, employee, assets.length === 1),
         category, kind, ext, size: Number(a.file_size) || 0, date,
+        who: tidy(employee || ''),   // whose row it is: a team's pieces carry the team's name
         isNew: isMU ? now - dated < 7 * DAY : now - created < 14 * DAY,
         url: '/api/file/' + a.id,
       });

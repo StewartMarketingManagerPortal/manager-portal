@@ -59,7 +59,7 @@ function nhInviteBox(n) {
     '<label class="check"><input type="checkbox" data-act="nh-invite" ' + (n.invite !== false ? 'checked' : '') + '> Send the monday.com invite when I submit</label>' +
     '<small>They’re added to the portal board as a guest right away, so their “I’ve Made a Move” post and flyers are waiting when they accept.</small></div>';
 }
-function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, bio: null, looks: ['Modern Dark'], notes: '' }; }
+function freshNewHire() { return { step: 1, firstName: '', lastName: '', title: '', titleOther: '', startDate: '', company: 'Stewart Title of California, Inc.', office: '', address1: '', address2: '', phone: '', email: '', show: { phone: true, email: true, address: true, headshot: true }, photo: null, photoUrl: '', areas: [], ar: null, nlAreas: [], nlf: null, bio: null, looks: ['Modern Dark'], notes: '', team: false, teamName: '', teamTitle: '', partners: [] }; }
 function freshRequest() { return { step: 1, state: 'California', type: null, other: '', projectName: '', who: 'pick', people: [], needBy: inDays(7), description: '', files: [], photos: [], x: {} }; }
 
 // ---------- routing ----------
@@ -223,7 +223,7 @@ PAGES.newhire = () => {
   if (window.Cutout) Cutout.load().catch(() => {});
   const steps = ['Details + photo', 'About Me', 'Choose a look', 'Review'];
   let h = (n.step === 1 && S.onbFrom ? '<div class="ob-banner"><span><b>Part of ' + esc(n.firstName || 'their') + '’s onboarding.</b> Once you send this, Marketing setup is ticked off.</span><a class="btn" href="#onboard/' + esc(S.onbFrom) + '/before">‹ Back to the checklist</a></div>' : '') + (n.step === 1 && !S.onbFrom ? '<div class="ob-banner"><span><b>This is the Marketing setup step of onboarding.</b> Start from the new hire’s checklist so everything stays in one place.</span><a class="btn primary" href="#onboard">Go to onboarding ›</a></div>' : '') +
-    '<div class="head"><div><h1>' + (n.step === 2 ? 'About ' + (n.firstName ? esc(n.firstName) : 'them') : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + (S.pk && S.pk.list && S.pk.list.length ? ' announcement' : ' look') : n.step === 4 ? 'Review and submit' : 'Introduce ' + (n.firstName ? esc(n.firstName) : 'your new hire') + ' to Marketing') + '</h1><div class="sub">' +
+    '<div class="head"><div><h1>' + (n.step === 2 ? 'About ' + (n.firstName ? esc(n.firstName) : 'them') : n.step === 3 ? 'Choose ' + (n.firstName ? esc(n.firstName) + '’s' : 'their') + (S.pk && S.pk.list && S.pk.list.length ? ' announcement' : ' look') : n.step === 4 ? 'Review and submit' : 'Introduce ' + (n.team && n.teamName.trim() ? esc(n.teamName.trim()) : n.firstName ? esc(n.firstName) : 'your new hire') + ' to Marketing') + '</h1><div class="sub">' +
     (n.step === 1 ? 'Takes about 3 minutes. Everything goes straight to West Marketing.' : n.step === 2 ? 'Their About Me, used on their website and marketing pieces. Answer a few questions or paste one they have.' : n.step === 3 ? (S.pk && S.pk.list && S.pk.list.length ? 'Their two welcome posts: Stewart’s announcement and their own “I’ve Made a Move” post. Pick one look, or more than one to get each.' : 'Pick one, or both to get every piece in dark and light.') : 'Check everything once — this is exactly what goes on their materials.') + '</div></div>' +
     '<ol class="steps" aria-label="Steps">' + steps.map((s, i) => '<li class="' + (i + 1 === n.step ? 'on' : i + 1 < n.step ? 'done' : '') + '"><span>' + (i + 1 < n.step ? '✓' : i + 1) + '</span>' + s + '</li>').join('') + '</ol></div>';
   if (n.step === 1) h += nhDetails(n); else if (n.step === 2) h += nhBio(n); else if (n.step === 3) h += nhLooks(n); else h += nhReview(n);
@@ -238,7 +238,7 @@ function nhDetails(n) {
   const me = S.me;
   const offices = me.offices.map((o, i) => '<option value="' + i + '" ' + (String(i) === n.office ? 'selected' : '') + '>' + esc(o.address2.replace(/,?\s*[A-Z]{2}\s*\d{5}.*$/, '') + ' – ' + o.address1) + '</option>').join('');
   const titles = me.titles.map(t => '<option ' + (t === n.title ? 'selected' : '') + '>' + esc(t) + '</option>').join('');
-  let h = '<div class="cols"><section class="card col3"><h2>Their details</h2><div class="grid2">' +
+  let h = '<div class="cols"><section class="card col3">' + nhTeamBox(n) + '<h2>' + (n.team ? 'First person' : 'Their details') + '</h2><div class="grid2">' +
     fld('First name', 'firstName', n.firstName, { req: 1 }) + fld('Last name', 'lastName', n.lastName, { req: 1 }) +
     '<label class="field">Title<select data-f="title"><option value="">Choose…</option>' + titles + '<option value="__other" ' + (n.title === '__other' ? 'selected' : '') + '>Something else…</option></select></label>' +
     (n.title === '__other' ? fld('Their title', 'titleOther', n.titleOther) : fld('Start date', 'startDate', n.startDate, { type: 'date' })) +
@@ -248,7 +248,7 @@ function nhDetails(n) {
     (n.office && n.office !== '__new' && me.offices[+n.office] ? '<span class="hint">' + esc(me.offices[+n.office].address1 + ', ' + me.offices[+n.office].address2) + '</span>' : '') + '</label>' +
     (n.office === '__new' ? fld('Street address', 'address1', n.address1, { ph: '123 Main St., Suite 100' }) + fld('City, state, zip', 'address2', n.address2, { ph: 'Sacramento, CA 95814' }) : '') +
     fld('Work phone', 'phone', n.phone, { type: 'tel', ph: '(916) 555-0100' }) + fld('Work email', 'email', n.email, { type: 'email', ph: 'first.last@stewart.com' }) + '</div>' +
-    nhInviteBox(n) +
+    nhInviteBox(n) + (n.team ? nhPartners(n) : '') +
     '<div class="field">Show on their materials<div class="row" style="gap:4px 24px">' + [['phone', 'Phone'], ['email', 'Email'], ['address', 'Office address'], ['headshot', 'Headshot']].map(([k, l]) =>
       '<label class="check"><input type="checkbox" data-show="' + k + '" ' + (n.show[k] ? 'checked' : '') + '> ' + l + '</label>').join('') + '</div></div>' +
     '<div id="nh-areas" style="border-top:1px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:12px"><div><h2>Market update areas <span class="muted" style="font-size:14px;font-weight:500">· at least 2 required</span></h2>' +
@@ -263,13 +263,13 @@ function nhDetails(n) {
     (n.nlAreas.length ? '<div class="tm-areas">' + n.nlAreas.map((a, i) => '<div class="tm-area"><span class="grow"><b>' + esc(nlName(a.header)) + '</b>' + (a.location ? '<span class="small muted">' + esc(a.location) + '</span>' : '') + '</span>' +
       '<button type="button" class="btn small" data-act="nh-nl-del" data-i="' + i + '">Remove</button></div>').join('') + '</div>' : '<div class="small" style="color:var(--brand);font-weight:600">Add their newsletter area to continue.</div>') +
     nlForm('nh') + '</div></section>';
-  h += '<section class="col2"><div class="card"><h2>Headshot</h2><div class="row" style="align-items:center;flex-wrap:nowrap">' +
+  h += '<section class="col2"><div class="card"><h2>' + (n.team ? 'Team photo' : 'Headshot') + '</h2>' + (n.team ? '<div class="small muted2">One photo with everyone in it. It goes on every team piece.</div>' : '') + '<div class="row" style="align-items:center;flex-wrap:nowrap">' +
     '<div class="headshot" id="headshot">' + headshotBox(n) + '</div>' +
     '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px" class="muted2">' + (n.photo ? '<span style="color:var(--green-text);font-weight:700">✓ ' + esc(n.photo.name) + '</span>' : '') +
     '<span id="cutnote">' + cutNote(n) + '</span>' +
     '<label class="btn small" style="align-self:flex-start">' + (n.photo ? 'Replace photo' : 'Upload photo') + '<input type="file" accept="image/*" data-file="photo" hidden></label></div></div></div>' +
     '<div class="preview"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock" id="cblock">' + cblock(n) + '</div>' +
-    '<div class="small" style="color:var(--border)">This is how their details appear on flyers and the email signature.</div></div></section></div>';
+    '<div class="small" style="color:var(--border)">' + (n.team ? 'The team block on flyers is the same size as one person’s, so every flyer works for a team.' : 'This is how their details appear on flyers and the email signature.') + '</div></div></section></div>';
   h += '<div class="row" style="justify-content:space-between"><a href="#home" style="font-weight:600">Cancel</a><button type="button" class="btn primary" data-act="nh-next">Next: About Me →</button></div>';
   return h;
 }
@@ -283,8 +283,43 @@ function cutNote(n) {
   if (n.cutState === 'failed') return 'We couldn’t preview the cutout here, but marketing removes the background for you.';
   return 'Head and shoulders inside the guide. We remove the background for you.';
 }
+// ----- joining as a team: one row for the team (its name and team photo), plus a row for each person -----
+function nhTeamBox(n) {
+  let h = '<div class="nh-team"><div class="row" style="justify-content:space-between;align-items:center"><div><b>Joining as a team?</b><div class="small muted2">Some salespeople work together and share one set of marketing with both of them on it.</div></div>' +
+    '<div class="seg" role="group" aria-label="Joining as a team"><button type="button" data-act="nh-team" data-v="0" aria-pressed="' + !n.team + '">Just them</button><button type="button" data-act="nh-team" data-v="1" aria-pressed="' + !!n.team + '">As a team</button></div></div>';
+  if (n.team) h += '<div class="grid2" style="margin-top:12px">' + fld('Team name', 'teamName', n.teamName, { ph: 'titleBYus', hint: 'shown on their marketing' }) +
+    fld('Title on team pieces', 'teamTitle', n.teamTitle, { ph: 'Business Development Managers', hint: 'optional' }) + '</div>';
+  return h + '</div>';
+}
+function nhPartners(n) {
+  const taken = new Set(n.partners.map(x => x.existing).filter(Boolean));
+  let h = '<div id="nh-partners" style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:18px"><h2>Who else is on the team</h2>';
+  n.partners.forEach((x, i) => {
+    h += '<div class="nh-partner"><div class="row" style="justify-content:space-between;align-items:center"><b>Person ' + (i + 2) + '</b><button type="button" class="btn small" data-act="nh-p-del" data-i="' + i + '">Remove</button></div>';
+    if (x.existing) { const e = S.me.team.find(t => String(t.id) === x.existing) || {}; h += '<div class="small"><b>' + esc(e.name || '') + '</b> <span class="muted2">· already works here, nothing new to fill in</span></div></div>'; return; }
+    h += '<div class="grid2">' + pfld(i, 'First name', 'firstName', x) + pfld(i, 'Last name', 'lastName', x) + pfld(i, 'Work phone', 'phone', x, 'tel', '(916) 555-0100') + pfld(i, 'Work email', 'email', x, 'email', 'first.last@stewart.com') +
+      pfld(i, 'Personal email for the portal invite', 'portalEmail', x, 'email', 'optional') + '</div></div>';
+  });
+  const others = S.me.team.filter(t => !taken.has(String(t.id)));
+  h += '<div class="row" style="gap:10px"><button type="button" class="btn small" data-act="nh-p-add">+ Someone new</button>' +
+    (others.length ? '<select data-pf="add" aria-label="Add someone who already works here"><option value="">+ Someone who already works here…</option>' + others.map(t => '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>').join('') + '</select>' : '') + '</div></div>';
+  return h;
+}
+function pfld(i, label, key, x, type, ph) {
+  return '<label class="field">' + label + '<input type="' + (type || 'text') + '" data-pf="' + i + '.' + key + '" value="' + esc(x[key] || '') + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '></label>';
+}
+// everyone on the team, in order: the first person, then each partner
+function nhPeople(n) {
+  const out = [{ name: (n.firstName + ' ' + n.lastName).trim(), phone: n.show.phone ? fmtPhone(n.phone) : '', email: n.show.email ? n.email : '' }];
+  n.partners.forEach(x => {
+    if (x.existing) { const e = S.me.team.find(t => String(t.id) === x.existing); if (e) out.push({ name: e.name, phone: '', email: e.email || '' }); }
+    else out.push({ name: (x.firstName + ' ' + x.lastName).trim(), phone: fmtPhone(x.phone || ''), email: x.email || '' });
+  });
+  return out;
+}
 // the live preview: the same contact block the flyers (and My Team) use
 function cblock(n) {
+  if (n.team) return cblockTeam(n);
   const name = (n.firstName + ' ' + n.lastName).trim();
   const pic = n.show.headshot && n.cutUrl ? '<img src="' + n.cutUrl + '" alt="">' : n.show.headshot && n.photoUrl ? '<img class="raw" src="' + n.photoUrl + '" alt="">'
     : '<span class="cblk-ini">' + esc(initials(name) || '?') + '</span>';
@@ -296,6 +331,18 @@ function cblock(n) {
     (n.show.phone && n.phone ? '<div>' + CB_ICONS.phone + '<span>' + esc(fmtPhone(n.phone)) + '</span></div>' : '') +
     (n.show.email && n.email ? '<div>' + CB_ICONS.mail + '<span>' + esc(n.email) + '</span></div>' : '') +
     (addr ? '<div>' + CB_ICONS.pin + '<span>' + addr + '</span></div>' : '') + '</div>' +
+    '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></div>';
+}
+// a team's block is stacked so it fits the same space as one person's: each name with its phone, then its email
+function cblockTeam(n) {
+  const pic = n.show.headshot && n.cutUrl ? '<img src="' + n.cutUrl + '" alt="">' : n.show.headshot && n.photoUrl ? '<img class="raw" src="' + n.photoUrl + '" alt="">' : '<span class="cblk-ini">' + esc(initials(n.teamName) || '?') + '</span>';
+  const ad = n.show.address ? nhAddress(n) : { address1: '', address2: '' };
+  const addr = [ad.address1, ad.address2].filter(Boolean).join(', ');
+  return '<div class="cblk mini"><div class="cblk-pic">' + pic + '</div><div class="cblk-txt">' +
+    '<div class="cblk-name">' + esc(n.teamName || 'Team name') + '</div><div class="cblk-title">' + esc(n.teamTitle || nhTitle(n) || 'Title') + '</div>' +
+    (n.company ? '<div class="cblk-co">' + esc(n.company) + '</div>' : '') + '<div class="cblk-team">' +
+    nhPeople(n).map(m => '<div><b>' + esc(m.name || 'Name') + '</b>' + (m.phone ? ' · ' + esc(m.phone) : '') + '</div>' + (m.email ? '<div class="cblk-em">' + esc(m.email) + '</div>' : '')).join('') + '</div>' +
+    (addr ? '<div class="cblk-lines"><div>' + CB_ICONS.pin + '<span>' + esc(addr) + '</span></div></div>' : '') +
     '<img class="cblk-logo" src="logo-dark.png" alt="Stewart Title"></div></div>';
 }
 // (916) 555-0142 however it was typed; anything that isn't a 10-digit US number is left as typed
@@ -384,7 +431,7 @@ function nhReview(n) {
   let h = '<div class="cols"><section class="card col3" style="gap:4px"><div class="row" style="padding-bottom:16px;border-bottom:1px solid var(--line);flex-wrap:nowrap">' +
     (n.photoUrl ? '<img class="av" style="width:84px;height:84px" src="' + n.photoUrl + '" alt="">' : '<span class="av" style="width:84px;height:84px;font-size:24px">' + esc(initials(n.firstName + ' ' + n.lastName)) + '</span>') +
     '<div class="grow"><div style="font-size:24px;font-weight:800">' + esc(n.firstName + ' ' + n.lastName) + '</div><div style="color:var(--brand);font-weight:700">' + esc(nhTitle(n)) + '</div></div><a href="#" data-act="nh-step" data-step="1" style="font-weight:600;font-size:14px">Edit</a></div>' +
-    line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) + line('Portal invite', String(n.portalEmail || '').trim() && n.invite !== false ? 'Send to ' + n.portalEmail.trim() : 'Not sending one') +
+    (n.team ? line('Team', n.teamName + ': ' + nhPeople(n).map(m => m.name).join(', ')) : '') + line('Company', n.company) + line('Office', [a.address1, a.address2].filter(Boolean).join(', ')) + line('Phone', fmtPhone(n.phone) + (n.show.phone ? '' : ' (not shown)')) + line('Email', n.email + (n.show.email ? '' : ' (not shown)')) + line('Portal invite', String(n.portalEmail || '').trim() && n.invite !== false ? 'Send to ' + n.portalEmail.trim() : 'Not sending one') +
     line('Start date', nice(n.startDate)) + line('Market areas', n.areas.map(a => a.label || a.area).join(', ')) + line('Newsletter', n.nlAreas.map(a => nlName(a.header)).join(', ')) + line('About Me', nhBioText(n).length > 140 ? nhBioText(n).slice(0, 140) + '…' : nhBioText(n), 2) + line('Look', n.looks.join(' + ') + (n.looks.length > 1 ? ' (both)' : ''), 3) +
     '<label class="field" style="margin-top:10px">Anything else marketing should know? (optional)<textarea data-f="notes" rows="3">' + esc(n.notes) + '</textarea></label></section>';
   h += '<section class="col2"><div class="card"><h2>What happens next</h2><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7" class="muted2"><li>' + esc(n.firstName || 'They') + ' is added to the Main Employee Sheet and your team.</li>' +
@@ -583,6 +630,17 @@ ACT['nh-next'] = () => {
     if (miss.length) { miss.forEach(k => { const el = document.querySelector('[data-f=' + k + ']'); if (el) el.classList.add('bad'); }); toast('Please fill in the highlighted fields.'); return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.email)) { toast('That email doesn’t look right.'); return; }
     if (String(n.portalEmail || '').trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.portalEmail.trim())) { const el = document.querySelector('[data-f=portalEmail]'); if (el) el.classList.add('bad'); toast('The personal email doesn’t look right. Fix it, or leave it blank to skip the invite.'); return; }
+    if (n.team) {
+      if (!n.teamName.trim()) { const el = document.querySelector('[data-f=teamName]'); if (el) el.classList.add('bad'); toast('Give the team a name.'); return; }
+      if (!n.partners.length) { toast('Add the other people on the team, or choose “Just them”.'); return; }
+      for (let i = 0; i < n.partners.length; i++) {
+        const x = n.partners[i]; if (x.existing) continue;
+        const bad = ['firstName', 'lastName', 'email'].filter(k => !String(x[k] || '').trim());
+        if (x.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email.trim())) bad.push('email');
+        if (x.portalEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.portalEmail.trim())) bad.push('portalEmail');
+        if (bad.length) { bad.forEach(k => { const el = document.querySelector('[data-pf="' + i + '.' + k + '"]'); if (el) el.classList.add('bad'); }); toast('Please fill in person ' + (i + 2) + '’s highlighted fields.'); return; }
+      }
+    }
     if (n.areas.length < 2) { toast('Add at least 2 market update areas.'); const el = document.getElementById('nh-areas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (!n.nlAreas.length) { toast('Add their newsletter area.'); const el = document.getElementById('nh-nl'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   }
@@ -608,6 +666,9 @@ function nhPackages(n, list) {
 }
 ACT.look = el => { const n = S.nh, l = el.dataset.look; n.looksTouched = true; n.looks = n.looks.includes(l) ? n.looks.filter(x => x !== l) : n.looks.concat([l]); render(); };
 ACT['nh-invite'] = el => { S.nh.invite = el.checked; };
+ACT['nh-team'] = el => { const n = S.nh; n.team = el.dataset.v === '1'; if (n.team && !n.partners.length) n.partners.push({ firstName: '', lastName: '', phone: '', email: '', portalEmail: '' }); render(); };
+ACT['nh-p-add'] = () => { S.nh.partners.push({ firstName: '', lastName: '', phone: '', email: '', portalEmail: '' }); render(); };
+ACT['nh-p-del'] = el => { S.nh.partners.splice(+el.dataset.i, 1); render(); };
 ACT['nh-another'] = () => { S.nh = freshNewHire(); S.onbFrom = ''; };
 ACT['nh-submit'] = async () => {
   const n = S.nh, a = nhAddress(n);
@@ -615,10 +676,11 @@ ACT['nh-submit'] = async () => {
   try {
     const fd = new FormData();
     fd.append('fields', JSON.stringify({ firstName: n.firstName, lastName: n.lastName, title: nhTitle(n), company: n.company, address1: a.address1, address2: a.address2, phone: fmtPhone(n.phone), email: n.email,
-      startDate: n.startDate, show: n.show, portalEmail: n.invite !== false ? String(n.portalEmail || '').trim() : '', areas: n.areas, nlAreas: n.nlAreas, bio: nhBioText(n), looks: n.looks, notes: n.notes }));
+      startDate: n.startDate, show: n.show, portalEmail: n.invite !== false ? String(n.portalEmail || '').trim() : '', areas: n.areas, nlAreas: n.nlAreas, bio: nhBioText(n), looks: n.looks, notes: n.notes,
+      team: n.team ? { name: n.teamName.trim(), title: n.teamTitle.trim(), partners: n.partners.map(x => x.existing ? { existing: (S.me.team.find(t => String(t.id) === x.existing) || {}).name || '' } : { firstName: x.firstName.trim(), lastName: x.lastName.trim(), phone: fmtPhone(x.phone || ''), email: x.email.trim(), portalEmail: String(x.portalEmail || '').trim() }) } : null }));
     if (n.photo) fd.append('photo', n.photo, n.photo.name);
     const res = await api('newhire', { method: 'POST', body: fd });
-    S.last = { first: n.firstName, selfServe: S.me.selfServe, onb: S.onbFrom || '', invite: res.invite || null, portalEmail: n.invite !== false ? String(n.portalEmail || '').trim() : '' };
+    S.last = { first: n.team ? n.teamName.trim() : n.firstName, selfServe: S.me.selfServe, onb: S.onbFrom || '', invite: res.invite || null, portalEmail: n.invite !== false ? String(n.portalEmail || '').trim() : '' };
     if (S.onbFrom && window.onbMarkSent) onbMarkSent(S.onbFrom); S.onbFrom = '';
     S.nh = freshNewHire(); S.busy = false; loadRequests(); go('submitted');
   } catch (e) { S.busy = false; render(); toast(e.message, 7000); }
@@ -679,7 +741,8 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => {
   const t = e.target, d = t.dataset;
-  if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther|address1|address2/.test(d.f)) refreshPreview(); }
+  if (d.f && S.nh) { S.nh[d.f] = t.value; t.classList.remove('bad'); if (/firstName|lastName|phone|email|titleOther|address1|address2|teamName|teamTitle/.test(d.f)) refreshPreview(); }
+  if (d.pf && S.nh && t.tagName === 'INPUT') { const [i, k] = d.pf.split('.'); S.nh.partners[+i][k] = t.value; t.classList.remove('bad'); refreshPreview(); }
   if (d.r && S.rq) { if (d.r.startsWith('x.')) S.rq.x[d.r.slice(2)] = t.value; else S.rq[d.r] = t.value; t.classList.remove('bad'); rqRefreshSide(); }
   if (d.nlf && t.tagName === 'INPUT') { const [sc, k] = d.nlf.split('.'); nlfState(sc)[k] = t.value; const st = nlfState(sc), b = document.querySelector('[data-act=' + sc + '-nl-add]'); if (b) b.disabled = !(st.header === '__other' ? st.other.trim() : st.header); return; }
   if (d.bq && S.nh) { const b = bioState(S.nh); if (d.bq === 'paste') b.paste = t.value; else if (d.bq === 'text') { b.text = t.value; const nx = document.querySelector('[data-act=nh-next]'); if (nx) nx.disabled = !t.value.trim(); } else b.q[d.bq] = t.value; return; }
@@ -697,6 +760,8 @@ document.addEventListener('change', e => {
   if (d.r === 'needBy' && S.rq && route() === 'request') { S.rq.pickDate = true; render(); return; }
   if (d.nlf && t.tagName === 'SELECT') { const [sc, k] = d.nlf.split('.'); const st = nlfState(sc); st[k] = t.value; st.loc = ''; render(); return; }
   if (d.f && (t.tagName === 'SELECT')) { S.nh[d.f] = t.value; render(); }
+  if (d.pf === 'add' && S.nh && t.value) { S.nh.partners.push({ existing: t.value }); render(); return; }
+  if (d.pf && /\.phone$/.test(d.pf) && S.nh) { const i = +d.pf.split('.')[0]; S.nh.partners[i].phone = t.value = fmtPhone(t.value); refreshPreview(); }
   if (d.f === 'phone' && S.nh) { S.nh.phone = t.value = fmtPhone(t.value); refreshPreview(); }
   if (d.show) { S.nh.show[d.show] = t.checked; refreshPreview(); }
   if (d.file === 'photo' && t.files[0]) {

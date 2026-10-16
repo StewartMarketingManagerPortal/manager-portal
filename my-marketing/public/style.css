@@ -443,3 +443,8 @@ body.pop-open { overflow: hidden; }
   .mmpop { max-width: none; border-radius: 20px 20px 0 0; padding: 26px 22px calc(26px + var(--safe-b)) 28px; animation: popup .3s ease; }
 }
 @keyframes popup { from { transform: translateY(40px); } to { transform: none; } }
+/* someone on a sales team: All / the team / Just me */
+.teamtabs { margin-top: 0; }
+.homehead .teamtabs .chip { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
+.homehead .teamtabs .chip.on { background: #fff; color: var(--ink); border-color: #fff; }
+.pagehead .teamtabs { margin: 4px 0 8px; }

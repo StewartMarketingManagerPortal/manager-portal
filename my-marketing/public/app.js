@@ -133,7 +133,7 @@ async function submitCode() {
 async function load(fresh) {
   if (!S.data) { S.loading = true; render(); }
   try {
-    S.data = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.err = '';
+    S.full = rename(await api('content' + (fresh ? '?fresh=1' : ''))); S.data = teamView(); S.err = '';
     if (S.viewAs == null) {
       const meP = api('me').then(m => { S.viewAs = m.viewAs || false; return m; }).catch(() => null);
       // the full welcome the first time; "Welcome back" each time they sign in again after that
@@ -193,6 +193,31 @@ function rename(d) {
   (d.pieces || []).filter(p => /newsletter/i.test(p.category)).forEach(nlFix);
   (d.newsletter || []).forEach(p => { p.category = fix(p.category); const same = (d.pieces || []).find(x => x.id === p.id); if (same) { p.title = same.title; p.month = same.month; } else nlFix(p); });
   return d;
+}
+// ---------- teams: someone on a sales team gets the team's pieces as well as their own ----------
+// each piece says whose row it is; anything not under their own name is a team's. "All" shows both.
+function teamNamesOf(d) {
+  const me = nk(d.name), out = [];
+  (d.pieces || []).forEach(p => { if (p.who && nk(p.who) !== me && !out.some(t => nk(t) === nk(p.who))) out.push(p.who); });
+  return out;
+}
+function teamView() {
+  const d = S.full; if (!d) return null;
+  const teams = teamNamesOf(d);
+  let who = S.who || store.get('who') || 'all';
+  if (who !== 'all' && who !== 'me' && !teams.some(t => nk(t) === nk(who))) who = 'all';
+  S.who = who;
+  if (!teams.length || who === 'all') return Object.assign({}, d, { teams });
+  const me = nk(d.name), keep = p => who === 'me' ? (!p.who || nk(p.who) === me) : nk(p.who) === nk(who);
+  const list = (d.pieces || []).filter(keep);
+  const categories = (d.categories || []).map(c => { const l = list.filter(p => p.category === c.name); return Object.assign({}, c, { count: l.length, newCount: l.filter(p => p.isNew).length }); }).filter(c => c.count);
+  return Object.assign({}, d, { teams, pieces: list, categories, week: (d.week || []).filter(keep), newsletter: (d.newsletter || []).filter(keep) });
+}
+function teamTabs() {
+  const teams = (S.data && S.data.teams) || [];
+  if (!teams.length) return '';
+  const b = (v, label) => '<button class="chip' + (S.who === v ? ' on' : '') + '" data-who="' + esc(v) + '" aria-pressed="' + (S.who === v) + '">' + esc(label) + '</button>';
+  return '<div class="chips teamtabs" role="group" aria-label="Whose pieces">' + b('all', 'Everything') + teams.map(t => b(t, t + ' team')).join('') + b('me', 'Just me') + '</div>';
 }
 const pieces = () => (S.data && S.data.pieces) || [];
 const byId = id => pieces().find(p => p.id === id);
@@ -299,7 +324,7 @@ function homeHtml() {
     '<div class="date">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div>' +
     '<h1>Hi ' + esc(firstName(S.data.name)) + '</h1>' +
     '<p>' + (newCount ? 'You have <b>' + newCount + ' new piece' + (newCount === 1 ? '' : 's') + '</b> ready to share.' : all.length ? 'Everything you have is below, ready to share.' : 'Your marketing will show up here as soon as it’s ready.') + '</p></div>' +
-    '<button class="refresh" data-act="refresh" aria-label="Check for new pieces">' + I.refresh + '<span>Refresh</span></button>' +
+    teamTabs() + '<button class="refresh" data-act="refresh" aria-label="Check for new pieces">' + I.refresh + '<span>Refresh</span></button>' +
     '<form class="search dark" id="f-search" role="search"><span style="color:var(--muted-dark);display:flex">' + I.search + '</span><input type="search" id="q" placeholder="Search flyers, tips, updates" aria-label="Search"></form></div></header>';
   h += vHomeNote();
   h += welcomeHtml();
@@ -360,7 +385,7 @@ function catHtml(s) {
   let h = t.top + '<div class="frame"><header class="pagehead"><div class="wrap"><a class="back" href="#home">' + I.back + 'Home</a>' +
     '<div><h1>' + esc(c.name) + '</h1><p>' + list.length + ' piece' + (list.length === 1 ? '' : 's') + ' with your photo and contact info · tap one to share</p></div>' +
     (list.length > 6 ? '<label class="search">' + '<span style="color:var(--muted);display:flex">' + I.search + '</span><input type="search" id="cq" placeholder="Search ' + esc(c.name.toLowerCase()) + '" aria-label="Search ' + esc(c.name) + '" value="' + esc(S.q) + '"></label>' : '') +
-    (c.newCount ? '<div class="chips"><button class="chip ' + (S.filter !== 'new' ? 'on' : '') + '" data-filter="all">All</button><button class="chip ' + (S.filter === 'new' ? 'on' : '') + '" data-filter="new">New (' + c.newCount + ')</button></div>' : '') +
+    teamTabs() + (c.newCount ? '<div class="chips"><button class="chip ' + (S.filter !== 'new' ? 'on' : '') + '" data-filter="all">All</button><button class="chip ' + (S.filter === 'new' ? 'on' : '') + '" data-filter="new">New (' + c.newCount + ')</button></div>' : '') +
     '</div></header><div class="body"><div class="wrap" id="results">' + resultsHtml(c.name, shown) + '</div></div>' + foot() + '</div>' + t.bottom;
   return h;
 }
@@ -524,7 +549,7 @@ document.addEventListener('keydown', e => {
   if (t.dataset && t.dataset.d != null && e.key === 'Backspace' && !t.value) { const prev = document.querySelector('.digits input[data-d="' + (+t.dataset.d - 1) + '"]'); if (prev) { prev.focus(); prev.value = ''; } }
 });
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-act],[data-share],[data-share-week],[data-share-nl],[data-go],[data-filter],[data-jump]');
+  const el = e.target.closest('[data-act],[data-who],[data-share],[data-share-week],[data-share-nl],[data-go],[data-filter],[data-jump]');
   if (!el) return;
   const d = el.dataset;
   if (d.jump) { e.preventDefault(); const s = document.getElementById(d.jump); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
@@ -534,6 +559,7 @@ document.addEventListener('click', async e => {
   if (d.shareNl) { e.preventDefault(); share((S.data.newsletter || []).slice()); return; }
   if (d.go) { go('p/' + d.go); return; }
   if (d.filter) { S.filter = d.filter; render(); return; }
+  if (d.who) { S.who = d.who; store.set('who', d.who); S.data = teamView(); render(); return; }
   if (d.act === 'refresh') { doRefresh(); return; }
   if (d.act === 'viewas-exit') { api('viewas/exit', { method: 'POST' }).catch(() => {}).then(() => { S.viewAs = null; S.data = null; location.hash = ''; window.close(); load(); }); return; }
   if (d.act === 'menu') { openMenu(true); return; }
