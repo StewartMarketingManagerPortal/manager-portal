@@ -67,6 +67,15 @@ export async function onRequest(ctx) {
     if (route.startsWith('recview/') && m === 'GET') { const r = await recViewLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route === 'ideas' && m === 'GET') return json(await ideaList(env, me));
     if (route === 'ideas' && m === 'POST') { const r = await ideaAdd(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route === 'reviews' || route.startsWith('reviews/')) {
+      const parts = route.split('/').slice(1);
+      if (!parts.length && m === 'GET') return json(await drList(env, me));
+      if (parts[0] === 'img' && m === 'GET') return await drImage(env, me, parts[1], parts[2]);
+      if (parts[0] === 'answer' && m === 'POST') { const r = await drAnswer(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+      if (parts[0] === 'comment' && m === 'POST') { const r = await drComment(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
+      if (parts.length === 1 && m === 'GET') { const r = await drDetail(env, me, parts[0]); return json(r, r.error ? 404 : 200); }
+      return fail('Not found', 404);
+    }
     if (route === 'social' || route.startsWith('social/')) {
       if (!me.row.admin) return fail('The social calendar is for West Marketing only.', 403);
       const parts = route.split('/').slice(1);
@@ -1468,3 +1477,115 @@ export async function socialReminders(env) {
   return { sent };
 }
 
+
+// ---------- Design Reviews: design packages the marketing team sends from a brainstorm board ----------
+// Stewart Marketing Tools (a board › Send to management) makes one row per package on the private "Design Reviews" board in the
+// Stewart West Marketing workspace: the slides as PNGs (Slides), their titles (Slide List), who should look (Reviewers: Manager Contacts
+// row ids) and their answers (Answers, keyed by row id). Comments are updates on the row, so the team sees them on monday.com too.
+// The board is made by the Manager's Mac; the portal only reads it.
+const DR_NAME = 'Design Reviews';
+const DR_TITLES = ['Project', 'Board Key', 'Market', 'From', 'Sent', 'Note', 'Slides', 'Slide List', 'Reviewers', 'Answers', 'Status'];
+async function drBoard(env) {
+  const b = await cached('drBoard', 3600e3, async () => {
+    const ws = await wsWest(env);
+    const bs = await gql(env, 'query($w:[ID!]){boards(workspace_ids:$w,state:active,limit:500){id name}}', { w: [ws] });
+    const id = env.REVIEWS_BOARD_ID ? String(env.REVIEWS_BOARD_ID) : ((bs.boards || []).find(x => nk(x.name) === nk(DR_NAME)) || {}).id;
+    if (!id) return null;
+    const cols = await columns(env, String(id)), col = {};
+    DR_TITLES.forEach(t => { const c = cols.byTitle[nk(t)]; if (c) col[t] = c.id; });
+    return { id: String(id), col };
+  });
+  if (!b) forget('drBoard');
+  return b;
+}
+const drJson = (t, d) => { try { const v = JSON.parse(t || ''); return v == null ? d : v; } catch (e) { return d; } };
+const drStrip = h => String(h || '').replace(/<br\s*\/?>|<\/p>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{2,}/g, '\n').trim();
+// comments: "<b>Slide 2 · Name</b> text" from the portal; anything else on the row is from West Marketing (replies made in the app or on monday.com)
+function drComments(ups) {
+  const out = [];
+  (ups || []).forEach(u => {
+    const body = String(u.body || '');
+    if (/<b>(Approved|Asked for changes) · /.test(body)) return;
+    const m = body.match(/<b>(?:Slide (\d+)|Whole package) · ([^<]+)<\/b>/);
+    const text = m ? drStrip(body.slice(body.indexOf(m[0]) + m[0].length)) : drStrip(body);
+    if (text) out.push({ name: m ? drStrip(m[2]) : (u.creator && u.creator.name) || 'Marketing', slide: m && m[1] ? Number(m[1]) : 0, text, at: u.created_at || '', marketing: !m || /^marketing$/i.test(drStrip(m[2])) });
+  });
+  return out.sort((x, y) => String(x.at).localeCompare(String(y.at)));
+}
+function drRow(b, it) {
+  const v = {}; (it.column_values || []).forEach(c => v[c.id] = (c.text || '').trim());
+  const g = t => b.col[t] ? v[b.col[t]] || '' : '';
+  const reviewers = drJson(g('Reviewers'), []).filter(r => r && r.id).map(r => ({ id: String(r.id), name: String(r.name || '') }));
+  const answers = drJson(g('Answers'), {});
+  return { id: String(it.id), name: it.name.trim(), project: g('Project'), market: g('Market'), from: g('From') || 'Marketing', sent: g('Sent') || it.created_at || '', note: g('Note'),
+    slides: drJson(g('Slide List'), []).filter(x => x && x.asset).map((x, i) => ({ asset: String(x.asset), title: String(x.title || 'Slide ' + (i + 1)) })),
+    reviewers, answers: answers && typeof answers === 'object' ? answers : {}, status: g('Status') || 'Open' };
+}
+const drMine = (me, r) => me.row.admin || r.reviewers.some(x => x.id === String(me.row.rowId));
+function drPublic(me, r) {
+  const ok = r.reviewers.filter(x => (r.answers[x.id] || {}).a === 'approve').length, ch = r.reviewers.filter(x => (r.answers[x.id] || {}).a === 'changes').length;
+  const mine = r.answers[String(me.row.rowId)] || null;
+  return { id: r.id, name: r.name, project: r.project, market: r.market, from: r.from, sent: r.sent, note: r.note, status: r.status, count: r.slides.length,
+    cover: r.slides[0] ? '/api/reviews/img/' + r.id + '/' + r.slides[0].asset : '', reviewer: r.reviewers.some(x => x.id === String(me.row.rowId)),
+    mine: mine ? mine.a : '', approved: ok, changes: ch, total: r.reviewers.length };
+}
+async function drList(env, me) {
+  const b = await drBoard(env); if (!b) return { reviews: [] };
+  const items = await allItems(env, b.id, Object.values(b.col));
+  const rows = items.map(it => drRow(b, it)).filter(r => r.slides.length && drMine(me, r));
+  return { reviews: rows.map(r => drPublic(me, r)).sort((x, y) => String(y.sent).localeCompare(String(x.sent))).slice(0, 60) };
+}
+async function drItem(env, b, id) {
+  const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){id name state created_at board{id} column_values(ids:$c){id text} updates(limit:100){body created_at creator{name}}}}', { i: [String(id)], c: Object.values(b.col) });
+  const it = d.items && d.items[0];
+  if (!it || String(it.board.id) !== b.id || (it.state && it.state !== 'active')) return null;
+  return it;
+}
+async function drDetail(env, me, id) {
+  const b = await drBoard(env); if (!b) return { error: 'Not found' };
+  const it = await drItem(env, b, id); if (!it) return { error: 'This package isn’t there anymore.' };
+  const r = drRow(b, it); if (!drMine(me, r)) return { error: 'This package wasn’t sent to you.' };
+  return Object.assign(drPublic(me, r), {
+    slides: r.slides.map(x => ({ title: x.title, url: '/api/reviews/img/' + r.id + '/' + x.asset })),
+    people: r.reviewers.map(x => { const a = r.answers[x.id] || {}; return { name: x.name, you: x.id === String(me.row.rowId), a: a.a || '', by: a.by || '', at: a.at || '' }; }),
+    comments: drComments(it.updates),
+  });
+}
+async function drImage(env, me, id, asset) {
+  const b = await drBoard(env); if (!b) return fail('Not found', 404);
+  const it = await drItem(env, b, id); if (!it) return fail('Not found', 404);
+  const r = drRow(b, it); if (!drMine(me, r) || !r.slides.some(x => x.asset === String(asset))) return fail('Not found', 404);
+  const a = (await gql(env, 'query($i:[ID!]!){assets(ids:$i){id public_url}}', { i: [String(asset)] })).assets[0];
+  if (!a || !a.public_url) return fail('Not found', 404);
+  const res = await fetch(a.public_url);
+  if (!res.ok) return fail('The slide couldn’t be read from monday.com.', 502);
+  return new Response(res.body, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=3600' } });
+}
+async function drAnswer(env, me, body) {
+  const ans = body.a === 'approve' ? 'approve' : body.a === 'changes' ? 'changes' : '';
+  if (!ans) return { error: 'Approve or ask for changes?' };
+  const note = String(body.note || '').trim().slice(0, 3000);
+  if (ans === 'changes' && !note) return { error: 'Say what should change.' };
+  const b = await drBoard(env); if (!b || !b.col.Answers) return { error: 'Design Reviews isn’t set up yet.' };
+  const it = await drItem(env, b, body.id); if (!it) return { error: 'This package isn’t there anymore.' };
+  const r = drRow(b, it), rowId = String(me.row.rowId);
+  if (!r.reviewers.some(x => x.id === rowId)) return { error: 'This package wasn’t sent to you, so your answer can’t be counted.' };
+  r.answers[rowId] = { row: rowId, name: me.row.name, by: byName(me), a: ans, at: new Date().toISOString() };
+  const ok = r.reviewers.every(x => (r.answers[x.id] || {}).a === 'approve'), ch = r.reviewers.some(x => (r.answers[x.id] || {}).a === 'changes');
+  const v = {}; v[b.col.Answers] = { text: JSON.stringify(r.answers) }; if (b.col.Status) v[b.col.Status] = ok ? 'Approved' : ch ? 'Changes asked' : 'Open';
+  await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: b.id, i: r.id, v: JSON.stringify(v) });
+  await addUpdate(env, r.id, '<p><b>' + (ans === 'approve' ? 'Approved' : 'Asked for changes') + ' · ' + escHtml(byName(me)) + '</b></p>');
+  if (note) await drPost(env, me, r.id, Number(body.slide) || 0, note);
+  return { ok: true };
+}
+async function drPost(env, me, id, slide, text) {
+  await addUpdate(env, id, '<p><b>' + (slide > 0 ? 'Slide ' + slide : 'Whole package') + ' · ' + escHtml(byName(me)) + '</b></p><p>' + escHtml(text) + '</p>');
+}
+async function drComment(env, me, body) {
+  const text = String(body.text || '').trim().slice(0, 3000); if (!text) return { error: 'Type a comment first.' };
+  const b = await drBoard(env); if (!b) return { error: 'Design Reviews isn’t set up yet.' };
+  const it = await drItem(env, b, body.id); if (!it) return { error: 'This package isn’t there anymore.' };
+  const r = drRow(b, it); if (!drMine(me, r)) return { error: 'This package wasn’t sent to you.' };
+  await drPost(env, me, r.id, Math.max(0, Math.min(r.slides.length, Number(body.slide) || 0)), text);
+  return { ok: true };
+}
