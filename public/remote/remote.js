@@ -19,6 +19,7 @@ async function load() {
   try { R.st = await api('remote/status'); R.err = ''; } catch (e) { R.err = e.message; }
   R.loading = false;
   // don't interrupt a playing video or someone typing
+  if (route()[0] === 'post') { navRefresh(); return; }
   const v = document.querySelector('video'), f = document.activeElement;
   if ((v && !v.paused) || (f && /INPUT|TEXTAREA/.test(f.tagName))) return;
   render();
@@ -54,25 +55,35 @@ const route = () => (location.hash || '#home').slice(1).split('/');
 window.addEventListener('hashchange', () => { R.sheet = null; render(); window.scrollTo(0, 0); });
 const IC = {
   home: '<path d="M3 11l9-8 9 8v10H3z"/><path d="M9 21v-6h6v6"/>', video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/>',
-  hires: '<circle cx="10" cy="8" r="4"/><path d="M3 21c1-4 4-6 7-6s6 2 7 6"/><path d="M19 8v6M16 11h6"/>', people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.5-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16.5 14.6c2.6.2 4.4 1.9 5 5.4"/>',
+  hires: '<circle cx="10" cy="8" r="4"/><path d="M3 21c1-4 4-6 7-6s6 2 7 6"/><path d="M19 8v6M16 11h6"/>', post: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r=".9" fill="currentColor"/>', people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.5-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16.5 14.6c2.6.2 4.4 1.9 5 5.4"/>',
 };
 const svg = k => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + IC[k] + '</svg>';
+// a slim dark bar at the top, with every page in the menu behind the button at the top right (same as the Manager Portal)
 function nav(on) {
-  const c = D().c || {};
-  const t = (k, label, n) => '<a href="#' + k + '" class="' + (on === k ? 'on' : '') + '">' + svg(k) + label + (n ? '<span class="n">' + n + '</span>' : '') + '</a>';
-  return '<nav class="nav">' + t('home', 'Home') + t('video', 'Video', c.inbox) + t('hires', 'New Hires', c.hires) + t('people', 'People') + '</nav>';
+  const c = D().c || {}, due = SP.due(), any = due || c.inbox || c.hires;
+  const t = (k, label, n) => '<a class="mlink' + (on === k ? ' on' : '') + '" href="#' + k + '"' + (on === k ? ' aria-current="page"' : '') + '>' + svg(k) + label + (n ? '<span class="count">' + n + '</span>' : '') + '</a>';
+  return '<header class="mtop"><img class="logo" src="/logo-light.png" alt="Stewart Title"><span class="tag">MARKETING TOOLS</span>' +
+    '<details class="mmenu"><summary aria-label="Menu"><svg class="mm-open" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>' +
+    '<svg class="mm-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>' + (any ? '<span class="mm-dot"></span>' : '') + '</summary>' +
+    '<nav class="mmenu-list" aria-label="Main">' + t('home', 'Home') + t('post', 'Post', due) + t('video', 'Video', c.inbox) + t('hires', 'New Hires', c.hires) + t('people', 'People') + '</nav><span class="mm-scrim" aria-hidden="true"></span></details></header>';
 }
+// refresh the menu's counts without closing it if it's open
+function navRefresh() { const n = document.querySelector('.mtop'); if (n && !R.sheet && !n.querySelector('details[open]')) n.outerHTML = nav(route()[0]); }
+// tapping outside the open menu closes it
+document.addEventListener('click', e => { const m = document.querySelector('details.mmenu[open]'); if (m && (!m.contains(e.target) || e.target.classList.contains('mm-scrim'))) m.open = false; });
 function render() {
   const [pg, arg] = route();
+  // social posts don't need the Mac: they come straight from the board
+  if (pg === 'post') { $('#app').innerHTML = nav(pg) + (arg ? postOne(arg) : postList()) + (R.sheet ? R.sheet() : ''); return; }
   if (!R.st) { $('#app').innerHTML = R.err ? '<div class="body"><div class="card">' + esc(R.err) + '</div><button class="btn" onclick="load()">Try again</button></div>' : '<div class="boot"><span class="spin"></span></div>'; return; }
   const f = { home: home, video: arg != null ? videoOne : videoList, hires: arg != null ? hireOne : hireList, people: arg != null ? personOne : peopleList }[pg] || home;
-  $('#app').innerHTML = f(arg) + nav(pg) + (R.sheet ? R.sheet() : '');
+  $('#app').innerHTML = nav(pg) + f(arg) + (R.sheet ? R.sheet() : '');
 }
 
 function home() {
   const d = D(), c = d.c || {}, m = macState(), now = new Date();
   const hr = now.getHours(), first = (d.who || '').split(' ')[0];
-  let h = '<div class="top"><img src="/logo-light.png" alt="Stewart Title"><div class="t">MARKETING TOOLS · REMOTE</div><h1>' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + (first ? ', ' + esc(first) : '') + '</h1>' +
+  let h = '<div class="top"><div class="t">REMOTE</div><h1>' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + (first ? ', ' + esc(first) : '') + '</h1>' +
     '<p>' + DAYS[now.getDay()] + ', ' + MON[now.getMonth()] + ' ' + now.getDate() + '</p><div class="mac ' + (m.k === 'ok' ? '' : m.k) + '"><i></i>' + esc(m.t) + '</div></div><div class="body">';
   if (!R.st.data) h += '<div class="card"><b>Not connected yet</b><div class="note" style="margin-top:6px">Open Marketing Tools on your Mac. It connects to this remote within about 15 seconds.</div></div>';
   if (d.job) h += '<div class="card"><div class="lbl">Running now</div><div style="margin-top:8px"><b style="font-size:14.5px">' + esc(d.job.t) + '</b><div class="note">' + esc(d.job.l) + ' · step ' + d.job.s + ' of ' + d.job.n + '</div><div class="bar"><i style="width:' + (d.job.p != null ? d.job.p : Math.round((d.job.s - 1) / d.job.n * 100)) + '%"></i></div></div></div>';
@@ -142,6 +153,92 @@ function personOne(i) {
   return h;
 }
 
+// ---------- social posts (Projects › Social on the Mac): post them from this phone ----------
+// The QR code on the Mac and the monday reminder open #post/<id>. Save the pictures, copy the caption, post it in the app, mark it posted.
+const SP = { list: null, err: '', loading: false, app: {}, me: '', due: () => (SP.list || []).filter(p => spLate(p) || spSoon(p)).length };
+const spAll = p => p.apps.length > 0 && p.apps.every(a => p.posted[a]);
+const spLate = p => !spAll(p) && Date.parse(p.at) <= Date.now();
+const spSoon = p => !spAll(p) && Date.parse(p.at) > Date.now() && Date.parse(p.at) - Date.now() < 3 * 3600e3;
+const SP_APP = { ig: 'Instagram', li: 'LinkedIn' }, SP_FULL = { ig: 'Instagram + Facebook', li: 'LinkedIn' };
+const spWhen = t => { const d = new Date(t); let h = d.getHours(); const ap = h >= 12 ? 'PM' : 'AM'; h = (h + 11) % 12 + 1; return DAYS[d.getDay()].slice(0, 3) + ', ' + MON[d.getMonth()] + ' ' + d.getDate() + ' · ' + h + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + ap; };
+const spImg = (p, i) => '/api/social/img/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(i.id);
+const spNet = a => '<span class="net ' + a + '">' + (a === 'ig' ? 'IG' : 'in') + '</span>';
+async function spLoad() {
+  if (SP.loading) return; SP.loading = true;
+  try { const r = await api('social'); SP.list = r.posts || []; SP.me = r.me || ''; SP.err = r.missing ? 'The social calendar isn’t set up yet.' : ''; } catch (e) { SP.err = e.message; SP.list = SP.list || []; }
+  SP.loading = false;
+  const f = document.activeElement; if (route()[0] === 'post' && !(f && /INPUT|TEXTAREA/.test(f.tagName)) && !R.sheet) render(); else navRefresh();
+}
+function spState(p) { return spAll(p) ? ['g', 'Posted'] : spLate(p) ? ['no', 'Time to post'] : ['ok', 'Ready']; }
+function spRow(p) {
+  const [k, t] = spState(p), i = p.images[0];
+  return '<a class="row" href="#post/' + esc(p.id) + '"><span class="sth">' + (i && !i.video ? '<img src="' + spImg(p, i) + '" alt="" loading="lazy">' : '<span>' + (i && i.video ? '▶' : '') + '</span>') + '</span><span class="g"><b>' + esc(p.name) + '</b><small>' + esc(spWhen(p.at)) + ' · ' + p.apps.map(a => SP_APP[a]).join(' + ') + '</small></span><span class="pill ' + k + '">' + t + '</span></a>';
+}
+function postList() {
+  if (!SP.list) { spLoad(); return '<div class="hd"><h2>Post</h2><div class="sub">Stewart Title of California</div></div><div class="body"><div class="boot" style="min-height:40vh"><span class="spin"></span></div></div>'; }
+  const L = SP.list, now = Date.now();
+  const late = L.filter(spLate), soon = L.filter(p => !spAll(p) && Date.parse(p.at) > now), done = L.filter(spAll).reverse();
+  let h = '<div class="hd"><h2>Post</h2><div class="sub">Stewart Title of California · Instagram, Facebook and LinkedIn</div></div><div class="body">';
+  if (SP.err) h += '<div class="card note">' + esc(SP.err) + '</div>';
+  if (late.length) h += '<div class="card list"><div class="lbl" style="color:var(--brand)">Time to post · ' + late.length + '</div>' + late.map(spRow).join('') + '</div>';
+  h += '<div class="card list"><div class="lbl">Coming up</div>' + (soon.length ? soon.slice(0, 12).map(spRow).join('') : '<div class="empty" style="padding:16px 0">Nothing on the calendar yet. Posts come from finished projects in Marketing Tools.</div>') + '</div>';
+  if (done.length) h += '<div class="card list"><div class="lbl">Posted lately</div>' + done.slice(0, 8).map(spRow).join('') + '</div>';
+  return h + '</div>';
+}
+function postOne(id) {
+  if (!SP.list) { spLoad(); return '<div class="hd"><a class="back" href="#post">‹ Post</a><h2>…</h2></div><div class="body"><div class="boot" style="min-height:40vh"><span class="spin"></span></div></div>'; }
+  const p = SP.list.find(x => x.id === String(id));
+  if (!p) return '<div class="hd"><a class="back" href="#post">‹ Post</a><h2>Not found</h2></div><div class="body"><div class="empty">' + esc(SP.err || 'This post isn’t on the calendar any more.') + '</div></div>';
+  const a = p.apps.indexOf(SP.app[p.id]) >= 0 ? SP.app[p.id] : (p.apps.find(x => !p.posted[x]) || p.apps[0]), cap = a === 'ig' ? p.capIg : p.capLi, done = p.posted[a], vids = p.images.filter(i => i.video).length;
+  let h = '<div class="hd"><a class="back" href="#post">‹ Post</a><h2>' + esc(p.name) + '</h2><div class="sub">' + esc(spWhen(p.at)) + '</div></div><div class="body">';
+  if (p.apps.length > 1) h += '<div class="seg">' + p.apps.map(x => '<a data-a="spapp" data-id="' + esc(p.id) + '" data-app="' + x + '" class="' + (x === a ? 'on' : '') + '">' + spNet(x) + SP_APP[x] + (p.posted[x] ? ' ✓' : '') + '</a>').join('') + '</div>';
+  h += '<div class="spimgs">' + p.images.map(i => i.video ? '<video src="' + spImg(p, i) + '" controls playsinline preload="metadata"></video>' : '<img src="' + spImg(p, i) + '" alt="' + esc(i.name) + '">').join('') + '</div>';
+  if (p.images.length > 1) h += '<div class="note" style="text-align:center;margin-top:-4px">' + plural(p.images.length, vids ? 'file' : 'picture') + ' · swipe to see them all</div>';
+  h += '<button class="btn k" data-a="spsave" data-id="' + esc(p.id) + '">' + (p.images.length > 1 ? 'Save ' + p.images.length + ' to Photos' : vids ? 'Save the video to Photos' : 'Save the picture to Photos') + '</button>';
+  h += '<div class="card"><div class="lbl">' + (a === 'ig' ? 'Instagram caption · shares to Facebook' : 'LinkedIn caption') + '</div><div class="spcap">' + (cap ? esc(cap) : '<span class="note">No caption</span>') + '</div></div>';
+  if (cap) h += '<button class="btn" data-a="spcopy" data-id="' + esc(p.id) + '" data-app="' + a + '">Copy caption</button>';
+  h += '<button class="btn p" data-a="spopen" data-app="' + a + '">Open ' + SP_APP[a] + '</button>';
+  h += done ? '<div class="card"><div class="row"><div class="g"><b>✓ Posted on ' + SP_APP[a] + '</b><small>' + (done.by === SP.me ? 'By you · ' : '') + esc(spWhen(done.at)) + '</small></div><a class="pill g" data-a="spposted" data-id="' + esc(p.id) + '" data-app="' + a + '" data-undo="1">Undo</a></div></div>'
+    : '<button class="btn" data-a="spposted" data-id="' + esc(p.id) + '" data-app="' + a + '">✓ Mark posted on ' + SP_APP[a] + '</button>';
+  h += '<div class="note" style="text-align:center">' + (a === 'ig' ? 'In Instagram tap +, pick the new pictures from the top of your photos, paste the caption, and turn on Facebook sharing if it’s off.' : 'In LinkedIn switch to the Stewart Title of California page, start a post, add the pictures and paste the caption.') + '</div>';
+  return h + '</div>';
+}
+async function spSave(p) {
+  const btn = document.querySelector('[data-a="spsave"]'), old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Getting them ready…'; }
+  try {
+    const files = [];
+    for (const i of p.images) { const r = await fetch(spImg(p, i), { credentials: 'same-origin' }); if (!r.ok) throw new Error('A picture couldn’t be loaded.'); const bl = await r.blob(); files.push(new File([bl], i.name || ('picture-' + (files.length + 1)), { type: bl.type })); }
+    if (navigator.canShare && navigator.canShare({ files })) {
+      if (btn) btn.textContent = old;
+      await navigator.share({ files });   // the phone's share sheet: Save Image / Save Video
+    } else {
+      // no share sheet (a computer): download them one by one
+      p.images.forEach((i, n) => setTimeout(() => { const a = document.createElement('a'); a.href = spImg(p, i) + '?dl=1'; a.download = i.name || ''; document.body.appendChild(a); a.click(); a.remove(); }, n * 400));
+      toast('Downloading ' + plural(p.images.length, 'file'));
+    }
+  } catch (e) { if (e && e.name !== 'AbortError') toast(e.message || 'Couldn’t save them', true); }
+  if (btn) { btn.disabled = false; btn.textContent = old; }
+}
+async function spCopy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); t.setSelectionRange(0, text.length); document.execCommand('copy'); t.remove(); }
+  toast('Caption copied · paste it in the app');
+}
+function spOpen(a) {
+  // the app if it's installed, the website if not
+  const app = a === 'ig' ? 'instagram://app' : 'linkedin://', web = a === 'ig' ? 'https://www.instagram.com/' : 'https://www.linkedin.com/';
+  const t = setTimeout(() => { if (document.visibilityState === 'visible') location.href = web; }, 1400);
+  document.addEventListener('visibilitychange', () => clearTimeout(t), { once: true });
+  location.href = app;
+}
+async function spPosted(p, a, undo) {
+  const keep = p.posted[a];
+  p.posted[a] = undo ? null : { by: SP.me, at: new Date().toISOString() }; render();
+  try { await api('social/posted', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, app: a, undo: !!undo }) }); toast(undo ? 'Marked not posted' : 'Marked posted on ' + SP_APP[a]); }
+  catch (e) { p.posted[a] = keep; render(); toast(e.message, true); }
+}
+
 // ---------- sheets (confirm / type something) ----------
 function sheet(html) { R.sheet = () => '<div class="sheet" data-a="close"><div class="in">' + html + '</div></div>'; render(); const f = document.querySelector('.sheet input,.sheet textarea'); if (f) f.focus(); }
 function confirmSheet(title, text, ok, run) { R.run = run; sheet('<h3>' + esc(title) + '</h3><div class="note">' + esc(text) + '</div><button class="btn p" data-a="ok">' + esc(ok) + '</button><button class="btn" data-a="close">Cancel</button>'); }
@@ -149,6 +246,12 @@ function confirmSheet(title, text, ok, run) { R.run = run; sheet('<h3>' + esc(ti
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
   const a = el.dataset.a, d = D();
+  const sp = el.dataset.id && SP.list ? SP.list.find(x => x.id === el.dataset.id) : null;
+  if (a === 'spapp' && sp) { SP.app[sp.id] = el.dataset.app; render(); return; }
+  if (a === 'spsave' && sp) return spSave(sp);
+  if (a === 'spcopy' && sp) return spCopy(el.dataset.app === 'ig' ? sp.capIg : sp.capLi);
+  if (a === 'spopen') return spOpen(el.dataset.app);
+  if (a === 'spposted' && sp) return spPosted(sp, el.dataset.app, !!el.dataset.undo);
   if (a === 'close') { if (e.target === el || el.tagName === 'BUTTON') { R.sheet = null; render(); } return; }
   if (a === 'ok') { const f = R.run; R.sheet = null; render(); if (f) f(); return; }
   if (a === 'vbuild') { const c = d.inbox[+el.dataset.i]; return confirmSheet('Build this video?', (c.who || '') + ' · ' + c.topic + '. Takes about 5 minutes on your Mac. Both sizes go to their 10_Videos folder.', 'Build video', () => send('video.build', { path: c.path, who: c.who + ' · ' + c.topic }, 'Sent to your Mac · building ' + c.topic)); }
@@ -177,6 +280,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => { if (e.target.hasAttribute && e.target.hasAttribute('data-q')) { R.q = e.target.value; const pos = e.target.selectionStart; render(); const s = $('[data-q]'); if (s) { s.focus(); s.setSelectionRange(pos, pos); } } });
 
-load();
+load(); spLoad();
 setInterval(() => { if (document.visibilityState === 'visible' && !R.sheet) load(); }, 10000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
+setInterval(() => { if (document.visibilityState === 'visible' && !R.sheet) spLoad(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { load(); spLoad(); } });
