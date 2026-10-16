@@ -65,6 +65,8 @@ export async function onRequest(ctx) {
     if (route.startsWith('recfile/') && m === 'GET') return await recFile(env, me, route.split('/')[1], route.split('/')[2]);
     if (route.startsWith('recphoto/') && m === 'GET') return await recPhoto(env, me, route.split('/')[1]);
     if (route.startsWith('recview/') && m === 'GET') { const r = await recViewLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
+    if (route === 'ideas' && m === 'GET') return json(await ideaList(env, me));
+    if (route === 'ideas' && m === 'POST') { const r = await ideaAdd(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'refresh' && m === 'POST') { forget(''); return json({ ok: true }); }
     return fail('Not found', 404);
   } catch (e) {
@@ -986,6 +988,50 @@ async function viewAsLink(env, me, id) {
   const body = b64u(enc.encode(JSON.stringify({ uid, name: who.name, by: me.email, exp: Date.now() + 5 * 60e3 })));
   const sig = b64u(await crypto.subtle.sign('HMAC', key, enc.encode(body)));
   return { url: (env.MY_MARKETING_URL || MY_MARKETING) + '/api/viewas?t=' + body + '.' + sig };
+}
+
+// ---------- Content ideas: managers suggest topics for West Marketing's monthly planning meeting ----------
+// One row per idea on the private "Content Ideas" board (Stewart West Marketing workspace), shared with Stewart Marketing Tools
+// (Projects › Plan › Idea box). The marketing team sets Status: New, Planned (with Planned For), In library or Passed.
+const ID_NAME = 'Content Ideas';
+const ID_COLS = [['Market', 'text'], ['Note', 'long_text'], ['From', 'text'], ['From Email', 'text'], ['Source', 'text'], ['Status', 'text'], ['Planned For', 'text'], ['Topic', 'text'], ['Added', 'text']];
+async function ideaBoard(env) {
+  return cached('ideaBoard', 3600e3, async () => {
+    const ws = await wsWest(env);
+    const bs = await gql(env, 'query($w:[ID!]){boards(workspace_ids:$w,state:active,limit:500){id name}}', { w: [ws] });
+    let id = env.IDEAS_BOARD_ID ? String(env.IDEAS_BOARD_ID) : ((bs.boards || []).find(x => nk(x.name) === nk(ID_NAME)) || {}).id;
+    if (!id) id = (await gql(env, 'mutation($n:String!,$w:ID,$d:String){create_board(board_name:$n,board_kind:private,workspace_id:$w,description:$d){id}}',
+      { n: ID_NAME, w: ws, d: 'Topic ideas for marketing content, from managers (Manager Portal) and the marketing team (Stewart Marketing Tools › Projects › Plan). Looked at in the monthly planning meeting.' })).create_board.id;
+    id = String(id);
+    let cols = await columns(env, id);
+    const missing = ID_COLS.filter(([t]) => !cols.byTitle[nk(t)]);
+    for (const [t, type] of missing) await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:' + type + '){id}}', { b: id, t });
+    if (missing.length) { forget('cols:' + id); cols = await columns(env, id); }
+    const col = {}; ID_COLS.forEach(([t]) => col[t] = cols.byTitle[nk(t)].id);
+    return { id, col };
+  });
+}
+async function ideaList(env, me) {
+  const b = await ideaBoard(env);
+  const items = await allItems(env, b.id, Object.values(b.col));
+  const rows = items.map(it => {
+    const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+    return { id: String(it.id), idea: it.name.trim(), market: v[b.col.Market] || 'Both', note: v[b.col.Note], from: v[b.col.From], fromEmail: (v[b.col['From Email']] || '').toLowerCase(), source: v[b.col.Source],
+      status: v[b.col.Status] || 'New', plannedFor: v[b.col['Planned For']], topic: v[b.col.Topic], added: v[b.col.Added] || String(it.created_at || '').slice(0, 10) };
+  });
+  // each manager sees the ideas they (or their assistant) sent; presidents see their managers' too
+  const mine = rows.filter(r => r.source === 'Manager Portal' && inScope(me, r.fromEmail));
+  return { ideas: mine.sort((a, b) => String(b.added).localeCompare(String(a.added))).slice(0, 30) };
+}
+async function ideaAdd(env, me, body) {
+  const idea = String(body.idea || '').trim().slice(0, 200);
+  if (idea.length < 4) return { error: 'Type your idea first.' };
+  const market = ['Both', 'California', 'Tucson'].includes(body.market) ? body.market : 'Both';
+  const b = await ideaBoard(env), v = {};
+  v[b.col.Market] = market; v[b.col.From] = byName(me); v[b.col['From Email']] = me.email; v[b.col.Source] = 'Manager Portal'; v[b.col.Status] = 'New'; v[b.col.Added] = today();
+  const note = String(body.note || '').trim().slice(0, 2000); if (note) v[b.col.Note] = { text: note };
+  const id = await createItem(env, b.id, null, idea, v);
+  return { ok: true, id: String(id) };
 }
 
 // ---------- Recruiting: sample marketing for a candidate ----------
