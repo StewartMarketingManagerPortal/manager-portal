@@ -153,7 +153,7 @@ function freshen(all) {
   const r = route(), now = Date.now(), due = k => { if (!all && now - (freshAt[k] || 0) < FRESH_MS) return false; freshAt[k] = now; return true; };
   if (due('reqs')) loadRequests();
   if (window.DR && DR.load && due('reviews') && (r === 'home' || r === 'reviews')) DR.load();
-  const obQuiet = Date.now() - (OB.editedAt || 0) < 60e3;
+  const obQuiet = !!OB.edit || Date.now() - (OB.editedAt || 0) < 60e3;
   if (r === 'home' && due('home')) { if (window.onbLoad && OB.list && !obQuiet) onbLoad(true); [window.HL, window.WP, window.IDEAS].forEach(x => x && x.data && x.load && x.load()); }
   if (r === 'onboard' && OB.list && !obQuiet && due('onboard')) onbLoad(true);
   if (r === 'team' && S.tm && S.tm.data && !S.tm.busy && due('team')) loadTeam();
