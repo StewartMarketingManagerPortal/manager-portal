@@ -936,15 +936,51 @@ async function onbRows(env, b) {
     const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
     let data = {}; try { data = JSON.parse(v[b.col.Data] || '{}') || {}; } catch (e) {}
     return { id: String(it.id), name: it.name.trim(), kind: v[b.col.Kind] || 'hire', manager: v[b.col.Manager], managerEmail: (v[b.col['Manager Email']] || '').toLowerCase(),
-      title: v[b.col.Title], start: v[b.col['Start Date']], progress: v[b.col.Progress], data, created: it.created_at };
+      title: v[b.col.Title], start: v[b.col['Start Date']], progress: v[b.col.Progress], data, raw: v[b.col.Data] || '', created: it.created_at };
   });
 }
 async function onbList(env, me) {
   const b = await onbBoard(env), rows = await onbRows(env, b);
   const mine = r => r.managerEmail === me.email;
   const contacts = (rows.find(r => r.kind === 'contacts' && mine(r)) || {}).data || {};
-  const hires = rows.filter(r => r.kind !== 'contacts' && inScope(me, r.managerEmail)).sort((a, b) => String(b.start || '').localeCompare(String(a.start || '')));
-  return { hires, contacts };
+  const hires = rows.filter(r => r.kind !== 'contacts' && r.kind !== 'steps' && inScope(me, r.managerEmail)).sort((a, b) => String(b.start || '').localeCompare(String(a.start || ''))).map(({ raw, ...r }) => r);
+  // each manager's own onboarding steps (none = the standard steps), for everyone whose new hires this person sees
+  const steps = {};
+  new Set(rows.filter(r => r.kind === 'steps' && inScope(me, r.managerEmail)).map(r => r.managerEmail)).forEach(em => { const L = onbStepsOf(rows, em); if (L) steps[em] = L; });
+  return { hires, contacts, steps };
+}
+// A manager's steps are kept as JSON split over one or more "Steps" rows (a monday text box holds about 2,000 characters); Progress = the part number.
+const onbStepRows = (rows, em) => rows.filter(r => r.kind === 'steps' && r.managerEmail === em).sort((a, b) => (+a.progress || 0) - (+b.progress || 0));
+function onbStepsOf(rows, em) {
+  const parts = onbStepRows(rows, em); if (!parts.length) return null;
+  try { const L = JSON.parse(parts.map(r => r.raw).join('')); return Array.isArray(L) && L.length ? L : null; } catch (e) { return null; }
+}
+// keep only what the page uses, with sensible limits; Marketing setup is always in the list, as just its key
+function onbCleanSteps(list) {
+  const txt = (x, n) => String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, n);
+  const key = (x, p) => /^[a-z0-9]{1,12}$/i.test(String(x || '')) ? String(x) : p + Math.random().toString(36).slice(2, 8);
+  const num = (x, lo, hi) => Math.min(hi, Math.max(lo, parseInt(x, 10) || 0));
+  const seen = new Set(), out = [];
+  for (const s of (Array.isArray(list) ? list : []).slice(0, 24)) {
+    if (!s) continue;
+    if (s.k === 'mkt') { if (!seen.has('mkt')) { seen.add('mkt'); out.push({ k: 'mkt' }); } continue; }
+    let k = key(s.k, 's'); if (seen.has(k)) k = key('', 's'); seen.add(k);
+    const w = s.w || {}, W = w.x === 'before' || w.x === 'after' ? { x: w.x, n: num(w.n, 0, 365) } : w.x === 'day' ? { x: 'day', a: num(w.a, 1, 60), b: num(w.b, 0, 60) } : { x: 'text', t: txt(w.t, 60) };
+    if (W.x === 'day' && W.b <= W.a) delete W.b;
+    const ik = new Set(), items = [];
+    for (const it of (Array.isArray(s.items) ? s.items : []).slice(0, 40)) {
+      const t = txt(it && it.t, 90); if (!t) continue;
+      let k2 = key(it.k, 'i'); if (ik.has(k2)) k2 = key('', 'i'); ik.add(k2);
+      const o = { k: k2, t };
+      if (it.who && /^[a-z]{1,12}$/.test(it.who)) { o.who = it.who; if (txt(it.ask, 120)) o.ask = txt(it.ask, 120); }
+      if (txt(it.note, 60)) o.note = txt(it.note, 60);
+      if (it.day != null && it.day !== '') o.day = num(it.day, 0, 365);
+      items.push(o);
+    }
+    const t = txt(s.t, 60); if (t && items.length) out.push({ k, t, w: W, items });
+  }
+  if (!seen.has('mkt')) out.splice(Math.min(1, out.length), 0, { k: 'mkt' });
+  return out;
 }
 async function onbChange(env, me, body) {
   const b = await onbBoard(env), C = b.col;
@@ -984,6 +1020,20 @@ async function onbChange(env, me, body) {
     if (row) { const vals = {}; vals[C.Data] = { text: data }; await set(row.id, vals); }
     else { const vals = {}; vals[C.Kind] = 'contacts'; vals[C.Manager] = me.row.name; vals[C['Manager Email']] = me.email; vals[C.Data] = { text: data }; await createItem(env, b.id, null, 'Contacts · ' + me.row.name, vals); }
     return { ok: true, contacts: clean };
+  }
+  if (body.op === 'steps') {   // a manager's own onboarding steps; null = back to the standard steps
+    const rows = await onbRows(env, b), old = onbStepRows(rows, me.email);
+    const steps = body.steps == null ? null : onbCleanSteps(body.steps);
+    const json = steps ? JSON.stringify(steps) : '', parts = [];
+    for (let i = 0; i < json.length; i += 1900) parts.push(json.slice(i, i + 1900));
+    if (parts.length > 12) return { error: 'That’s too many steps and items to save.' };
+    for (let i = 0; i < parts.length; i++) {
+      const vals = {}; vals[C.Data] = { text: parts[i] }; vals[C.Progress] = String(i + 1);
+      if (old[i]) await set(old[i].id, vals);
+      else { vals[C.Kind] = 'steps'; vals[C.Manager] = me.row.name; vals[C['Manager Email']] = me.email; await createItem(env, b.id, null, 'Steps · ' + me.row.name + (i ? ' · ' + (i + 1) : ''), vals); }
+    }
+    for (const r of old.slice(parts.length)) await gql(env, 'mutation($i:ID!){archive_item(item_id:$i){id}}', { i: String(r.id) });
+    return { ok: true, steps };
   }
   return { error: 'Unknown change.' };
 }
