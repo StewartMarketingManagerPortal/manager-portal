@@ -353,6 +353,7 @@ body.vcam-on { overflow: hidden; }
 .vcount[hidden], .vtime[hidden] { display: none; }
 
 .vpill.re { background: #FBE3E8; color: var(--brand); }
+.vpill.test { background: #FFF4DB; color: #8A5A00; }
 .vre { display: flex; align-items: center; gap: 12px; background: #FBE3E8; border: 1.5px solid var(--brand); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; color: var(--ink); text-decoration: none; }
 .vre .vic { background: var(--brand); color: #fff; }
 .vre b { display: block; font-size: 15px; }
