@@ -1407,7 +1407,7 @@ async function soRows(env, b) {
     return { id: String(it.id), name: it.name.trim(), apps: g('Apps').split(',').filter(x => x === 'ig' || x === 'li'), at: g('Post At'), capIg: g('Caption IG'), capLi: g('Caption LI'),
       images: (Array.isArray(images) ? images : []).map(i => ({ id: String(i.id), name: String(i.name || ''), video: !!i.video })), remind: g('Remind').split(',').filter(Boolean), remindNames: g('Remind Names'),
       posted: { ig: soWho(g('Posted IG')), li: soWho(g('Posted LI')) }, reminded: g('Reminded'), by: g('By') };
-  });
+  }).filter(p => p.at && !isNaN(Date.parse(p.at)));   // items with no post time (monday's sample items, hand-added rows) aren't posts
 }
 const soAllPosted = p => p.apps.length > 0 && p.apps.every(a => p.posted[a]);
 async function soList(env, me) {
