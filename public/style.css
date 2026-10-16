@@ -759,3 +759,12 @@ select:disabled { opacity: .6; cursor: default; }
 li.dragging { background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.18); border-radius: 12px; position: relative; z-index: 2; }
 .ob-esteps li.dragging.on { background: var(--ink); }
 body.ob-dragging, body.ob-dragging * { cursor: grabbing !important; user-select: none; }
+/* joining as a team */
+.nh-team { border: 1px solid var(--line); border-left: 5px solid var(--brand); border-radius: 12px; padding: 14px 16px; margin-bottom: 4px; }
+.nh-team .seg { align-self: center; }
+.nh-partner { border: 1px solid var(--line); border-left: 5px solid var(--brand); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.nh-partner .grid2 { margin: 0; }
+#nh-partners select { font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.cblk-team { font-size: 15px; line-height: 1.35; margin-top: 7px; padding-right: 110px; }
+.cblk-team b { font-weight: 800; } .cblk-team .cblk-em { margin-bottom: 4px; overflow-wrap: anywhere; }
+.cblk.mini .cblk-team { font-size: 11px; margin-top: 4px; padding-right: 0; } .cblk.mini .cblk-team .cblk-em { margin-bottom: 3px; }

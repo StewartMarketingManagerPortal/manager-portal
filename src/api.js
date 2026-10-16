@@ -300,8 +300,25 @@ async function submitNewHire(env, me, fd) {
       forget('cols:' + eb); ec = await columns(env, eb);
     } catch (e) {}
   }
+  // joining as a team: the team gets its own row (team name, team photo, the package), and each person gets a plain row of
+  // their own with their phone and email; the team row lists them in "Team Members" so the Mac app builds team pieces
+  const team = f.team && String(f.team.name || '').trim() ? f.team : null;
+  const partners = team ? (team.partners || []).filter(x => x && (x.existing || String(x.firstName || '').trim())) : [];
+  const pname = x => x.existing ? String(x.existing).trim() : [x.firstName, x.lastName].map(s => String(s || '').trim()).filter(Boolean).join(' ');
+  const rowName = team ? String(team.name).trim() : name;
+  if (team) {
+    for (const t of ['Team Members', 'Solo Marketing']) if (!ec.byTitle[nk(t)]) {
+      try { await gql(env, 'mutation($b:ID!,$t:String!){create_column(board_id:$b,title:$t,column_type:text){id}}', { b: String(eb), t }); forget('cols:' + eb); ec = await columns(env, eb); } catch (e) {}
+    }
+  }
   const show = f.show || {};
-  const fields = {
+  const fields = team ? {
+    title: team.title || f.title, company: f.company,
+    address1: show.address === false ? '' : f.address1, address2: show.address === false ? '' : f.address2,
+    'Team Members': [name].concat(partners.map(pname)).join(', '), 'Solo Marketing': 'No',
+    'Marketing Setup': 'Pending', 'Package Look': (f.looks || []).join(', '), 'Requested By': me.email,
+    'Start Date': f.startDate, 'About Me': f.bio, 'Market Areas': (f.areas || []).map(a => typeof a === 'string' ? a : (a.label || a.area)).join(', '), 'Notes for Marketing': f.notes,
+  } : {
     title: f.title, company: f.company, email: f.email,
     phone: show.phone === false ? '' : f.phone,
     address1: show.address === false ? '' : f.address1, address2: show.address === false ? '' : f.address2,
@@ -309,18 +326,33 @@ async function submitNewHire(env, me, fd) {
     'Start Date': f.startDate, 'About Me': f.bio, 'Market Areas': (f.areas || []).map(a => typeof a === 'string' ? a : (a.label || a.area)).join(', '), 'Notes for Marketing': f.notes,
   };
   const { values, missing } = buildValues(ec, fields);
-  const itemId = await createItem(env, eb, null, name, values);
-  const notes = ['New hire submitted through the Manager Portal by ' + escHtml(byName(me)) + ' (' + escHtml(me.assistant ? me.assistant.email : me.email) + ')'];
+  const itemId = await createItem(env, eb, null, rowName, values);
+  const notes = [(team ? 'New team (' + escHtml([name].concat(partners.map(pname)).join(', ')) + ') ' : 'New hire ') + 'submitted through the Manager Portal by ' + escHtml(byName(me)) + ' (' + escHtml(me.assistant ? me.assistant.email : me.email) + ')'];
   if (show.headshot === false) notes.push('No headshot on their materials.');
   missing.forEach(t => notes.push(escHtml(t) + ': ' + escHtml(fields[t])));
   await addUpdate(env, itemId, notes.join('<br>'));
   const photo = fd.get('photo');
   const up = ec.byTitle[nk('Image Upload')];
   if (photo && typeof photo !== 'string' && photo.size && up) await addFile(env, itemId, up.id, photo);
+  // a team: a row for each new person (not Pending: the package is built once, on the team row)
+  const people = [];
+  if (team) {
+    const one = [{ name, phone: show.phone === false ? '' : f.phone, email: f.email, portalEmail: f.portalEmail }]
+      .concat(partners.filter(x => !x.existing).map(x => ({ name: pname(x), phone: x.phone, email: x.email, portalEmail: x.portalEmail })));
+    for (const x of one) {
+      const pf = { title: f.title, company: f.company, email: x.email, phone: x.phone, address1: f.address1, address2: f.address2, 'Start Date': f.startDate, 'Requested By': me.email };
+      const pv = buildValues(ec, pf);
+      try {
+        const id = await createItem(env, eb, null, x.name, pv.values);
+        people.push(Object.assign({ id }, x));
+        await addUpdate(env, id, 'Joined as part of the team ' + escHtml(rowName) + ', submitted through the Manager Portal by ' + escHtml(byName(me)) + '. Their marketing is built on the team row.');
+      } catch (e) { await addUpdate(env, itemId, 'Could not add a row for ' + escHtml(x.name) + ': ' + escHtml(String(e.message || e))).catch(() => {}); }
+    }
+  }
   // add them to this manager's team on the Manager Contacts board
   try {
     if (me.dir.relColId && !me.row.admin) {
-      const ids = me.row.linked.concat([String(itemId)]).map(Number);
+      const ids = me.row.linked.concat([String(itemId)], people.map(x => String(x.id))).map(Number);
       await gql(env, 'mutation($b:ID!,$i:ID!,$c:String!,$v:JSON!){change_column_value(board_id:$b,item_id:$i,column_id:$c,value:$v){id}}',
         { b: me.dir.managersBoard, i: String(me.row.rowId), c: me.dir.relColId, v: JSON.stringify({ item_ids: ids }) });
     }
@@ -330,19 +362,33 @@ async function submitNewHire(env, me, fd) {
     const b = await areasBoard(env);
     const areas = (f.areas || []).filter(a => a && typeof a === 'object' && /^https:\/\/(www\.)?(altos\.re|altosresearch\.com)\//i.test(String(a.link || '')));
     if (b) for (const a of areas) {
-      const v = {}; v[b.col.Employee] = name; v[b.col.Area] = String(a.area || '').trim(); v[b.col['Location Label']] = String(a.label || a.area || '').trim();
+      const v = {}; v[b.col.Employee] = rowName; v[b.col.Area] = String(a.area || '').trim(); v[b.col['Location Label']] = String(a.label || a.area || '').trim();
       v[b.col['Altos Link']] = String(a.link).trim(); v[b.col.Active] = 'Yes'; v[b.col.Notes] = 'Added with the new hire by ' + byName(me) + ' in the Manager Portal ' + today();
-      await createItem(env, b.id, null, name + ' - ' + v[b.col.Area], v);
+      await createItem(env, b.id, null, rowName + ' - ' + v[b.col.Area], v);
     }
     forget('areas');
   } catch (e) { await addUpdate(env, itemId, 'Market areas could not be added to the Market Areas board: ' + escHtml(String(e.message || e))).catch(() => {}); }
   // their monthly newsletter / event calendar area(s) go onto the Newsletter Template board
   try {
     const nl = (f.nlAreas || []).filter(a => a && a.header);
-    for (const a of nl) await nlAdd(env, { name, email: f.email, phone: f.phone, title: f.title, company: f.company, address1: f.address1, address2: f.address2 }, a.header, a.location, byName(me));
+    for (const a of nl) await nlAdd(env, { name: rowName, email: f.email, phone: f.phone, title: f.title, company: f.company, address1: f.address1, address2: f.address2 }, a.header, a.location, byName(me));
   } catch (e) { await addUpdate(env, itemId, 'Newsletter areas could not be added to the Newsletter Template board: ' + escHtml(String(e.message || e))).catch(() => {}); }
   // optional: invite them to monday.com as a guest and add them to the Employee Marketing Portal board
+  // a team: each person gets their own invite on their own row (the team's pieces reach everyone on it)
   let invite = null;
+  const sendInvite = async (rowId, email) => {
+    const pe = String(email || '').trim().toLowerCase();
+    if (!pe || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(pe)) return null;
+    let res;
+    try { res = await portalInvite(env, eb, rowId, pe); await addUpdate(env, rowId, 'Employee Marketing Portal invite sent to ' + escHtml(pe) + (res.already ? ' (they already had a monday.com login)' : '') + '. monday.com user ID ' + escHtml(res.id) + '.'); }
+    catch (e) { res = { error: String(e.message || e) }; await addUpdate(env, rowId, 'Employee Marketing Portal invite to ' + escHtml(pe) + ' did not go through: ' + escHtml(res.error)).catch(() => {}); }
+    return res;
+  };
+  if (team) {
+    for (const x of people) { const r = await sendInvite(x.id, x.portalEmail); if (x.name === name) invite = r; }
+    forget('dir');
+    return { ok: true, id: itemId, name: rowName, invite };
+  }
   const pe = String(f.portalEmail || '').trim().toLowerCase();
   if (pe && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(pe)) {
     try { invite = await portalInvite(env, eb, itemId, pe); await addUpdate(env, itemId, 'Employee Marketing Portal invite sent to ' + escHtml(pe) + (invite.already ? ' (they already had a monday.com login)' : '') + '. monday.com user ID ' + escHtml(invite.id) + '.'); }
