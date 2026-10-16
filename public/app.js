@@ -120,12 +120,54 @@ function phoneBars() {
 }
 // tapping outside the open phone menu closes it
 document.addEventListener('click', e => { const m = document.querySelector('details.mmenu[open]'); if (m && (!m.contains(e.target) || e.target.classList.contains('mm-scrim'))) m.open = false; });
-function render() {
+// Only the parts that changed are redrawn: the menu stays put when you change pages, and a page whose data
+// came back the same isn't redrawn at all (no flicker, and what you were typing or had open stays as it was).
+let drawn = {};
+function render(force) {
   if (!S.me) return;
-  $('#app').innerHTML = phoneBars() + '<nav class="side" aria-label="Main">' + nav() + '</nav><main id="main">' + (PAGES[route()] || PAGES.home)() + '</main>';
+  const r = route(), bars = phoneBars(), side = nav(), page = (PAGES[r] || PAGES.home)();
+  const app = $('#app'), main = document.getElementById('main');
+  if (!main || force === true) app.innerHTML = bars + '<nav class="side" aria-label="Main">' + side + '</nav><main id="main">' + page + '</main>';
+  else {
+    if (bars !== drawn.bars) {
+      const h = app.querySelector('header.mtop'), open = r === drawn.r && !!(h && h.querySelector('details.mmenu[open]'));
+      if (h) h.outerHTML = bars;
+      if (open) app.querySelector('details.mmenu').open = true;
+    }
+    if (side !== drawn.side) app.querySelector('nav.side').innerHTML = side;
+    if (page !== drawn.page) main.innerHTML = page;
+    else after = [];
+  }
+  drawn = { r, bars, side, page };
   after.forEach(f => f()); after = [];
 }
 let after = [];
+
+// Keeping things up to date without a reload: when you come back to the portal, change pages, or every
+// 2 minutes while it's open, the page's lists are checked again in the background. The old ones stay on
+// screen until the new ones arrive. Forms aren't touched, and nothing reloads while you're typing.
+const FRESH_MS = 45e3, typing = () => { const a = document.activeElement; return !!(a && a.closest && a.closest('#main') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); };
+let freshAt = {};
+function freshen(all) {
+  if (!S.me || document.hidden || typing() || /^(request|newhire|sent|submitted)$/.test(route())) return;
+  const r = route(), now = Date.now(), due = k => { if (!all && now - (freshAt[k] || 0) < FRESH_MS) return false; freshAt[k] = now; return true; };
+  if (due('reqs')) loadRequests();
+  if (window.DR && DR.load && due('reviews') && (r === 'home' || r === 'reviews')) DR.load();
+  const obQuiet = Date.now() - (OB.editedAt || 0) < 60e3;
+  if (r === 'home' && due('home')) { if (window.onbLoad && OB.list && !obQuiet) onbLoad(true); [window.HL, window.WP, window.IDEAS].forEach(x => x && x.data && x.load && x.load()); }
+  if (r === 'onboard' && OB.list && !obQuiet && due('onboard')) onbLoad(true);
+  if (r === 'team' && S.tm && S.tm.data && !S.tm.busy && due('team')) loadTeam();
+  if (r === 'recruit' && RC.list && !RC.busy && !RC.saving && !rcHash() && due('recruit')) rcLoad();
+}
+window.addEventListener('hashchange', () => setTimeout(freshen, 0));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) freshen(); });
+setInterval(freshen, 120e3);
+// a few seconds after the portal opens, the other pages' lists are loaded too, so the first click on them is quick
+function warmUp() {
+  if (window.onbLoad && !OB.list) onbLoad();
+  if (!tmState().data) loadTeam();
+  if (!RC.list) rcLoad();
+}
 
 // ---------- pages ----------
 const PAGES = {};
@@ -694,7 +736,9 @@ const TM_IC = {
 function tmState() { return S.tm || (S.tm = { data: null, err: '', q: '', sel: '', link: '', area: '', label: '', check: null, checking: false, busy: false }); }
 async function loadTeam() {
   const t = tmState();
+  if (t.loading) return; t.loading = true;
   try { t.data = await api('team'); t.err = ''; } catch (e) { t.err = e.message; }
+  t.loading = false;
   if (route() === 'team') render();
 }
 function tmList(t) {
@@ -917,7 +961,12 @@ async function arCheck(scope) {
 function arClear(st) { st.link = ''; st.area = ''; st.label = ''; st.check = null; }
 
 // ---------- start ----------
-async function loadRequests() { try { S.reqs = await api('requests'); } catch (e) { S.reqs = { requests: [], newHires: [] }; } render(); }
+let reqsLoading = false;
+async function loadRequests() {
+  if (reqsLoading) return; reqsLoading = true;
+  try { S.reqs = await api('requests'); } catch (e) { S.reqs = S.reqs || { requests: [], newHires: [] }; }
+  reqsLoading = false; freshAt.reqs = Date.now(); render();
+}
 async function start() {
   try { S.me = await api('me'); }
   catch (e) {
@@ -927,5 +976,7 @@ async function start() {
     return;
   }
   render(); loadRequests();
+  ['reviews', 'home', 'onboard', 'team', 'recruit'].forEach(k => freshAt[k] = Date.now());   // these are loading now
+  setTimeout(() => { if (window.requestIdleCallback) requestIdleCallback(warmUp, { timeout: 4000 }); else warmUp(); }, 2500);
 }
 start();

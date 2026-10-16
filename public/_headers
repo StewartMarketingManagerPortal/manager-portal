@@ -3,3 +3,20 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Cache-Control: no-cache
+
+# fonts, icons and brand pictures rarely change: keep them for a week instead of asking again on every page load
+/fonts/*
+  ! Cache-Control
+  Cache-Control: private, max-age=604800
+/icons/*
+  ! Cache-Control
+  Cache-Control: private, max-age=604800
+/brand/*
+  ! Cache-Control
+  Cache-Control: private, max-age=604800
+/highlights/*
+  ! Cache-Control
+  Cache-Control: private, max-age=604800
+/vendor/*
+  ! Cache-Control
+  Cache-Control: private, max-age=604800

@@ -6,6 +6,7 @@ Everything they submit lands on the team's monday.com boards.
 ## How it fits together
 - **Website:** a Cloudflare Worker publishes `public/` every time this repository changes (settings in `wrangler.toml`).
 - **Server:** `src/worker.js` sends `/api/...` to `src/api.js`, which talks to monday.com with the token kept in Cloudflare. Shared helpers are in `lib/monday.js`.
+- **Speed:** the big boards (Manager Contacts, Main Employee Sheet, Marketing Request, Market Areas, Newsletter) are kept for 30-60 seconds in one shared cache (`src/cache.js`, a Durable Object) that every copy of the server reads. When that copy is older, it is still shown once while a fresh one loads in the background. The website checks the page's lists again when you come back to it, change pages, or every 2 minutes, so changes from Marketing Tools show up within about a minute without reloading.
 - **Sign-in:** Cloudflare Access emails a one-time code. The portal then checks the signed-in email against the **Manager Contacts** board:
   - *Managers* group → can submit for the people linked to their row (their team)
   - *Portal Admins* group → can see and submit for everyone

@@ -5,8 +5,10 @@
 const RC = { list: null, days: 60, err: '', form: null, busy: false, confirm: null, opening: false, log: {}, note: {}, edit: null, meet: null, mail: null, called: null, saving: false };
 const rcFresh = () => ({ firstName: '', lastName: '', company: '', title: 'Sales Representative', area: '', phone: '', email: '', file: null, cut: '', cutting: false, cutFail: false });
 async function rcLoad() {
+  if (RC.loading) return; RC.loading = true;
   try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.board = r.board || null; RC.fwd = r.forwarded || []; RC.err = ''; if (r.moved) toast(r.moved === 1 ? 'A forwarded email was saved to its candidate.' : r.moved + ' forwarded emails were saved to their candidates.', 6000); }
-  catch (e) { RC.list = []; RC.err = e.message; }
+  catch (e) { RC.list = RC.list || []; RC.err = e.message; }
+  RC.loading = false;
   if (route() === 'recruit') render();
 }
 const rcHash = () => (location.hash.slice(1).split('/')[1] || '');

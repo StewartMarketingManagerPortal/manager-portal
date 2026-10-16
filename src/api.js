@@ -93,7 +93,7 @@ export async function onRequest(ctx) {
 
 // ---------- who is this? ----------
 async function directory(env) {
-  return cached('dir', 300e3, async () => {
+  return cached('dir', 60e3, async () => {
     const [mb, eb] = await Promise.all([bid(env, 'managers'), bid(env, 'employees')]);
     const [mc, ec] = await Promise.all([columns(env, mb), columns(env, eb)]);
     const [mItems, eItems] = await Promise.all([allItems(env, mb), allItems(env, eb)]);
@@ -133,7 +133,7 @@ async function directory(env) {
       m.missing = m.oversees.filter(n => !m.under.some(x => nk(x.name) === nk(n)));
     });
     return { managers, employees, relColId: rel ? rel.id : null, managersBoard: mb };
-  });
+  }, { shared: true });
 }
 // Cloudflare Access signs every request it lets through (Cf-Access-Jwt-Assertion). We check that signature
 // instead of trusting the plain email header, so the code stays safe even if it ever runs without Access in front.
@@ -212,14 +212,15 @@ async function myRequests(env, me) {
   const rc = await columns(env, rb);
   const c = t => rc.byTitle[nk(t)];
   const want = ["Manager's Name", 'Managers Email', 'Full Name', 'Status', 'Order Date', 'Due Date', 'Project Name', 'Purpose of Project', 'Proof', 'CA or AZ'].map(c).filter(Boolean);
-  const items = await allItems(env, rb, want.map(x => x.id));
-  const rows = items.map(it => {
+  // the whole board is loaded once for everyone and kept for 30 seconds; each person then gets their own rows
+  const all = await cached('reqrows', 30e3, async () => (await allItems(env, rb, want.map(x => x.id))).map(it => {
     const v = {}; it.column_values.forEach(cv => { const col = want.find(w => w.id === cv.id); if (col) v[nk(col.title)] = { text: (cv.text || '').trim(), value: cv.value }; });
     const g = k => (v[nk(k)] || {}).text || '';
     let proofs = []; try { proofs = (JSON.parse((v['proof'] || {}).value || '{}').files || []).map(f => ({ id: String(f.assetId), name: f.name })); } catch (e) {}
     return { id: it.id, project: g('Project Name') || it.name, type: g('Purpose of Project'), forWho: g('Full Name'), status: g('Status') || 'New', ordered: g('Order Date'), due: g('Due Date'), state: g('CA or AZ'),
       manager: g("Manager's Name"), managerEmail: g('Managers Email').toLowerCase(), group: it.group.title, proofs, created: it.created_at };
-  }).filter(r => inScope(me, r.managerEmail, r.manager))
+  }), { shared: true });
+  const rows = all.filter(r => inScope(me, r.managerEmail, r.manager)).map(r => Object.assign({}, r, { proofs: r.proofs.map(p => Object.assign({}, p)) }))
     .sort((a, b) => String(b.created).localeCompare(String(a.created))).slice(0, me.row.admin || me.row.president ? 150 : 100);
   // a link to look at the proof (monday gives a link that works for about an hour)
   const ids = rows.filter(r => /proof/i.test(r.status) && r.proofs.length).flatMap(r => r.proofs.map(p => p.id)).slice(0, 50);
@@ -261,6 +262,7 @@ async function submitRequest(env, me, fd) {
     const col = k === 'photos' ? picsCol : filesCol;
     if (col) await addFile(env, itemId, col.id, v);
   }
+  forget('reqrows');
   return { ok: true, id: itemId, reference: itemId, due: fields['Due Date'] };
 }
 
@@ -278,6 +280,7 @@ async function answerProof(env, me, b) {
     await addUpdate(env, b.id, '✏️ Changes requested by ' + escHtml(byName(me)) + ' in the Manager Portal:<br>' + escHtml(b.note));
     if (st) await gql(env, 'mutation($b:ID!,$i:ID!,$c:String!,$v:JSON!){change_column_value(board_id:$b,item_id:$i,column_id:$c,value:$v){id}}', { b: rb, i: String(b.id), c: st.id, v: JSON.stringify(colValue(st, env.CHANGES_STATUS || 'Working On It')) });
   }
+  forget('reqrows');
   return { ok: true };
 }
 
@@ -400,14 +403,15 @@ async function allAreas(env, b) {
       it.column_values.forEach(cv => { if (title[cv.id]) o[title[cv.id]] = (cv.text || '').trim(); });
       return { id: o.id, employee: o.Employee || '', area: o.Area || '', label: o['Location Label'] || '', link: o['Altos Link'] || '', active: !/^n/i.test(o.Active || 'Yes'), notes: o.Notes || '' };
     });
-  });
+  }, { shared: true });
 }
 async function myTeam(env, me) {
   const team = teamOf(me).slice().sort((a, b) => a.name.localeCompare(b.name));
-  const b = await areasBoard(env);
-  const areas = b ? await allAreas(env, b) : [];
-  const photos = await headshots(env, team.map(p => p.id)).catch(() => ({}));
-  const nb = await nlBoard(env).catch(() => null), nlRows = nb ? await nlAll(env, nb).catch(() => []) : [];
+  const nbP = nlBoard(env).catch(() => null);
+  const [b, areas, photos, nb, nlRows] = await Promise.all([
+    areasBoard(env), areasBoard(env).then(x => x ? allAreas(env, x) : []),
+    headshots(env, team.map(p => p.id)).catch(() => ({})),
+    nbP, nbP.then(x => x ? nlAll(env, x).catch(() => []) : [])]);
   const out = team.map(p => ({ id: p.id, name: p.name, title: p.title, email: p.email, phone: p.phone, company: p.company, address1: p.address1, address2: p.address2,
     birthday: p.birthday || '', start: p.start || '',
     posts: Object.fromEntries(hlDue(p, today()).filter(h => h.days >= 0).map(h => [h.kind, h.date])),
@@ -442,6 +446,7 @@ async function setDate(env, me, body) {
   vals[col.id] = col.type === 'date' ? (v ? { date: kind === 'birthday' ? '2000-' + v : v } : {}) : v;
   await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: String(eb), i: String(who.id), v: JSON.stringify(vals) });
   who[kind] = v;
+  forget('dir');
   return { ok: true, id: who.id, kind, value: v };
 }
 async function changeArea(env, me, body) {
@@ -761,7 +766,7 @@ async function nlAll(env, b) {
       const v = {}; it.column_values.forEach(cv => v[cv.id] = (cv.text || '').trim());
       return { id: String(it.id), item: it.name, group: it.group && it.group.id, name: (b.name && v[b.name.id]) || it.name.trim(), header: (v[b.header.id] || '').toUpperCase(), location: b.location ? v[b.location.id] || '' : '', active: !b.active ? true : b.active.type === 'checkbox' ? !!v[b.active.id] : !/^n/i.test(v[b.active.id] || '') };
     });
-  });
+  }, { shared: true });
 }
 function nlOptionsFrom(rows) {
   const m = {};
@@ -839,7 +844,7 @@ async function teamContent(env, me, id) {
       out[k] = { item: String(it.id), updated: it.updated_at, files };
     });
     return out;
-  });
+  }, { shared: true });
 }
 // streams one file from a team member's portal row (preview, or download with ?dl=1). Videos are sent to monday's own link so they can play.
 async function teamAsset(env, me, itemId, assetId, dl) {
