@@ -323,6 +323,7 @@ window.onbHomeCard = onbHomeCard;
 // ---------- editing the steps (each manager's own list; Marketing setup stays as it is) ----------
 const OB_PEN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
 const OB_LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const OB_GRIP = '<svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="3" r="1.6"/><circle cx="10" cy="3" r="1.6"/><circle cx="4" cy="9" r="1.6"/><circle cx="10" cy="9" r="1.6"/><circle cx="4" cy="15" r="1.6"/><circle cx="10" cy="15" r="1.6"/></svg>';
 const OB_WHENS = [['before', 'Days before start'], ['day', 'Work days'], ['after', 'Days after start'], ['text', 'Write my own']];
 const onbCanEdit = h => !h || String(h.managerEmail || '').toLowerCase() === String(S.me.email || '').toLowerCase();
 const onbKey = p => p + Math.random().toString(36).slice(2, 8);
@@ -342,9 +343,9 @@ function onbEditPage(h) {
     '<button class="btn primary" data-act="ob-edit-save" ' + (E.saving ? 'disabled' : '') + '>' + (E.saving ? 'Saving…' : 'Save changes') + '</button></span></div>';
   out += '<div class="ob-wrap"><aside class="card ob-rail"><ol class="ob-steps ob-esteps">' + L.map((x, i) => {
     const mk = x.k === 'mkt', st = mk ? ONB_MKT : x;
-    return '<li class="' + (x === cur ? 'on ' : '') + (mk ? 'mkt lock' : '') + '"><a href="#" data-act="ob-e-pick" data-k="' + esc(x.k) + '"><span class="ob-n">' + (i + 1) + '</span><span class="ob-tx"><b>' + esc(st.t || 'New step') + '</b><small>' +
+    return '<li data-k="' + esc(x.k) + '" class="' + (x === cur ? 'on ' : '') + (mk ? 'mkt lock' : '') + '"><a href="#" data-act="ob-e-pick" data-k="' + esc(x.k) + '"><span class="ob-n">' + (i + 1) + '</span><span class="ob-tx"><b>' + esc(st.t || 'New step') + '</b><small>' +
       (mk ? OB_LOCK + ' Set by West Marketing' : esc(onbWhen(hh, st.w)) + ' · ' + plural((st.items || []).length, 'item')) + '</small></span></a>' +
-      (mk ? '' : '<span class="ob-mv"><button data-act="ob-e-move" data-k="' + esc(x.k) + '" data-d="-1" ' + (i ? '' : 'disabled') + ' aria-label="Move up">↑</button><button data-act="ob-e-move" data-k="' + esc(x.k) + '" data-d="1" ' + (i < last ? '' : 'disabled') + ' aria-label="Move down">↓</button></span>') + '</li>';
+      (mk ? '<span class="ob-grip off"></span>' : '<button class="ob-grip" data-drag="step" title="Drag to move" aria-label="Move ' + esc(st.t || 'this step') + ' (drag, or use the arrow keys)">' + OB_GRIP + '</button>') + '</li>';
   }).join('') + '</ol><div class="ob-rail-foot"><button class="btn" data-act="ob-e-addstep">+ Add a step</button></div></aside><section class="ob-main">';
   if (cur.k === 'mkt') {
     out += '<div class="card ob-mkt"><div class="ob-eyebrow">Step ' + (ci + 1) + ' of ' + L.length + ' · West Marketing</div><h2>Marketing setup</h2>' +
@@ -360,7 +361,7 @@ function onbEditPage(h) {
         : '<input type="text" data-obe="wt" value="' + esc(w.t || '') + '" placeholder="For example: Once their license transfers" maxlength="60" class="ob-wt">') + '</div>' +
       '<small class="muted ob-whenshow">Shows as: <b>' + esc(onbWhen(hh, w) || '—') + '</b>' + (h && h.start ? ' for ' + esc(first) : '') + '</small></div></div>' +
       '<div class="ob-ed-h"><b>Checklist</b><span class="small muted">' + plural(cur.items.length, 'item') + '</span></div><ol class="ob-eitems">' +
-      cur.items.map((it, j) => '<li><span class="ob-mv"><button data-act="ob-e-imove" data-i="' + j + '" data-d="-1" ' + (j ? '' : 'disabled') + ' aria-label="Move up">↑</button><button data-act="ob-e-imove" data-i="' + j + '" data-d="1" ' + (j < cur.items.length - 1 ? '' : 'disabled') + ' aria-label="Move down">↓</button></span>' +
+      cur.items.map((it, j) => '<li data-i="' + j + '"><button class="ob-grip" data-drag="item" title="Drag to move" aria-label="Move ' + esc(it.t || 'this item') + ' (drag, or use the arrow keys)">' + OB_GRIP + '</button>' +
         '<div class="ob-ei"><div class="ob-ei-row"><input type="text" data-obe="it" data-i="' + j + '" value="' + esc(it.t) + '" placeholder="What needs doing" maxlength="90">' + roles(it).replace('data-i="#"', 'data-i="' + j + '"') + '</div>' +
         '<div class="ob-ei-row sm"><label class="ob-sl"><span>Note</span><input type="text" data-obe="note" data-i="' + j + '" value="' + esc(it.note || '') + '" placeholder="Optional, like “East Bay only”" maxlength="60"></label>' +
         (it.who ? '<label class="ob-sl"><span>Email asks them to</span><input type="text" data-obe="ask" data-i="' + j + '" value="' + esc(it.ask || '') + '" placeholder="like “order a laptop”" maxlength="120"></label>' : '') + '</div></div>' +
@@ -373,10 +374,6 @@ function onbEditPage(h) {
 const onbECur = () => OB.edit.steps.find(x => x.k === OB.edit.cur);
 const onbEDirty = () => { OB.edit.changed = true; };
 ACT['ob-e-pick'] = el => { OB.edit.cur = el.dataset.k; render(); };
-ACT['ob-e-move'] = el => {
-  const L = OB.edit.steps, i = L.findIndex(x => x.k === el.dataset.k), j = i + +el.dataset.d;
-  if (j < 0 || j >= L.length) return; [L[i], L[j]] = [L[j], L[i]]; onbEDirty(); render();
-};
 ACT['ob-e-addstep'] = () => {
   const s = { k: onbKey('s'), t: '', w: { x: 'text', t: '' }, items: [{ k: onbKey('i'), t: '' }] };
   OB.edit.steps.push(s); OB.edit.cur = s.k; onbEDirty(); render();
@@ -392,10 +389,6 @@ ACT['ob-e-iadd'] = () => {
   const all = document.querySelectorAll('[data-obe=it]'); if (all.length) all[all.length - 1].focus();
 };
 ACT['ob-e-idel'] = el => { onbECur().items.splice(+el.dataset.i, 1); onbEDirty(); render(); };
-ACT['ob-e-imove'] = el => {
-  const I = onbECur().items, i = +el.dataset.i, j = i + +el.dataset.d;
-  if (j < 0 || j >= I.length) return; [I[i], I[j]] = [I[j], I[i]]; onbEDirty(); render();
-};
 document.addEventListener('input', e => {
   const k = e.target.dataset && e.target.dataset.obe; if (!k || !OB.edit) return;
   const s = onbECur(), v = e.target.value, it = s.items[+e.target.dataset.i];
@@ -434,3 +427,37 @@ ACT['ob-edit-save'] = async () => {
 };
 // leaving the Onboarding page drops an unsaved edit
 window.addEventListener('hashchange', () => { if (OB.edit && route() !== 'onboard') OB.edit = null; });
+// drag a step or item by its handle to a new place (mouse, finger or pen); arrow keys move it one place
+function onbReorder(kind, order) {   // order: the keys (steps) or old positions (items) in their new order
+  const E = OB.edit; if (!E) return;
+  if (kind === 'step') E.steps = order.map(k => E.steps.find(x => x.k === k));
+  else { const I = onbECur().items; onbECur().items = order.map(i => I[+i]); }
+  E.changed = true; render();
+}
+const onbOrder = (ol, kind) => Array.from(ol.children).map(li => kind === 'step' ? li.dataset.k : li.dataset.i);
+document.addEventListener('pointerdown', e => {
+  const g = e.target.closest && e.target.closest('.ob-grip[data-drag]'); if (!g || !OB.edit || e.button > 0) return;
+  e.preventDefault();
+  const kind = g.dataset.drag, li = g.closest('li'), ol = li.parentNode, before = onbOrder(ol, kind).join('|');
+  li.classList.add('dragging'); document.body.classList.add('ob-dragging');
+  const move = ev => {
+    const y = ev.clientY, sibs = Array.from(ol.children).filter(x => x !== li);
+    const next = sibs.find(x => { const r = x.getBoundingClientRect(); return y < r.top + r.height / 2; });
+    if (next !== li.nextSibling) ol.insertBefore(li, next || null);
+  };
+  const up = () => {
+    removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+    li.classList.remove('dragging'); document.body.classList.remove('ob-dragging');
+    const after = onbOrder(ol, kind);
+    if (after.join('|') !== before) onbReorder(kind, after);
+  };
+  addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+});
+document.addEventListener('keydown', e => {
+  const g = e.target.closest && e.target.closest('.ob-grip[data-drag]'); if (!g || !OB.edit || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault();
+  const kind = g.dataset.drag, li = g.closest('li'), order = onbOrder(li.parentNode, kind), id = kind === 'step' ? li.dataset.k : li.dataset.i;
+  const i = order.indexOf(id), j = i + (e.key === 'ArrowUp' ? -1 : 1); if (j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]]; onbReorder(kind, order);
+  const pos = kind === 'step' ? '.ob-esteps li[data-k="' + id + '"] .ob-grip' : '.ob-eitems li[data-i="' + j + '"] .ob-grip', back = document.querySelector(pos); if (back) back.focus();
+});
