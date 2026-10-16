@@ -1,10 +1,10 @@
 // My Marketing · Make a video: pick a script, set up, record on the front camera with a teleprompter, send it in.
-// The background is softly blurred on the phone while recording (person cut-out by MediaPipe), so it arrives ready to build.
+// The camera records as-is (no background blur). MediaPipe finds the person only to show the "lined up" guide.
 'use strict';
 const V = { list: null, filmed: [], reshoot: [], err: '', blob: null, url: '', sending: 0, sent: false, speed: 1, size: 1 };
 const VTIPS = [
   ['q', 'Find a quiet room', 'Close the door. No TV, fans or open windows. Phone on Do Not Disturb.'],
-  ['bg', 'Pick a nice background', 'An office, bookshelf or plant a few feet behind you. Not a blank wall, a mess, or a window. We’ll soften it.'],
+  ['bg', 'Pick a nice background', 'An office, bookshelf or plant a few feet behind you. Not a blank wall, a mess, or a window.'],
   ['sun', 'Face the light', 'Window or lamp in front of you, never behind.'],
   ['ph', 'Phone upright at eye level', 'Prop it or use a tripod, about an arm’s length away. Wipe the front camera.'],
   ['shirt', 'Dress for a client meeting', 'Solid colors work best. Avoid small stripes and logos.'],
@@ -72,7 +72,7 @@ function filmHtml(id) {
 }
 
 // ---------- 3 · camera + teleprompter ----------
-const REC = { stream: null, video: null, canvas: null, ctx: null, seg: null, raf: 0, rec: null, chunks: [], recording: false, t0: 0, scroll: 0, last: 0, maskC: null, personC: null, ok: false, lined: false };
+const REC = { stream: null, video: null, canvas: null, ctx: null, seg: null, raf: 0, rec: null, chunks: [], recording: false, t0: 0, scroll: 0, last: 0, ok: false, lined: false };
 function recHtml(id) {
   const s = vScript(id);
   if (!V.list) { vLoad().then(() => render()); return '<div class="vcam"><div class="boot"><span class="spin"></span></div></div>'; }
@@ -95,9 +95,7 @@ async function recStart(id) {
   }
   const v = REC.video = document.createElement('video'); v.playsInline = true; v.muted = true; v.srcObject = REC.stream; await v.play();
   const c = REC.canvas = $('#vcanvas'); c.width = 720; c.height = 1280; REC.ctx = c.getContext('2d');
-  REC.personC = document.createElement('canvas'); REC.personC.width = 720; REC.personC.height = 1280;
-  REC.maskC = document.createElement('canvas');
-  chip.textContent = 'Loading the background blur…';
+  chip.textContent = 'Getting the camera ready…';
   try {
     const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
     const fs = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
@@ -112,42 +110,20 @@ function recLoop() {
   const v = REC.video, c = REC.ctx, W = 720, H = 1280;
   if (v.readyState >= 2 && v.videoWidth) {
     const r = coverRect(v.videoWidth, v.videoHeight, W, H);
-    let mask = null;
     if (REC.seg) {
       try {
         const res = REC.seg.segmentForVideo(v, performance.now());
         const m = res.confidenceMasks && res.confidenceMasks[0];
         if (m) {
-          const mw = m.width, mh = m.height, f = m.getAsFloat32Array(), mc = REC.maskC;
-          if (mc.width !== mw) { mc.width = mw; mc.height = mh; }
-          const mx = mc.getContext('2d'), img = mx.createImageData(mw, mh), d = img.data;
+          const mw = m.width, mh = m.height, f = m.getAsFloat32Array();
           let top = -1, sx = 0, n = 0;
-          for (let i = 0; i < f.length; i++) { const a = f[i], t = Math.min(1, Math.max(0, (a - 0.45) / 0.4)); d[i * 4 + 3] = t * t * (3 - 2 * t) * 255; if (a > 0.6) { const y = (i / mw) | 0; if (top < 0) top = y; sx += i % mw; n++; } }
-          mx.putImageData(img, 0, 0); mask = mc;
+          for (let i = 0; i < f.length; i++) { if (f[i] > 0.6) { const y = (i / mw) | 0; if (top < 0) top = y; sx += i % mw; n++; } }
           REC.lined = n > mw * mh * 0.12 && top / mh > 0.05 && top / mh < 0.3 && Math.abs(sx / n / mw - 0.5) < 0.1;
           m.close && m.close();
         }
       } catch (e) {}
     }
-    if (mask) {
-      // background: a smooth blur that works in every browser. Halve the frame three times, soften the small copy, then double it back up step by step
-      if (!REC.L) { REC.L = [[360, 640], [180, 320], [90, 160]].map(([w, h]) => { const k = document.createElement('canvas'); k.width = w; k.height = h; const x = k.getContext('2d'); x.imageSmoothingQuality = 'high'; return x; }); REC.T = document.createElement('canvas'); REC.T.width = 90; REC.T.height = 160; }
-      const L = REC.L, tx = REC.T.getContext('2d');
-      L[0].drawImage(v, r[0] / 2, r[1] / 2, r[2] / 2, r[3] / 2);
-      L[1].drawImage(L[0].canvas, 0, 0, 180, 320); L[2].drawImage(L[1].canvas, 0, 0, 90, 160);
-      for (let pass = 0; pass < 2; pass++) {
-        tx.clearRect(0, 0, 90, 160); tx.drawImage(L[2].canvas, 0, 0);
-        [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]].forEach(([dx, dy], k) => { L[2].globalAlpha = 1 / (k + 2); L[2].drawImage(REC.T, dx, dy); });
-        L[2].globalAlpha = 1;
-      }
-      L[1].drawImage(L[2].canvas, 0, 0, 180, 320); L[0].drawImage(L[1].canvas, 0, 0, 360, 640);
-      c.imageSmoothingQuality = 'high'; c.drawImage(L[0].canvas, 0, 0, W, H);
-      // the person, sharp, with the mask's soft edge (the low-res mask scaled up feathers it)
-      const p = REC.personC.getContext('2d');
-      p.globalCompositeOperation = 'source-over'; p.clearRect(0, 0, W, H); p.drawImage(v, r[0], r[1], r[2], r[3]);
-      p.globalCompositeOperation = 'destination-in'; p.imageSmoothingQuality = 'high'; p.drawImage(mask, r[0], r[1], r[2], r[3]);
-      c.drawImage(REC.personC, 0, 0);
-    } else c.drawImage(v, r[0], r[1], r[2], r[3]);
+    c.drawImage(v, r[0], r[1], r[2], r[3]);
   }
   // teleprompter: scrolls while recording
   const now = performance.now(), dt = REC.last ? (now - REC.last) / 1000 : 0; REC.last = now;
