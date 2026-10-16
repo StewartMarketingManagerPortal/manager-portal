@@ -13,6 +13,7 @@
     I.loading = false;
     if (route() === 'home') render();
   }
+  I.load = load;
   // what happened to an idea, in the manager's words
   function state(i) {
     if (i.status === 'Planned') return i.plannedFor && i.plannedFor < todayIso() ? ['done', 'Used ' + nice(i.plannedFor)] : ['done', 'Planned for ' + (nice(i.plannedFor) || 'an upcoming month')];

@@ -71,6 +71,7 @@ async function onbLoad(force) {
 }
 const onbPost = body => api('onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 function onbSave(h) {
+  OB.editedAt = Date.now();   // the background refresh leaves the list alone for a minute after a tick
   clearTimeout(OB.timers[h.id]);
   OB.timers[h.id] = setTimeout(async () => {
     const t = onbTotals(h);

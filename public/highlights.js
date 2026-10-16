@@ -107,6 +107,7 @@
     HL.loading = false;
     if (route() === 'home') render();
   }
+  HL.load = load;
   function picture(h) {
     const d = design(h), k = h.key + '|' + d.id;
     if (HL.pics[k]) return HL.pics[k].url;

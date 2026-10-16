@@ -15,6 +15,7 @@
     try { R.list = (await api('reviews')).reviews || []; R.err = ''; } catch (err) { R.err = err.message; R.list = R.list || []; }
     R.loading = false; render();
   }
+  R.load = load;
   async function loadOne(id) {
     R.det[id] = R.det[id] || { loading: true };
     try { R.det[id] = await api('reviews/' + id); } catch (err) { R.det[id] = { error: err.message }; }

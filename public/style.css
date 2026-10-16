@@ -1,3 +1,6 @@
+/* Montserrat comes from our own site (one small file for every weight), so text doesn't change font and jump once the page is up */
+@font-face { font-family: Montserrat; src: url(/fonts/montserrat-latin-wght-normal.woff2) format('woff2-variations'), url(/fonts/montserrat-latin-wght-normal.woff2) format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 :root {
   --ink: #1A1A1C; --paper: #F2F1EF; --card: #FFFFFF; --brand: #A30C33; --brand-dark: #7E0A28; --brand-tint: #FBF3F5; --problem: #8A0A2B;
   --muted: #6B6966; --muted2: #4A4845; --green: #1B7A43; --green-text: #1B6B3C; --green-tint: #E3F1E8; --pill: #ECEAE6; --line: #ECEAE6;

@@ -1,6 +1,8 @@
 name = "manager-portal"
 main = "src/worker.js"
 compatibility_date = "2026-06-01"
+# nodejs_als: lets the cache finish reloading a board in the background after the page has its answer
+compatibility_flags = ["nodejs_als"]
 # keep settings added in the Cloudflare dashboard when a new version is published
 keep_vars = true
 
@@ -15,3 +17,12 @@ enabled = true
 # every 5 minutes: reminders for social posts whose time has come (src/api.js socialReminders)
 [triggers]
 crons = ["*/5 * * * *"]
+
+# one shared cache for every copy of the server (src/cache.js), so pages don't reload whole monday boards each time
+[[durable_objects.bindings]]
+name = "SHARED"
+class_name = "SharedCache"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SharedCache"]

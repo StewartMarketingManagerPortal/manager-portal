@@ -16,6 +16,7 @@
     W.loading = false;
     if (route() === 'home') render();
   }
+  W.load = load;
   const find = id => ((W.data && W.data.items) || []).find(x => String(x.id) === String(id));
   window.wpHomeCard = function () {
     if (!W.data) { load(); return ''; }
