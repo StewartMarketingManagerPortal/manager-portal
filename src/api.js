@@ -547,12 +547,14 @@ async function hlDesigns(env) {
       const type = (v[b.col.Type] || '').toLowerCase(), st = (v[b.col.Status] || '').toLowerCase();
       const art = (it.assets || []).filter(a => /png|jpe?g|webp/i.test(a.file_extension || a.name)).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
       const kind = /anniv/.test(type) ? 'start' : /birth/.test(type) ? 'birthday' : '';
-      const status = /live/.test(st) ? 'live' : /retir/.test(st) ? 'retired' : /review|ready/.test(st) ? 'review' : '';
+      const status = /live/.test(st) ? 'live' : /retir/.test(st) ? 'retired' : /delet/.test(st) ? 'deleted' : /review|ready/.test(st) ? 'review' : '';
       return { id: String(it.id), name: it.name.trim(), kind, status, art: art ? { id: String(art.id), url: art.public_url } : null,
         layout: (v[b.col.Layout] || 'Classic').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'classic', text: hex(v[b.col['Text Color']]), accent: hex(v[b.col['Accent Color']]), small: hex(v[b.col['Small Text Color']]) };
-    }).filter(x => x.kind && x.art && (x.status === 'live' || x.status === 'review'));
+    }).filter(x => x.kind);
   });
 }
+// a row with no art, Status Retired or Deleted, named like a built-in design, turns that built-in off (set from Marketing Tools › Templates)
+const hlOff = rows => rows.filter(x => !x.art && (x.status === 'retired' || x.status === 'deleted')).map(x => x.kind + '|' + x.name.toLowerCase());
 async function hlPosted(env) {
   return cached('hlPosted', 120e3, async () => {
     const b = await hlPostedBoard(env), out = {};
@@ -591,9 +593,9 @@ async function highlights(env, me) {
   const items = due.map(h => Object.assign(h, { photo: photos[h.id] ? 'api/photo/' + h.id + '?v=' + photos[h.id].id : '', posted: posted[h.key] ? posted[h.key].on || true : false }))
     .filter(h => !(h.days < 0 && h.posted))
     .sort((a, b) => a.days - b.days || a.name.localeCompare(b.name));
-  const show = designs.filter(d => d.status === 'live' || me.row.admin)
+  const show = designs.filter(d => d.art && (d.status === 'live' || (d.status === 'review' && me.row.admin)))
     .map(d => ({ id: d.id, name: d.name, kind: d.kind, review: d.status === 'review', layout: d.layout, art: 'api/hlart/' + d.art.id, text: d.text, accent: d.accent, small: d.small }));
-  return { items, designs: show };
+  return { items, designs: show, off: hlOff(designs) };
 }
 async function hlMark(env, me, body) {
   const p = teamOf(me).find(x => x.id === String(body.id));
@@ -615,14 +617,14 @@ async function hlMark(env, me, body) {
 }
 async function hlArt(env, me, assetId) {
   assetId = String(assetId || '').replace(/\D/g, '');
-  const d = (await hlDesigns(env)).find(x => x.art.id === assetId && (x.status === 'live' || me.row.admin));
+  const d = (await hlDesigns(env)).find(x => x.art && x.art.id === assetId && (x.status === 'live' || me.row.admin));
   if (!d) return fail('Not found', 404);
   const ck = new Request('https://manager-portal.cache/hlart/' + assetId), cache = caches.default;
   const head = { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
   const hit = await cache.match(ck);
   if (hit) return new Response(hit.body, { headers: Object.assign(head, { 'Content-Type': hit.headers.get('Content-Type') || 'image/png' }) });
   let r = await fetch(d.art.url);
-  if (!r.ok) { forget('hlDesigns'); const d2 = (await hlDesigns(env)).find(x => x.art.id === assetId); if (d2) r = await fetch(d2.art.url); }
+  if (!r.ok) { forget('hlDesigns'); const d2 = (await hlDesigns(env)).find(x => x.art && x.art.id === assetId); if (d2) r = await fetch(d2.art.url); }
   if (!r.ok) return fail('Could not load the design', 502);
   const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
   try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
