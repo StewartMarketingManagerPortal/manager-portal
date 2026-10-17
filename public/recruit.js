@@ -1,14 +1,21 @@
 // Manager Portal · Recruiting: show a candidate sample marketing with their own photo and contact details.
-// Candidates are kept on the private "Recruiting" board. The pieces are drawn on screen by samples.js; nothing goes to the marketing team.
+// Candidates are kept on the private "Recruiting" board. The pieces are drawn on screen by samples.js over the board's own copy of the
+// marketing pieces (its "Sample pieces" group, added by a Portal Admin); nothing goes to the marketing team.
 'use strict';
 
-const RC = { list: null, days: 60, err: '', form: null, busy: false, confirm: null, opening: false, log: {}, note: {}, edit: null, meet: null, mail: null, called: null, saving: false };
+const RC = { pieces: null, piecesBusy: false, up: null, showPieces: false, pieceAsk: null, list: null, days: 60, err: '', form: null, busy: false, confirm: null, opening: false, log: {}, note: {}, edit: null, meet: null, mail: null, called: null, saving: false };
 const rcFresh = () => ({ firstName: '', lastName: '', company: '', title: 'Sales Representative', area: '', phone: '', email: '', file: null, cut: '', cutting: false, cutFail: false });
 async function rcLoad() {
   if (RC.loading) return; RC.loading = true;
   try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.board = r.board || null; RC.fwd = r.forwarded || []; RC.err = ''; if (r.moved) toast(r.moved === 1 ? 'A forwarded email was saved to its candidate.' : r.moved + ' forwarded emails were saved to their candidates.', 6000); }
   catch (e) { RC.list = RC.list || []; RC.err = e.message; }
   RC.loading = false;
+  if (route() === 'recruit') render();
+}
+async function rcPiecesLoad() {
+  if (RC.piecesBusy) return; RC.piecesBusy = true;
+  try { RC.pieces = (await api('recruiting/samples')).pieces || []; } catch (e) { RC.pieces = RC.pieces || []; }
+  RC.piecesBusy = false;
   if (route() === 'recruit') render();
 }
 const rcHash = () => (location.hash.slice(1).split('/')[1] || '');
@@ -38,6 +45,7 @@ PAGES.recruit = () => {
   }).join('') + '</div>' : '<div class="empty">No candidates yet. Add one to make their samples.</div>';
   h += '<div class="small muted row" style="gap:8px;flex-wrap:nowrap;align-items:flex-start">' + RC_LOCK + '<span>Only you' + (S.me.president ? ', your managers' : ', your assistant and your president') + ' see these. Candidates left for ' + RC.days + ' days are removed automatically.</span></div>' + rcBoardLine() + '</section>';
   h += rcForm(RC.form) + '</div>';
+  if (S.me.admin) h += rcPiecesCard();
   return h;
 };
 // emails forwarded to the board's address that couldn't be matched to a candidate
@@ -238,23 +246,20 @@ function rcNotes(c, first, log) {
 }
 // right side: the phone view and what they'd get, then every piece grouped by when it comes
 function rcRight(c, first) {
-  const all = Samples.html(c, rcPhoto(c), 'brand/stewart-logo.png');
-  const tmp = document.createElement('div'); tmp.innerHTML = all;
-  const P = [...tmp.querySelectorAll('.sp-cap')].map(x => x.parentElement.outerHTML);
-  const pc = (i, wide) => P[i] ? '<div class="cd-pc' + (wide ? ' wide' : '') + '">' + P[i] + '</div>' : '';
+  if (!RC.pieces) rcPiecesLoad();
+  const pieces = RC.pieces || [], pic = rcPhoto(c);
   const when = (ic, t, d) => '<div class="cd-when"><span class="ic">' + ic + '</span><div><b>' + t + '</b><div>' + d + '</div></div></div>';
   return '<div class="cd-right"><section class="card cd-b"><div class="cd-phone"><div class="notch"></div><div class="scr"><div class="rc-mm-hd"><img src="logo-light.png" alt="Stewart Title"><span class="rc-tag">SAMPLE</span></div>' +
-    '<div class="rc-mm-hi"><h3>Hi ' + esc(first) + '</h3><p>Here’s what would be waiting for you, ready to share.</p></div><div class="rc-mm-body">' + all + '</div></div></div>' +
+    '<div class="rc-mm-hi"><h3>Hi ' + esc(first) + '</h3><p>Here’s what would be waiting for you, ready to share.</p></div><div class="rc-mm-body">' + Samples.html(c, pic, pieces) + '</div></div></div>' +
     '<div class="cd-get"><h2>What ' + esc(first) + ' would get</h2>' +
-    when('WK 1', 'The week ' + esc(first) + ' joins', 'Welcome post, introduction post, email signature, and LinkedIn and Facebook headers, all made for them.') +
+    when('WK 1', 'The week ' + esc(first) + ' joins', 'A welcome announcement in their pick of 4 looks, 3 email signatures, LinkedIn and Facebook headers, and business cards, all made for them.') +
     when('WK', 'Every week', 'A market update for their area, with their photo and contact details.') +
-    when('MO', 'Every month', 'Buyer and seller flyers, title tips, a safety tip and a newsletter for their farm area.') +
+    when('MO', 'Every month', 'Flyers, title tips and a newsletter for their farm area, each with their photo and contact details.') +
     when('+', 'Anytime', 'Custom pieces on request from the marketing team.') +
-    '<div class="small muted">The phone shows how My Marketing looks on their phone. Scroll it to see every piece.</div></div></section>' +
+    '<div class="small muted">The phone shows how My Marketing looks on their phone. Scroll it to see every piece, and click any piece to see it big.</div></div></section>' +
     '<section class="card"><h2 style="margin:0">Every piece, by when it comes</h2><div class="sp">' +
-    '<div class="cd-band"><div class="lb"><b>Week one</b><span>Made for them when they join</span></div><div class="cd-row2">' + pc(0) + pc(1) + pc(2, 1) + pc(3, 1) + '</div></div>' +
-    '<div class="cd-band"><div class="lb"><b>Every week</b><span>For their area</span></div><div class="cd-row2">' + pc(4) + '</div></div>' +
-    '<div class="cd-band"><div class="lb"><b>Every month</b><span>New each month</span></div><div class="cd-row2">' + pc(5) + pc(6) + pc(7) + pc(8) + pc(9) + '</div></div></div></section></div>';
+    Samples.groups(c, pic, pieces).map(g => '<div class="cd-band"><div class="lb"><b>' + esc(g.when) + '</b><span>' + esc(g.sub) + '</span></div><div class="cd-rows">' + g.rows.map(Samples.row).join('') + '</div></div>').join('') +
+    '</div></section></div>';
 }
 async function rcLogLoad(id) {
   RC.log[id] = { meetings: [], notes: [], loading: true };
@@ -406,3 +411,92 @@ document.addEventListener('drop', e => {
   if (!files || !files.length) { toast('That didn’t come through as an email. In Outlook, drag the email to your desktop first, then drag that file here.', 9000); return; }
   rcTakeFiles(z.dataset.rcDrop, files);
 });
+
+// ---------- Portal Admins: the Recruiting board's own copy of the marketing pieces ----------
+// Drop the "Recruiting Sample Pieces" folder (from 0_Marketing Department Brain › _Admin) here once; its pieces.json says what each picture is.
+// Dropping a piece again replaces it. Retire hides a piece from every sample; Delete for good removes it from the board.
+const RC_KIND_ORDER = ['Market update', 'Flyer', 'Title tip', 'Newsletter'];
+function rcPiecesCard() {
+  if (!RC.pieces) rcPiecesLoad();
+  const all = RC.pieces || [], live = all.filter(p => !p.retired), up = RC.up;
+  const count = RC_KIND_ORDER.map(k => { const n = live.filter(p => p.kind === k).length; return n ? plural(n, k.toLowerCase()) : ''; }).filter(Boolean).join(', ');
+  let h = '<section class="card rc-pcs"><div class="cd-hd"><span class="cardlabel">Sample pieces · Portal admins</span>' +
+    (all.length ? '<button type="button" class="btn small" data-act="rc-pcs-show">' + (RC.showPieces ? 'Hide the list' : 'See the list') + '</button>' : '') + '</div>' +
+    '<div class="small muted">The flyers, title tips, market update and newsletter every candidate sees, copied from the marketing pieces with no one on them. ' +
+    'They live on the Recruiting board, so changes on the marketing side never touch them.</div>' +
+    '<div class="rc-pcs-now">' + (RC.pieces ? (live.length ? '<b>' + plural(live.length, 'piece') + '</b> · ' + esc(count) : '<b>No sample pieces yet.</b> Drop the folder below to add them.') : '<span class="spin dark"></span>') + '</div>';
+  h += up ? '<div class="rc-pcs-drop busy"><b>Adding ' + Math.min(up.done + 1, up.total) + ' of ' + up.total + '…</b><span>' + esc(up.now || '') + '</span><div class="rc-pcs-bar"><i style="width:' + Math.round(100 * up.done / Math.max(1, up.total)) + '%"></i></div></div>'
+    : '<label class="rc-pcs-drop" data-rc-pieces="1"><b>Drop the “Recruiting Sample Pieces” folder here</b><span>or click to choose it. It’s in 0_Marketing Department Brain › _Admin. Pieces already here are replaced.</span>' +
+      '<input type="file" id="rc-pcs-in" webkitdirectory multiple hidden></label>';
+  if (RC.showPieces && all.length) {
+    h += '<div class="rc-pcs-list">' + RC_KIND_ORDER.map(k => {
+      const ps = all.filter(p => p.kind === k); if (!ps.length) return '';
+      return '<div class="cd-sec">' + esc(k === 'Flyer' ? 'Flyers' : k === 'Title tip' ? 'Title tips' : k) + '</div>' + ps.map(p => {
+        const ask = RC.pieceAsk === p.id;
+        return '<div class="rc-pc-r' + (p.retired ? ' off' : '') + '"><img src="' + esc(p.img) + '" alt="" loading="lazy"><div class="grow"><b>' + esc(p.name) + '</b>' + (p.retired ? '<span class="meta">Retired · not in any sample</span>' : '') + '</div>' +
+          (ask ? '<div class="err rc-pc-ask">Delete “' + esc(p.name) + '” for good? It comes off the Recruiting board and can’t be brought back.</div><button type="button" class="btn small" data-act="rc-pc-ask-x">Cancel</button><button type="button" class="btn small danger" data-act="rc-pc" data-s="delete" data-id="' + esc(p.id) + '">Delete for good</button>'
+            : p.retired ? '<button type="button" class="btn small" data-act="rc-pc" data-s="live" data-id="' + esc(p.id) + '">Bring back</button><button type="button" class="btn small cd-rm" data-act="rc-pc-ask" data-id="' + esc(p.id) + '">Delete for good</button>'
+            : '<button type="button" class="btn small" data-act="rc-pc" data-s="retired" data-id="' + esc(p.id) + '">Retire</button>') + '</div>';
+      }).join('');
+    }).join('') + '</div>';
+  }
+  return h + '</section>';
+}
+ACT['rc-pcs-show'] = () => { RC.showPieces = !RC.showPieces; RC.pieceAsk = null; render(); };
+ACT['rc-pc-ask'] = el => { RC.pieceAsk = el.dataset.id; render(); };
+ACT['rc-pc-ask-x'] = () => { RC.pieceAsk = null; render(); };
+ACT['rc-pc'] = async el => {
+  const s = el.dataset.s; el.disabled = true;
+  try {
+    await api('recruiting/samples/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: el.dataset.id, status: s }) });
+    RC.pieceAsk = null; await rcPiecesLoad();
+    toast(s === 'delete' ? 'Deleted for good.' : s === 'retired' ? 'Retired. It’s out of every sample now.' : 'Brought back.');
+  } catch (e) { el.disabled = false; toast(e.message, 7000); }
+};
+// every file in a dropped folder (folders inside it too)
+async function rcFolderFiles(dt) {
+  const entries = [...(dt.items || [])].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (!entries.length) return [...(dt.files || [])];
+  const out = [];
+  const walk = async en => {
+    if (en.isFile) { out.push(await new Promise((res, rej) => en.file(res, rej))); return; }
+    const rd = en.createReader();
+    for (;;) { const batch = await new Promise((res, rej) => rd.readEntries(res, rej)); if (!batch.length) break; for (const x of batch) await walk(x); }
+  };
+  for (const en of entries) await walk(en);
+  return out;
+}
+async function rcPiecesAdd(files) {
+  const byName = {}; files.forEach(f => { byName[f.name] = f; });
+  const man = byName['pieces.json'];
+  if (!man) { toast('That isn’t the Recruiting Sample Pieces folder (it has no pieces.json).', 8000); return; }
+  let list = [];
+  try { list = (JSON.parse(await man.text()).pieces || []).filter(p => p && p.file && p.name && p.kind); } catch (e) { toast('The folder’s pieces.json couldn’t be read.', 8000); return; }
+  const missing = list.filter(p => !byName[p.file]);
+  list = list.filter(p => byName[p.file]);
+  if (!list.length) { toast('None of the pictures listed in pieces.json are in that folder.', 8000); return; }
+  RC.up = { total: list.length, done: 0, now: '' }; render();
+  const failed = [];
+  for (const p of list) {
+    RC.up.now = p.name; render();
+    try {
+      const fd = new FormData();
+      fd.append('fields', JSON.stringify({ name: p.name, kind: p.kind, layout: p.layout || '' }));
+      fd.append('file', byName[p.file], p.file);
+      await api('recruiting/samples', { method: 'POST', body: fd });
+    } catch (e) { failed.push(p.name + ' (' + e.message + ')'); }
+    RC.up.done++;
+  }
+  RC.up = null; await rcPiecesLoad();
+  const n = list.length - failed.length;
+  toast(plural(n, 'piece') + ' added.' + (failed.length ? ' These didn’t save: ' + failed.join('; ') : '') + (missing.length ? ' ' + plural(missing.length, 'picture') + ' listed in pieces.json weren’t in the folder.' : ''), failed.length || missing.length ? 12000 : 5000);
+}
+const rcPcsAt = e => e.target && e.target.closest && e.target.closest('[data-rc-pieces]');
+document.addEventListener('dragover', e => { const z = rcPcsAt(e); if (!z || RC.up) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; z.classList.add('hot'); });
+document.addEventListener('dragleave', e => { const z = rcPcsAt(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove('hot'); });
+document.addEventListener('drop', async e => {
+  const z = rcPcsAt(e); if (!z || RC.up) return;
+  e.preventDefault(); z.classList.remove('hot');
+  rcPiecesAdd(await rcFolderFiles(e.dataTransfer));
+});
+document.addEventListener('change', e => { if (e.target && e.target.id === 'rc-pcs-in' && e.target.files.length) rcPiecesAdd([...e.target.files]); });

@@ -65,6 +65,10 @@ export async function onRequest(ctx) {
     if (route === 'recruiting/email' && m === 'POST') { const r = await recEmail(env, me, await request.formData()); return json(r, r.error ? 400 : 200); }
     if (route.startsWith('recfile/') && m === 'GET') return await recFile(env, me, route.split('/')[1], route.split('/')[2]);
     if (route.startsWith('recphoto/') && m === 'GET') return await recPhoto(env, me, route.split('/')[1]);
+    if (route === 'recruiting/samples' && m === 'GET') return json(await recSamples(env, me));
+    if (route === 'recruiting/samples' && m === 'POST') { if (!me.row.admin) return fail('Only Portal Admins can change the sample pieces.', 403); const r = await recSampleAdd(env, await request.formData()); return json(r, r.error ? 400 : 200); }
+    if (route === 'recruiting/samples/status' && m === 'POST') { if (!me.row.admin) return fail('Only Portal Admins can change the sample pieces.', 403); const r = await recSampleStatus(env, await request.json()); return json(r, r.error ? 400 : 200); }
+    if (route.startsWith('recsample/') && m === 'GET') return await recSampleArt(env, route.split('/')[1]);
     if (route.startsWith('recview/') && m === 'GET') { const r = await recViewLink(env, me, route.split('/')[1]); return json(r, r.error ? 403 : 200); }
     if (route === 'ideas' && m === 'GET') return json(await ideaList(env, me));
     if (route === 'ideas' && m === 'POST') { const r = await ideaAdd(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
@@ -1132,7 +1136,11 @@ async function ideaAdd(env, me, body) {
 // first time it's used. The samples themselves are drawn on screen from samples.js - nothing is saved but this row.
 // "Not hiring" deletes the row (and its photo); rows older than REC_DAYS are deleted the next time anyone opens Recruiting.
 const REC_NAME = 'Manager Portal Recruiting', REC_DAYS = 60;
-const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Company', 'text'], ['Added', 'text'], ['Photo', 'file'], ['Work Email', 'text'], ['Work Phone', 'text'], ['Files', 'file']];
+const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Company', 'text'], ['Added', 'text'], ['Photo', 'file'], ['Work Email', 'text'], ['Work Phone', 'text'], ['Files', 'file'],
+  ['Kind', 'text'], ['Layout', 'text'], ['Piece Status', 'text']];
+// the board's own copy of the marketing pieces (blank art) lives in this group; its rows are never candidates
+const REC_PIECES = 'Sample pieces';
+const recIsPiece = it => !!(it.group && nk(it.group.title) === nk(REC_PIECES));
 async function recBoard(env) {
   return cached('recBoard', 3600e3, async () => {
     let id = env.RECRUITING_BOARD_ID ? String(env.RECRUITING_BOARD_ID) : '';
@@ -1148,7 +1156,7 @@ async function recBoard(env) {
   });
 }
 async function recRows(env, b) {
-  const items = await allItems(env, b.id, Object.values(b.col));
+  const items = (await allItems(env, b.id, Object.values(b.col))).filter(it => !recIsPiece(it));
   return items.map(it => {
     const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
     return { id: String(it.id), name: it.name.trim(), manager: v[b.col.Manager], managerEmail: (v[b.col['Manager Email']] || '').toLowerCase(), title: v[b.col.Title], area: v[b.col.Area],
@@ -1168,6 +1176,84 @@ async function recList(env, me) {
   const out = { days: REC_DAYS, candidates: mine.sort((a, b) => String(b.added).localeCompare(String(a.added))), forwarded: fwd.waiting, moved: fwd.moved };
   if (me.row.admin) out.board = await recBoardInfo(env, b.id).catch(() => null);
   return out;
+}
+// ---------- Sample pieces: the Recruiting board's own copy of the marketing pieces ----------
+// One row per piece in the board's "Sample pieces" group: the blank art (no person on it) in Files, what it is in Kind
+// (Flyer, Title tip, Market update, Newsletter) and where the person goes in Layout. A Portal Admin adds them once by dropping
+// the "Recruiting Sample Pieces" folder on the Recruiting page; the candidate's photo and details are drawn over the art on screen.
+// Recruiting never reads the marketing team's own folders or boards, so changing a piece there doesn't change it here.
+const PIECE_KINDS = ['Flyer', 'Title tip', 'Market update', 'Newsletter'];
+async function recPiecesGroup(env, b) {
+  const g = ((await columns(env, b.id)).groups || []).find(x => nk(x.title) === nk(REC_PIECES));
+  if (g) return g.id;
+  const d = await gql(env, 'mutation($b:ID!,$n:String!){create_group(board_id:$b,group_name:$n){id}}', { b: b.id, n: REC_PIECES });
+  forget('cols:' + b.id);
+  return d.create_group.id;
+}
+async function recPieces(env) {
+  return cached('recPieces', 600e3, async () => {
+    const b = await recBoard(env), C = b.col;
+    const items = (await allItems(env, b.id, [C.Kind, C.Layout, C['Piece Status']])).filter(recIsPiece);
+    if (!items.length) return [];
+    const ids = items.map(it => String(it.id)), arts = {};
+    for (let i = 0; i < ids.length; i += 100) {
+      const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){id assets(column_ids:$c){id public_url created_at}}}', { i: ids.slice(i, i + 100), c: [C.Files] });
+      (d.items || []).forEach(x => { arts[String(x.id)] = (x.assets || []).slice().sort((p, q) => String(q.created_at).localeCompare(String(p.created_at)))[0] || null; });
+    }
+    return items.map(it => {
+      const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+      const a = arts[String(it.id)];
+      return { id: String(it.id), name: it.name.trim(), kind: v[C.Kind] || '', layout: v[C.Layout] || '', status: (v[C['Piece Status']] || 'live').toLowerCase(), art: a ? { id: String(a.id), url: a.public_url } : null };
+    }).filter(p => p.art && PIECE_KINDS.includes(p.kind));
+  });
+}
+async function recSamples(env, me) {
+  const all = await recPieces(env).catch(() => []);
+  return { pieces: all.filter(p => p.status !== 'retired' || me.row.admin).map(p => ({ id: p.id, name: p.name, kind: p.kind, layout: p.layout, retired: p.status === 'retired', img: 'api/recsample/' + p.art.id })) };
+}
+async function recSampleAdd(env, fd) {
+  const f = JSON.parse(fd.get('fields') || '{}'), file = fd.get('file');
+  const name = String(f.name || '').trim().slice(0, 200), kind = PIECE_KINDS.find(k => nk(k) === nk(f.kind)), layout = String(f.layout || '').trim().slice(0, 200);
+  if (!name || !kind) return { error: 'Each piece needs a name and a kind (' + PIECE_KINDS.join(', ') + ').' };
+  if (!file || typeof file === 'string' || !file.size) return { error: name + ' has no picture.' };
+  if (!/^image\/(png|jpe?g|webp)$/i.test(file.type || '')) return { error: name + ' isn’t a picture (PNG or JPG).' };
+  if (file.size > 8e6) return { error: name + ' is too big (8 MB at most).' };
+  const b = await recBoard(env), C = b.col, g = await recPiecesGroup(env, b);
+  // the same piece dropped again replaces the old copy
+  const old = (await recPieces(env).catch(() => [])).filter(p => p.kind === kind && nk(p.name) === nk(name));
+  const vals = {}; vals[C.Kind] = kind; vals[C.Layout] = layout; vals[C['Piece Status']] = 'Live';
+  const id = String(await createItem(env, b.id, g, name, vals));
+  try { await addFile(env, id, C.Files, file); }
+  catch (e) { await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: id }).catch(() => {}); return { error: name + ' didn’t save: ' + String(e.message || e) }; }
+  for (const o of old) await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: o.id }).catch(() => {});
+  forget('recPieces');
+  return { ok: true, id, replaced: old.length > 0 };
+}
+// Retire hides a piece from every sample (Bring back shows it again); Delete for good removes its row from the board
+async function recSampleStatus(env, body) {
+  const p = (await recPieces(env)).find(x => x.id === String(body.id || ''));
+  if (!p) return { error: 'That piece isn’t on the Recruiting board any more.' };
+  const b = await recBoard(env);
+  if (body.status === 'delete') await gql(env, 'mutation($i:ID!){delete_item(item_id:$i){id}}', { i: p.id });
+  else await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}',
+    { b: b.id, i: p.id, v: JSON.stringify({ [b.col['Piece Status']]: body.status === 'retired' ? 'Retired' : 'Live' }) });
+  forget('recPieces');
+  return { ok: true };
+}
+async function recSampleArt(env, assetId) {
+  assetId = String(assetId || '').replace(/\D/g, '');
+  let p = (await recPieces(env)).find(x => x.art.id === assetId);
+  if (!p) return fail('Not found', 404);
+  const ck = new Request('https://manager-portal.cache/recsample/' + assetId), cache = caches.default;
+  const head = { 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+  const hit = await cache.match(ck);
+  if (hit) return new Response(hit.body, { headers: Object.assign({ 'Content-Type': hit.headers.get('Content-Type') || 'image/jpeg' }, head) });
+  let r = await fetch(p.art.url);
+  if (!r.ok) { forget('recPieces'); p = (await recPieces(env)).find(x => x.art.id === assetId); if (p) r = await fetch(p.art.url); }
+  if (!r.ok) return fail('Could not load the piece', 502);
+  const type = r.headers.get('Content-Type') || 'image/jpeg', buf = await r.arrayBuffer();
+  try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
+  return new Response(buf, { headers: Object.assign({ 'Content-Type': type }, head) });
 }
 // ---------- Emails forwarded from a phone to the Recruiting board's email address ----------
 // monday makes a row named after the subject, with the email as its first update and the attachments on it.
@@ -1265,7 +1351,7 @@ async function recOwn(env, me, id) {
   const it = (d.items || [])[0];
   if (!it || String(it.board.id) !== b.id) return null;
   const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
-  return inScope(me, v[b.col['Manager Email']]) ? { id, name: it.name.trim(), b } : null;
+  return v[b.col['Manager Email']] && inScope(me, v[b.col['Manager Email']]) ? { id, name: it.name.trim(), b } : null;
 }
 async function recAdd(env, me, fd) {
   const f = JSON.parse(fd.get('fields') || '{}');
