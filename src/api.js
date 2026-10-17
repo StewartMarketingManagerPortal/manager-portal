@@ -1219,8 +1219,11 @@ async function recSampleAdd(env, fd) {
   if (!/^image\/(png|jpe?g|webp)$/i.test(file.type || '')) return { error: name + ' isn’t a picture (PNG or JPG).' };
   if (file.size > 8e6) return { error: name + ' is too big (8 MB at most).' };
   const b = await recBoard(env), C = b.col, g = await recPiecesGroup(env, b);
-  // the same piece dropped again replaces the old copy
-  const old = (await recPieces(env).catch(() => [])).filter(p => p.kind === kind && nk(p.name) === nk(name));
+  // the same piece dropped again replaces the old copy: the page sends the ids it already shows, and only rows in the Sample pieces group are removed
+  // (no full board read per picture, so a whole folder of uploads stays quick)
+  const want = (Array.isArray(f.replace) ? f.replace : []).map(x => String(x).replace(/\D/g, '')).filter(Boolean).slice(0, 20);
+  const old = want.length ? ((await gql(env, 'query($i:[ID!]){items(ids:$i){id board{id} group{title}}}', { i: want }).catch(() => ({}))).items || [])
+    .filter(it => String(it.board && it.board.id) === String(b.id) && recIsPiece(it)) : [];
   const vals = {}; vals[C.Kind] = kind; vals[C.Layout] = layout; vals[C['Piece Status']] = 'Live';
   const id = String(await createItem(env, b.id, g, name, vals));
   try { await addFile(env, id, C.Files, file); }
