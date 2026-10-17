@@ -103,7 +103,16 @@
     ctx.fillStyle = small; for (let i = tl.length - 1; i >= 0; i--) { ctx.fillText(tl[i], 80, by); by -= 35; }
     font(ctx, 800, 40); let np = 40; while (ctx.measureText(h.name).width > 395 && np > 22) { np -= 2; font(ctx, 800, np); }
     ctx.fillStyle = ink; ctx.fillText(h.name, 80, by - 4);
+    copyright(ctx, d);
     return c;
+  }
+  // the copyright line every posted graphic carries: a soft strip across the bottom so it reads on any art or photo
+  function copyright(ctx, d) {
+    const dark = !!d.text && d.text.toUpperCase() === '#FFFFFF';
+    ctx.fillStyle = dark ? 'rgba(26,26,28,.78)' : 'rgba(255,255,255,.82)'; ctx.fillRect(0, W - 34, W, 34);
+    spacing(ctx, 0, 15); font(ctx, 600, 15); ctx.fillStyle = dark ? '#CFCBC5' : MUTED; ctx.textAlign = 'center';
+    ctx.fillText('© ' + new Date().getFullYear() + ' Stewart. All rights reserved. Trademarks are the property of their respective owners.', W / 2, W - 12);
+    ctx.textAlign = 'left';
   }
   window.hlDraw = draw;   // used by the template preview
 
