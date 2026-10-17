@@ -222,7 +222,9 @@ async function samplePieces(env) {
       const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
       const a = (it.assets || []).slice().sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
       return { id: String(it.id), name: it.name.trim(), kind: v[b.cols.Kind] || '', layout: v[b.cols.Layout] || '', status: (v[b.cols['Piece Status']] || 'live').toLowerCase(), art: a ? { id: String(a.id), url: a.public_url } : null };
-    }).filter(x => x.art && x.status !== 'retired');
+    }).filter(x => x.art && x.status !== 'retired')
+      // a piece added twice shows once: the newest row (highest id) of each kind + name wins
+      .filter((p, i, all) => !all.some(o => o !== p && o.kind === p.kind && o.name.toLowerCase() === p.name.toLowerCase() && (o.id.length !== p.id.length ? o.id.length > p.id.length : o.id > p.id)));
   });
 }
 // the approved script font for the first name, from the "_Script font" row Marketing Tools keeps on the New Hire Packages board (licensed, so never in this repo)
