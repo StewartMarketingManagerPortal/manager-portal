@@ -11,9 +11,9 @@ const Samples = (() => {
 .sp-row{margin:10px 0 4px}.sp-row>b{display:block;font-size:13px;font-weight:700;margin-bottom:6px}.sp-row>b span{font-weight:500;color:var(--m)}
 .sp-strip{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:thin;--rh:170px}.sp-strip.br{--rh:96px}
 .sp-it{flex:none;display:flex;flex-direction:column;gap:5px}
-.sp-cap{font-size:11.5px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--k)}
+.sp-cap{font-size:11.5px;font-weight:600;width:0;min-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--k)}
 .sp-none{font-size:13px;color:var(--m);background:#F7F5F2;border-radius:10px;padding:12px 14px}
-.sx{position:relative;overflow:hidden;height:var(--rh);border-radius:8px;background:#fff;box-shadow:0 0 0 1px var(--ln);cursor:zoom-in;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.sx{position:relative;overflow:hidden;height:var(--rh);width:calc(var(--rh) * var(--ar));flex:none;border-radius:8px;background:#fff;box-shadow:0 0 0 1px var(--ln);cursor:zoom-in;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .sx img{pointer-events:none}
 .sx-in{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;font-family:Montserrat,sans-serif;color:var(--k);line-height:1.2;text-align:left}
 .sx-a{position:absolute}.sx-bg{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -52,9 +52,14 @@ const Samples = (() => {
   };
   const svg = (k, s, color) => '<svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '"' + (color ? ' style="stroke:' + color + '"' : '') + '>' + ICON[k] + '</svg>';
   // c: { name, title, area, phone, email }, photo: image URL (background already removed) or ''
+  // 9518342559 -> (951) 834-2559; anything else stays as typed
+  function phoneFmt(v) {
+    const t = String(v || '').trim(), d = t.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+    return d.length === 10 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : t;
+  }
   function person(c, photo) {
     const name = String(c.name || 'Candidate').trim(), parts = name.split(/\s+/);
-    return { name, f: parts[0], l: parts.slice(1).join(' ') || parts[0], t: c.title || 'Sales Representative', area: c.area || '', ph: c.phone || '', em: c.email || '', pic: photo || '' };
+    return { name, f: parts[0], l: parts.slice(1).join(' ') || parts[0], t: c.title || 'Sales Representative', area: c.area || '', ph: phoneFmt(c.phone), em: c.email || '', pic: photo || '' };
   }
   // ---------- drawing helpers, in the piece's own pixels ----------
   const box = (x, y, w, h, inner, st) => '<div class="sx-a" style="left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;' + (st || '') + '">' + inner + '</div>';
@@ -66,7 +71,7 @@ const Samples = (() => {
     o = o || {};
     const inner = P.pic ? '<img data-center="1" src="' + esc(P.pic) + '" alt="" draggable="false">'
       : '<svg viewBox="0 0 100 120" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><circle cx="50" cy="44" r="21" fill="#B9B5AF"/><path d="M10 120c2-30 18-46 40-46s38 16 40 46z" fill="#B9B5AF"/></svg>';
-    return '<div class="sx-ph' + (o.round ? ' o' : '') + '" style="left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;' + (o.bg ? 'background:' + o.bg + ';' : '') + (o.ring ? 'box-shadow:0 0 0 ' + o.ring + ';' : '') + '">' + inner + '</div>';
+    return '<div class="sx-ph' + (o.round ? ' o' : '') + '" style="left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;' + (o.bg ? 'background:' + o.bg + ';' : '') + (o.ring ? 'box-shadow:0 0 0 ' + o.ring + ';' : '') + (o.st || '') + '">' + inner + '</div>';
   }
   const logo = (x, y, w, white) => '<img class="sx-a" src="brand/stewart-logo' + (white ? '-white' : '') + '.png" style="left:' + x + 'px;top:' + y + 'px;width:' + w + 'px" alt="" draggable="false">';
   // one piece: W × H pixels, scaled to the row's height by fit()
@@ -105,10 +110,16 @@ const Samples = (() => {
   const letters = (x, y, w, fs, rows, gap, st) => rows.map((r, i) => '<div class="sx-a sx-1 sx-fit" style="left:' + x + 'px;top:' + (y + i * gap) + 'px;width:' + w + 'px;height:' + Math.ceil(fs * 1.35) + 'px;font-size:' + fs + 'px;' + (st || '') + '"><b style="color:var(--b);display:inline-block;width:' + Math.round(fs * 1.4) + 'px">' + r[0] + '</b>' + esc(r[1]) + '</div>').join('');
   const curve = (cx, cy, r, ring) => '<div class="sx-a" style="left:' + (cx - r) + 'px;top:' + (cy - r) + 'px;width:' + 2 * r + 'px;height:' + 2 * r + 'px;border-radius:50%;background:#1C1C1E;box-shadow:0 0 0 ' + ring + 'px var(--b)"></div>';
   const stripes = (x, y, h) => [0, 1, 2].map(i => '<div class="sx-a" style="left:' + (x + i * 62) + 'px;top:' + y + 'px;width:42px;height:' + h + 'px;background:var(--b);transform:skewX(-28deg)"></div>').join('');
+  // script first name tilted up (sx-w: shrinks for width only, the script's tall letters always overrun their box), then the last name in red caps with the title under it; the whole block shrinks together to fit its width
+  const sigName = (x, y, w, h, P) => '<div class="sx-a sx-fit sx-w" style="left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;font-size:48px;display:flex;flex-direction:column;justify-content:flex-end;white-space:nowrap"><div style="display:flex;align-items:flex-start">' +
+    '<span class="sx-fn" style="position:static;display:inline-block;font-size:2.1em;padding:.66em .12em 0 0;transform:rotate(-8deg);transform-origin:left bottom">' + esc(P.f) + '</span>' +
+    '<span style="padding-top:2.33em;margin-left:.3em"><span style="display:block;font-weight:800;color:var(--b);letter-spacing:.125em;text-transform:uppercase;line-height:1">' + esc(P.l) + '</span>' +
+    '<span style="display:block;margin-top:.45em;font-size:.36em;font-weight:700;letter-spacing:.3em;text-transform:uppercase;opacity:.8">' + esc(P.t) + '</span></span></div></div>';
   const BRAND = [
-    ['Email signature · Script Name', P => [1200, 400, box(-12, -72, 470, 470, '', 'border-radius:50%;background:#F1EFEB;box-shadow:0 0 0 9px var(--b)') + photo(P, 8, 30, 380, 370) +
-      box(405, 39, 748, 156, '', 'background:#E8E5DF') + fn(425, 24, 104, P) + caps(600, 117, 540, 46, esc(P.l), 'var(--b)', .14) + caps(602, 170, 520, 12, esc(P.t), 'var(--k)', .3, 32) +
-      (P.ph ? iconLine(456, 222, 420, 23, 'ph', esc(P.ph), 'font-weight:600') : '') + (P.em ? iconLine(456, 260, 420, 23, 'em', esc(P.em), 'font-weight:600') : '') + (P.area ? iconLine(456, 298, 420, 23, 'pin', esc(P.area), 'font-weight:600') : '') + logo(897, 304, 250), '#fff']],
+    ['Email signature · Script Name', P => [1200, 400, box(300, 40, 852, 156, '', 'background:#E9E5DF') +
+      box(0, 0, 404, 400, '', 'background:var(--b);border-radius:0 220px 220px 0/0 50% 50% 0') + photo(P, 0, 0, 392, 400, { st: 'border-radius:0 212px 212px 0/0 50% 50% 0;background:#F4F2EE' }) +
+      sigName(424, 0, 728, 196, P) +
+      (P.ph ? iconLine(444, 226, 420, 23, 'ph', esc(P.ph), 'font-weight:600') : '') + (P.em ? iconLine(444, 264, 420, 23, 'em', esc(P.em), 'font-weight:600') : '') + (P.area ? iconLine(444, 302, 420, 23, 'pin', esc(P.area), 'font-weight:600') : '') + logo(897, 316, 250), '#fff']],
     ['Email signature · Left Edge', P => [1200, 344, box(28, 32, 8, 280, '', 'background:var(--b)') + photo(P, 60, 57, 229, 229, { round: true, bg: '#EEECE8' }) +
       line(324, 40, 600, 46, esc(P.name), 'font-weight:700') + caps(325, 100, 600, 15, esc(P.t), 'var(--b)', .12) +
       letters(324, 140, 520, 20, [['M', P.ph], ['E', P.em], ['W', 'stewart.com']].filter(r => r[1]), 32) +
@@ -174,7 +185,7 @@ const Samples = (() => {
       inn.querySelectorAll('.sx-fit,.lk-fit').forEach(t => {
         let fs = Number(t.dataset.fs) || parseFloat(getComputedStyle(t).fontSize), n = 0;
         t.dataset.fs = fs; t.style.fontSize = fs + 'px';
-        while ((t.scrollHeight > t.clientHeight + 1 || t.scrollWidth > t.clientWidth + 1) && n++ < 16) { fs *= 0.94; t.style.fontSize = fs + 'px'; }
+        while (((!t.classList.contains('sx-w') && t.scrollHeight > t.clientHeight + 1) || t.scrollWidth > t.clientWidth + 1) && n++ < 16) { fs *= 0.94; t.style.fontSize = fs + 'px'; }
       });
     });
   }

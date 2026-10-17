@@ -475,22 +475,35 @@ async function rcPiecesAdd(files) {
   const missing = list.filter(p => !byName[p.file]);
   list = list.filter(p => byName[p.file]);
   if (!list.length) { toast('None of the pictures listed in pieces.json are in that folder.', 8000); return; }
+  try { RC.pieces = (await api('recruiting/samples')).pieces || RC.pieces; } catch (e) { /* use what the page shows */ }
+  // pieces already on the board are skipped, so dropping the folder again just finishes what's missing; the smaller kinds go first
+  const have = {}; (RC.pieces || []).forEach(p => { (have[p.kind + '|' + p.name.toLowerCase()] = have[p.kind + '|' + p.name.toLowerCase()] || []).push(p.id); });
+  const there = list.filter(p => have[p.kind + '|' + String(p.name).trim().toLowerCase()]);
+  list = list.filter(p => !there.includes(p)).sort((a, b) => (a.kind === 'Flyer') - (b.kind === 'Flyer'));
+  if (!list.length) { toast('Every piece in that folder is already on the Recruiting board. To swap one for new art, Delete it for good, then drop the folder again.', 9000); return; }
   RC.up = { total: list.length, done: 0, now: '' }; render();
-  const failed = [];
+  const failed = [], send = async p => {
+    const fd = new FormData();
+    fd.append('fields', JSON.stringify({ name: p.name, kind: p.kind, layout: p.layout || '' }));
+    fd.append('file', byName[p.file], p.file);
+    await api('recruiting/samples', { method: 'POST', body: fd });
+  };
   for (const p of list) {
     RC.up.now = p.name; render();
-    try {
-      const fd = new FormData();
-      fd.append('fields', JSON.stringify({ name: p.name, kind: p.kind, layout: p.layout || '' }));
-      fd.append('file', byName[p.file], p.file);
-      await api('recruiting/samples', { method: 'POST', body: fd });
-    } catch (e) { failed.push(p.name + ' (' + e.message + ')'); }
+    try { await send(p); }
+    catch (e) {
+      // one more try after a short wait (monday sometimes turns away a burst of uploads)
+      await new Promise(r => setTimeout(r, 2500));
+      try { await send(p); } catch (e2) { failed.push(p.name + ' (' + e2.message + ')'); }
+    }
     RC.up.done++;
   }
   RC.up = null; await rcPiecesLoad();
   const n = list.length - failed.length;
-  toast(plural(n, 'piece') + ' added.' + (failed.length ? ' These didn’t save: ' + failed.join('; ') : '') + (missing.length ? ' ' + plural(missing.length, 'picture') + ' listed in pieces.json weren’t in the folder.' : ''), failed.length || missing.length ? 12000 : 5000);
+  toast(plural(n, 'piece') + ' added.' + (there.length ? ' ' + plural(there.length, 'piece') + ' were already there.' : '') + (failed.length ? ' These didn’t save (drop the folder again to finish): ' + failed.join('; ') : '') + (missing.length ? ' ' + plural(missing.length, 'picture') + ' listed in pieces.json weren’t in the folder.' : ''), failed.length || missing.length ? 12000 : 5000);
 }
+// leaving the page mid-upload stops it, so ask first
+window.addEventListener('beforeunload', e => { if (RC.up) { e.preventDefault(); e.returnValue = ''; } });
 const rcPcsAt = e => e.target && e.target.closest && e.target.closest('[data-rc-pieces]');
 document.addEventListener('dragover', e => { const z = rcPcsAt(e); if (!z || RC.up) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; z.classList.add('hot'); });
 document.addEventListener('dragleave', e => { const z = rcPcsAt(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove('hot'); });
