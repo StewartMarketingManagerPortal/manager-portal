@@ -109,7 +109,9 @@
 
   // ---------- state ----------
   const HL = window.HL = { data: null, loading: false, err: '', pick: {}, pics: {}, busy: {} };
-  const designsFor = kind => BUILT_IN.filter(d => d.kind === kind).concat(((HL.data && HL.data.designs) || []).filter(d => d.kind === kind && LAYOUTS[d.layout || 'classic']));
+  // built-ins turned off in Marketing Tools › Templates (if every design of a kind is off, the built-ins still show)
+  const builtIn = kind => { const off = new Set((HL.data && HL.data.off) || []), all = BUILT_IN.filter(d => d.kind === kind); return all.filter(d => !off.has(kind + '|' + d.name.toLowerCase())); };
+  const designsFor = kind => (ds => ds.length ? ds : BUILT_IN.filter(d => d.kind === kind))(builtIn(kind).concat(((HL.data && HL.data.designs) || []).filter(d => d.kind === kind && LAYOUTS[d.layout || 'classic'])));
   // each person starts on a different design (same one every time for them); the manager can still pick another
   const seedOf = k => { let n = 0; for (const ch of String(k)) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return n; };
   const pick = h => HL.pick[h.key] || (HL.pick[h.key] = { d: (ds => ds[seedOf(h.key) % ds.length].id)(designsFor(h.kind)), c: 0 });
