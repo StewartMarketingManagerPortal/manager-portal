@@ -1137,7 +1137,7 @@ async function ideaAdd(env, me, body) {
 // "Not hiring" deletes the row (and its photo); rows older than REC_DAYS are deleted the next time anyone opens Recruiting.
 const REC_NAME = 'Manager Portal Recruiting', REC_DAYS = 60;
 const REC_COLS = [['Manager', 'text'], ['Manager Email', 'text'], ['Title', 'text'], ['Area', 'text'], ['Phone', 'text'], ['Email', 'text'], ['Company', 'text'], ['Added', 'text'], ['Photo', 'file'], ['Work Email', 'text'], ['Work Phone', 'text'], ['Files', 'file'],
-  ['Kind', 'text'], ['Layout', 'text'], ['Piece Status', 'text']];
+  ['Kind', 'text'], ['Layout', 'text'], ['Piece Status', 'text'], ['Why Stewart', 'long_text']];
 // the board's own copy of the marketing pieces (blank art) lives in this group; its rows are never candidates
 const REC_PIECES = 'Sample pieces';
 const recIsPiece = it => !!(it.group && nk(it.group.title) === nk(REC_PIECES));
@@ -1160,7 +1160,7 @@ async function recRows(env, b) {
   return items.map(it => {
     const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
     return { id: String(it.id), name: it.name.trim(), manager: v[b.col.Manager], managerEmail: (v[b.col['Manager Email']] || '').toLowerCase(), title: v[b.col.Title], area: v[b.col.Area],
-      phone: v[b.col.Phone], email: v[b.col.Email], company: v[b.col.Company], workEmail: v[b.col['Work Email']], workPhone: v[b.col['Work Phone']], added: v[b.col.Added] || String(it.created_at || '').slice(0, 10), photo: !!v[b.col.Photo] };
+      phone: v[b.col.Phone], email: v[b.col.Email], company: v[b.col.Company], workEmail: v[b.col['Work Email']], workPhone: v[b.col['Work Phone']], why: v[b.col['Why Stewart']] || '', added: v[b.col.Added] || String(it.created_at || '').slice(0, 10), photo: !!v[b.col.Photo] };
   });
 }
 async function recList(env, me) {
@@ -1369,6 +1369,7 @@ async function recAdd(env, me, fd) {
   const b = await recBoard(env), C = b.col, vals = {};
   vals[C.Manager] = me.row.name; vals[C['Manager Email']] = me.email; vals[C.Title] = txt(f.title); vals[C.Area] = txt(f.area);
   vals[C.Phone] = txt(f.phone, 40); vals[C.Email] = txt(f.email, 120); vals[C.Company] = txt(f.company); vals[C.Added] = today();
+  if (txt(f.why, 400)) vals[C['Why Stewart']] = { text: txt(f.why, 400) };
   const id = String(await createItem(env, b.id, null, name, vals));
   const photo = fd.get('photo');
   if (photo && typeof photo !== 'string' && photo.size) {
@@ -1394,6 +1395,7 @@ async function recEdit(env, me, body) {
   const vals = { name };
   vals[C.Title] = txt(f.title); vals[C.Area] = txt(f.area); vals[C.Phone] = txt(f.phone, 40); vals[C.Email] = txt(f.email, 120); vals[C.Company] = txt(f.company);
   vals[C['Work Email']] = txt(f.workEmail, 120); vals[C['Work Phone']] = txt(f.workPhone, 40);
+  if (f.why != null) vals[C['Why Stewart']] = { text: txt(f.why, 400) };
   await gql(env, 'mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}', { b: r.b.id, i: r.id, v: JSON.stringify(vals) });
   return { ok: true };
 }

@@ -57,9 +57,14 @@ const Samples = (() => {
     const t = String(v || '').trim(), d = t.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
     return d.length === 10 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : t;
   }
+  // the short "why Stewart" paragraph that sits where the bio goes on the welcome announcements; the manager can change it
+  const WHY_MAX = 300;
+  const why = first => (first || 'They') + ' is joining Stewart Title, a company with more than 130 years in title and escrow. With the strength of a national company, a local team that picks up the phone, and a marketing team behind them, ' + (first || 'they') + ' is ready to help you and your clients close with confidence.';
   function person(c, photo) {
     const name = String(c.name || 'Candidate').trim(), parts = name.split(/\s+/);
-    return { name, f: parts[0], l: parts.slice(1).join(' ') || parts[0], t: c.title || 'Sales Representative', area: c.area || '', ph: phoneFmt(c.phone), em: c.email || '', pic: photo || '' };
+    const w = String(c.why || '').replace(/\s+/g, ' ').trim() || why(parts[0]);
+    return { name, f: parts[0], l: parts.slice(1).join(' ') || parts[0], t: c.title || 'Sales Representative', area: c.area || '', ph: phoneFmt(c.phone), em: c.email || '', pic: photo || '',
+      why: w.length > WHY_MAX ? w.slice(0, WHY_MAX).replace(/\s+\S*$/, '') + '…' : w };
   }
   // ---------- drawing helpers, in the piece's own pixels ----------
   const box = (x, y, w, h, inner, st) => '<div class="sx-a" style="left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;' + (st || '') + '">' + inner + '</div>';
@@ -148,7 +153,7 @@ const Samples = (() => {
   // the 4 approved new hire looks, each an announcement and an "I've joined" post (from looks.js)
   function looks(P) {
     if (!window.nhLookPosts) return [];
-    const L = { f: P.f, l: P.l, t: P.t, ph: P.ph || '(000) 000-0000', em: P.em || 'name@stewart.com', a1: CO, a2: P.area, bio: '', noBio: true, pic: P.pic, cut: !!P.pic };
+    const L = { f: P.f, l: P.l, t: P.t, ph: P.ph || '(000) 000-0000', em: P.em || 'name@stewart.com', a1: CO, a2: P.area, bio: P.why, noBio: !P.why, pic: P.pic, cut: !!P.pic };
     const out = [];
     (window.nhLookNames || []).forEach(n => (nhLookPosts(n, L) || []).forEach((post, i) => out.push({ cap: n + (i ? ' · I’ve joined' : ' · Announcement'), html: frame(1080, 1350, post) })));
     return out;
@@ -240,5 +245,5 @@ const Samples = (() => {
     });
     fit(root);
   }
-  return { html, groups, row, fit, center, fix };
+  return { html, groups, row, fit, center, fix, why, WHY_MAX };
 })();
