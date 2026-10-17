@@ -1197,15 +1197,20 @@ async function recPieces(env) {
     if (!items.length) return [];
     const ids = items.map(it => String(it.id)), arts = {};
     for (let i = 0; i < ids.length; i += 100) {
-      const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){id assets(column_ids:$c){id public_url created_at}}}', { i: ids.slice(i, i + 100), c: [C.Files] });
+      const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i,limit:100){id assets(column_ids:$c){id public_url created_at}}}', { i: ids.slice(i, i + 100), c: [C.Files] });
       (d.items || []).forEach(x => { arts[String(x.id)] = (x.assets || []).slice().sort((p, q) => String(q.created_at).localeCompare(String(p.created_at)))[0] || null; });
     }
     return items.map(it => {
       const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
       const a = arts[String(it.id)];
       return { id: String(it.id), name: it.name.trim(), kind: v[C.Kind] || '', layout: v[C.Layout] || '', status: (v[C['Piece Status']] || 'live').toLowerCase(), art: a ? { id: String(a.id), url: a.public_url } : null };
-    }).filter(p => p.art && PIECE_KINDS.includes(p.kind));
+    }).filter(p => p.art && PIECE_KINDS.includes(p.kind)).filter(recNewest);
   });
+}
+// a piece added twice shows once: the newest row (highest id) of each kind + name wins
+function recNewest(p, i, all) {
+  const k = x => x.kind + '|' + x.name.toLowerCase(), later = (a, b) => a.length !== b.length ? a.length > b.length : a > b;
+  return !all.some(o => o !== p && k(o) === k(p) && later(o.id, p.id));
 }
 async function recSamples(env, me) {
   const all = await recPieces(env).catch(() => []);
