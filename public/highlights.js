@@ -7,6 +7,17 @@
   const BUILT_IN = [
     { id: 'b1', name: 'Classic', kind: 'birthday', art: 'highlights/birthday.png' },
     { id: 'a1', name: 'Classic', kind: 'start', art: 'highlights/anniversary.png' },
+    // celebration designs (balloons, confetti, fireworks); dark ones set their own text colours
+    { id: 'b-balloons', name: 'Balloons', kind: 'birthday', art: 'highlights/birthday-balloons.png' },
+    { id: 'b-confetti', name: 'Confetti', kind: 'birthday', art: 'highlights/birthday-confetti.png' },
+    { id: 'b-red-party', name: 'Red party', kind: 'birthday', art: 'highlights/birthday-red-party.png', text: '#FFFFFF', accent: '#F3C969', small: '#F6DCE2' },
+    { id: 'b-party-banner', name: 'Party banner', kind: 'birthday', art: 'highlights/birthday-party-banner.png' },
+    { id: 'b-sparkle-night', name: 'Sparkle night', kind: 'birthday', art: 'highlights/birthday-sparkle-night.png', text: '#FFFFFF', accent: '#F3C969', small: '#CFCBC5' },
+    { id: 'a-gold-stars', name: 'Gold stars', kind: 'start', art: 'highlights/anniversary-gold-stars.png' },
+    { id: 'a-fireworks', name: 'Fireworks', kind: 'start', art: 'highlights/anniversary-fireworks.png', text: '#FFFFFF', accent: '#F3C969', small: '#CFCBC5' },
+    { id: 'a-gold-streamers', name: 'Gold streamers', kind: 'start', art: 'highlights/anniversary-gold-streamers.png', text: '#FFFFFF', accent: '#F3C969', small: '#F6DCE2' },
+    { id: 'a-celebration-burst', name: 'Celebration burst', kind: 'start', art: 'highlights/anniversary-celebration-burst.png' },
+    { id: 'a-ribbons', name: 'Ribbons', kind: 'start', art: 'highlights/anniversary-ribbons.png' },
   ];
   const INK = '#1A1A1C', RED = '#A30C33', MUTED = '#6B6966';
   const CAPTIONS = {
@@ -99,7 +110,9 @@
   // ---------- state ----------
   const HL = window.HL = { data: null, loading: false, err: '', pick: {}, pics: {}, busy: {} };
   const designsFor = kind => BUILT_IN.filter(d => d.kind === kind).concat(((HL.data && HL.data.designs) || []).filter(d => d.kind === kind && LAYOUTS[d.layout || 'classic']));
-  const pick = h => HL.pick[h.key] || (HL.pick[h.key] = { d: designsFor(h.kind)[0].id, c: 0 });
+  // each person starts on a different design (same one every time for them); the manager can still pick another
+  const seedOf = k => { let n = 0; for (const ch of String(k)) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return n; };
+  const pick = h => HL.pick[h.key] || (HL.pick[h.key] = { d: (ds => ds[seedOf(h.key) % ds.length].id)(designsFor(h.kind)), c: 0 });
   const design = h => designsFor(h.kind).find(d => d.id === pick(h).d) || designsFor(h.kind)[0];
   async function load() {
     if (HL.loading) return; HL.loading = true;
