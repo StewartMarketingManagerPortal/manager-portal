@@ -43,7 +43,7 @@
     const post = (bg, inner, color) => '<div class="lk-post" style="background:' + bg + (color ? ';color:' + color : '') + '">' + inner + '</div>';
     return {
       'soft paper': [
-        post('#F4F2EE', logo(70, 70, 280) + circ(560, 170, 430) + '<div class="lk-abs lk-kick" style="left:70px;top:210px">Please welcome</div>' + name(66, 275, { fs: 130, dy: 175, rw: 540 }) + rows(70, 645, null, 28, 540) +
+        post('#F4F2EE', logo(70, 70, 280) + circ(560, 170, 430) + '<div class="lk-abs lk-kick" style="left:70px;top:210px">Please welcome</div>' + name(66, 300, { fs: 130, dy: 150, rw: 540 }) + rows(70, 645, null, 28, 540) +
           '<div class="lk-abs" style="left:70px;top:860px;width:940px;height:400px;background:#fff;border-radius:28px;border-left:12px solid var(--lk-red);padding:44px 52px"><div class="lk-lbl">About ' + e(P.f) + '</div><div class="lk-bio lk-fit" style="height:290px">' + bio + '</div></div>' + cr('var(--lk-muted)')),
         post('#F4F2EE', logo(70, 70, 280) + '<div class="lk-abs lk-kick" style="left:70px;top:230px">Big news</div><div class="lk-abs lk-hd" style="left:70px;top:290px;font-size:96px;width:900px">I’ve joined<br><span style="color:var(--lk-red)">Stewart Title</span></div>' +
           circ(620, 620, 380) + name(66, 560, { fs: 120, dy: 160, dx: 40, rw: 600 }) + rows(70, 920, null, 28, 600) + cr('var(--lk-muted)'))],
