@@ -596,6 +596,11 @@ ACT['nh-next'] = () => {
 };
 ACT['nh-back'] = (el, e) => { e.preventDefault(); S.nh.step--; render(); };
 ACT['nh-step'] = (el, e) => { e.preventDefault(); S.nh.step = +el.dataset.step; render(); };
+// each look's posts: drawn live with this new hire's photo and details when the look has a live layout (looks.js), else its saved previews
+function pkFigs(x, n) {
+  const imgs = x.imgs && x.imgs.length ? x.imgs : [{ src: x.img, label: '' }], live = window.nhLive ? nhLive(x.name, n) : null;
+  return imgs.map((i, k) => '<span class="pk-fig">' + (live && live[k] ? live[k] : '<img class="pk-img" src="' + esc(i.src) + '" alt="' + esc(x.name + (i.label ? ' - ' + i.label : '')) + '" loading="lazy">') + (i.label ? '<span class="pk-cap">' + esc(i.label) + '</span>' : '') + '</span>').join('');
+}
 function nhPackages(n, list) {
   const names = list.map(x => x.name);
   n.looks = n.looks.filter(l => names.includes(l));
@@ -604,7 +609,7 @@ function nhPackages(n, list) {
     '<span class="row" style="flex-wrap:nowrap"><input type="checkbox" tabindex="-1" ' + (on ? 'checked' : '') + ' aria-hidden="true"><span class="grow"><b style="display:block;font-size:19px">' + esc(x.name) + '</b>' + (x.about ? '<span class="muted small">' + esc(x.about) + '</span>' : '') + '</span>' +
     (on ? '<span class="status proof" style="background:var(--brand);color:#fff">Selected</span>' : '') + '</span>' +
     (x.notReady ? '<span class="pk-note">Not ready yet. Only Portal Admins see this until it’s marked Ready.</span>' : '') +
-    '<span class="pk-imgs">' + (x.imgs && x.imgs.length ? x.imgs : [{ src: x.img, label: '' }]).map(i => '<span class="pk-fig"><img class="pk-img" src="' + esc(i.src) + '" alt="' + esc(x.name + (i.label ? ' - ' + i.label : '')) + '" loading="lazy">' + (i.label ? '<span class="pk-cap">' + esc(i.label) + '</span>' : '') + '</span>').join('') + '</span>' +
+    '<span class="pk-imgs">' + pkFigs(x, n) + '</span>' +
     (x.pieces.length ? '<span class="chips" style="font-size:12px">' + x.pieces.map(p => '<span class="status">' + esc(p) + '</span>').join('') + '</span>' : '') + '</button>'; }).join('') + '</div>';
   h += '<div class="card" style="flex-direction:row;flex-wrap:wrap;gap:10px 28px;font-size:14px;padding:18px 22px"><b>The same for every new hire:</b><span class="muted2">Email signature</span><span class="muted2">Facebook header</span><span class="muted2">LinkedIn banner</span><span class="muted2">All current Title Tips</span><span class="muted2">Personalized flyers</span><span class="muted2">Social media posts</span><span class="muted2">Weekly market update (once areas are set)</span></div>';
   h += '<div class="row" style="justify-content:space-between"><a href="#" data-act="nh-back" style="font-weight:600">← Back</a><button type="button" class="btn primary" data-act="nh-next" ' + (n.looks.length ? '' : 'disabled') + '>Next: review →</button></div>';
