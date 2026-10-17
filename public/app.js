@@ -37,7 +37,11 @@ const nice = s => { if (!s) return ''; const d = new Date(String(s).slice(0, 10)
 function toast(msg, ms) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), ms || 4000); }
 function statusClass(s) { return /complete|done|ready on/i.test(s) ? 'done' : /proof/i.test(s) ? 'proof' : /work|design|waiting/i.test(s) ? 'work' : ''; }
 async function api(path, opts) {
-  const r = await fetch('/api/' + path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  // pages that only read give up after a minute, so a stuck answer shows Try again instead of spinning forever
+  const get = !opts || !opts.method || opts.method === 'GET';
+  let r;
+  try { r = await fetch('/api/' + path, Object.assign({ credentials: 'same-origin' }, get && window.AbortSignal && AbortSignal.timeout ? { signal: AbortSignal.timeout(60e3) } : {}, opts || {})); }
+  catch (e) { const err = new Error(e && e.name === 'TimeoutError' ? 'The portal is taking too long to answer. Try again in a minute.' : 'Could not reach the portal. Check your connection and try again.'); err.status = 0; err.data = {}; throw err; }
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) { const err = new Error(j.error || ('Something went wrong (' + r.status + ')')); err.status = r.status; err.data = j; throw err; }
   return j;

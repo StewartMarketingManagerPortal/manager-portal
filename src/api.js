@@ -148,7 +148,7 @@ async function accessEmail(request, env) {
   const team = env.ACCESS_TEAM || ACCESS_TEAM;
   if (head.alg !== 'RS256' || claims.iss !== 'https://' + team || !(claims.exp * 1000 > Date.now())) return '';
   if (env.ACCESS_AUD && !(Array.isArray(claims.aud) ? claims.aud : [claims.aud]).includes(env.ACCESS_AUD)) return '';
-  const keys = await cached('access-certs', 3600e3, async () => (await (await fetch('https://' + team + '/cdn-cgi/access/certs')).json()).keys || []);
+  const keys = await cached('access-certs', 3600e3, async () => (await (await fetch('https://' + team + '/cdn-cgi/access/certs', { signal: AbortSignal.timeout(15e3) })).json()).keys || []);
   const jwk = keys.find(k => k.kid === head.kid);
   if (!jwk) { forget('access-certs'); return ''; }
   const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
@@ -353,7 +353,7 @@ async function submitNewHire(env, me, fd) {
 }
 // invite_users is newer than the API version the rest of the portal uses
 async function gqlNew(env, query, variables) {
-  const r = await fetch('https://api.monday.com/v2', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: env.MONDAY_TOKEN, 'API-Version': '2025-04' }, body: JSON.stringify({ query, variables: variables || {} }) });
+  const r = await fetch('https://api.monday.com/v2', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: env.MONDAY_TOKEN, 'API-Version': '2025-04' }, body: JSON.stringify({ query, variables: variables || {} }), signal: AbortSignal.timeout(25e3) });
   const j = await r.json().catch(() => ({}));
   if (j.errors || j.error_message) throw new Error('monday.com: ' + (j.errors ? j.errors.map(e => e.message).join('; ') : j.error_message));
   return j.data;
