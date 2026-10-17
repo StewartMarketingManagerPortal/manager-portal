@@ -47,6 +47,7 @@ export async function onRequest(ctx) {
     if (route === 'dates' && m === 'POST') { const r = await setDate(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route === 'packages' && m === 'GET') return json(await packageList(env, me));
     if (route.startsWith('pkgimg/') && m === 'GET') return await packageImg(env, me, route.split('/')[1]);
+    if (route === 'pkgfont' && m === 'GET') return await packageFont(env);
     if (route === 'highlights' && m === 'GET') return json(await highlights(env, me));
     if (route === 'highlights' && m === 'POST') { const r = await hlMark(env, me, await request.json()); return json(r, r.error ? 400 : 200); }
     if (route.startsWith('hlart/') && m === 'GET') return await hlArt(env, me, route.split('/')[1]);
@@ -693,12 +694,15 @@ async function packages(env) {
         .map(x => ({ id: String(x.id), url: x.public_url, label: String(x.name || '').replace(/\.\w+$/, '').replace(/^\d+\s*-\s*/, '').replace(/\s+preview$/i, '') }));
       return { name: it.name.trim(), about: v[col('Description')] || '', pieces: [],
         status: (v[col('Package Status')] || '').toLowerCase(), order: Number(v[col('Order')]) || 99, imgs: imgs, img: imgs[0] || null };
-    }).filter(x => x.img && x.status !== 'retired').sort((x, y) => x.order - y.order || x.name.localeCompare(y.name));
+    }).filter(x => x.img && x.status !== 'retired').sort((x, y) => x.order - y.order || x.name.localeCompare(y.name))
+      // the script font for the live previews: Marketing Tools keeps it on this board's "_Script font" row (licensed, so never in this repo)
+      .concat(d.boards[0].items_page.items.filter(it => /^_script font$/i.test(it.name.trim())).flatMap(it => (it.assets || []).filter(x => /^\.?(otf|ttf|woff2?)$/i.test(x.file_extension || '') || /\.(otf|ttf|woff2?)$/i.test(x.name || ''))).slice(0, 1)
+        .map(x => ({ name: '_font', font: { id: String(x.id), url: x.public_url, ext: String(x.file_extension || x.name.split('.').pop()).replace(/^\./, '').toLowerCase() }, imgs: [], status: 'font' })));
   });
 }
 async function packageList(env, me) {
   const all = await packages(env).catch(() => []);
-  return { packages: all.filter(x => x.status === 'live' || me.row.admin).map(x => ({ name: x.name, about: x.about, pieces: x.pieces, notReady: x.status !== 'live', img: 'api/pkgimg/' + x.img.id, imgs: x.imgs.map(i => ({ src: 'api/pkgimg/' + i.id, label: i.label })) })) };
+  return { packages: all.filter(x => !x.font && (x.status === 'live' || me.row.admin)).map(x => ({ name: x.name, about: x.about, pieces: x.pieces, notReady: x.status !== 'live', img: 'api/pkgimg/' + x.img.id, imgs: x.imgs.map(i => ({ src: 'api/pkgimg/' + i.id, label: i.label })) })) };
 }
 async function packageImg(env, me, assetId) {
   assetId = String(assetId || '').replace(/\D/g, '');
@@ -715,6 +719,21 @@ async function packageImg(env, me, assetId) {
   const type = r.headers.get('Content-Type') || 'image/png', buf = await r.arrayBuffer();
   try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
   return new Response(buf, { headers: Object.assign({ 'Content-Type': type }, head) });
+}
+async function packageFont(env) {
+  let f = (await packages(env)).find(x => x.font);
+  if (!f) return fail('Not found', 404);
+  const ck = new Request('https://manager-portal.cache/pkgfont/' + f.font.id), cache = caches.default;
+  const type = { otf: 'font/otf', ttf: 'font/ttf', woff: 'font/woff', woff2: 'font/woff2' }[f.font.ext] || 'font/otf';
+  const head = { 'Content-Type': type, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+  const hit = await cache.match(ck);
+  if (hit) return new Response(hit.body, { headers: head });
+  let r = await fetch(f.font.url);
+  if (!r.ok) { forget('pkgs'); f = (await packages(env)).find(x => x.font); if (f) r = await fetch(f.font.url); }
+  if (!r.ok) return fail('Could not load the font', 502);
+  const buf = await r.arrayBuffer();
+  try { await cache.put(ck, new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' } })); } catch (e) {}
+  return new Response(buf, { headers: head });
 }
 // ---------- headshots: the cut-out copies the Marketing Tools app puts in the "Headshot Cutout" column ----------
 async function headshots(env, ids) {

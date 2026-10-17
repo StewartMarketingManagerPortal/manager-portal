@@ -493,6 +493,24 @@ select:disabled { opacity: .6; cursor: default; }
 .looks.pk .pk-imgs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
 .looks.pk .pk-fig { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .looks.pk .pk-fig .pk-img { max-height: 300px; }
+.looks.pk .pk-live { display: block; position: relative; width: 100%; aspect-ratio: 1080 / 1350; overflow: hidden; border-radius: 10px; --lk-red: #A30C33; --lk-ink: #1A1A1C; --lk-paper: #F2F1EF; --lk-muted: #6B6966; --lk-line: #CFCBC5; }
+.lk-post { position: absolute; left: 0; top: 0; width: 1080px; height: 1350px; transform-origin: 0 0; overflow: hidden; color: var(--lk-ink); font-family: Montserrat, sans-serif; text-align: left; line-height: normal; }
+.lk-abs { position: absolute; }
+.lk-kick { font-size: 28px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--lk-red); }
+.lk-fn { font-family: NHScript, Montserrat, sans-serif; white-space: nowrap; line-height: 1; transform: rotate(-8deg); transform-origin: left bottom; }
+.lk-ln { font-weight: 700; letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; }
+.lk-tt { font-weight: 700; letter-spacing: .3em; text-transform: uppercase; white-space: nowrap; }
+.lk-bio { font-size: 31px; font-weight: 500; line-height: 1.55; }
+.lk-lbl { font-size: 20px; font-weight: 700; letter-spacing: .25em; text-transform: uppercase; color: var(--lk-red); margin-bottom: 16px; }
+.lk-hd { font-weight: 800; line-height: 1.05; letter-spacing: -.01em; }
+.lk-rows { font-weight: 600; }
+.lk-rows div { display: flex; align-items: center; gap: 18px; height: 50px; }
+.lk-rows svg { width: 32px; height: 32px; fill: none; stroke: var(--lk-red); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.lk-circ { border-radius: 50%; overflow: hidden; }
+.lk-circ .lk-cut { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); height: 96%; }
+.lk-circ .lk-raw { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lk-nophoto { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 600; color: var(--lk-muted); }
+.lk-ring { border-radius: 50%; border: 8px solid var(--lk-red); }
 .looks.pk .pk-cap { font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; }
 
 .hl-pic.wp-pic { height: auto; aspect-ratio: 4 / 5; background: #1A1A1C; align-self: flex-start; }
