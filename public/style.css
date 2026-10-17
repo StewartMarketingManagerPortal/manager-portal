@@ -500,6 +500,7 @@ select:disabled { opacity: .6; cursor: default; }
 .lk-fn { font-family: NHScript, Montserrat, sans-serif; white-space: nowrap; line-height: 1; transform: rotate(-8deg); transform-origin: left bottom; }
 .lk-ln { font-weight: 700; letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; }
 .lk-tt { font-weight: 700; letter-spacing: .3em; text-transform: uppercase; white-space: nowrap; }
+.lk-tt2 { white-space: normal; letter-spacing: .2em; line-height: 1.25; }
 .lk-bio { font-size: 31px; font-weight: 500; line-height: 1.55; }
 .lk-lbl { font-size: 20px; font-weight: 700; letter-spacing: .25em; text-transform: uppercase; color: var(--lk-red); margin-bottom: 16px; }
 .lk-hd { font-weight: 800; line-height: 1.05; letter-spacing: -.01em; }
