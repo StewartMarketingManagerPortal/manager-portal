@@ -31,7 +31,7 @@
     const name = (x, y, o) => { o = o || {}; const fs = o.fs || 120, dx = o.dx == null ? 70 : o.dx, dy = o.dy == null ? 150 : o.dy, ls = o.ls || 50, ts = o.ts || 20, w = (o.rw || 1010) - x - dx; y += fs * 0.45;
       return '<div class="lk-abs lk-fn" style="left:' + x + 'px;top:' + y + 'px;font-size:' + fs + 'px;color:' + (o.fc || 'var(--lk-ink)') + '">' + e(P.f) + '</div>' +
         '<div class="lk-abs lk-ln lk-fit" style="left:' + (x + dx) + 'px;top:' + (y + dy) + 'px;width:' + w + 'px;height:' + (ls * 1.3) + 'px;font-size:' + ls + 'px;color:' + (o.lc || 'var(--lk-red)') + '">' + e(P.l) + '</div>' +
-        '<div class="lk-abs lk-tt lk-fit" style="left:' + (x + dx + 3) + 'px;top:' + (y + dy + ls * 1.45) + 'px;width:' + (w - 3) + 'px;height:' + (ts * 1.3) + 'px;font-size:' + ts + 'px;color:' + (o.tc || 'var(--lk-ink)') + '">' + e(P.t) + '</div>'; };
+        '<div class="lk-abs lk-tt lk-fit lk-tt2" style="left:' + (x + dx + 3) + 'px;top:' + (y + dy + ls * 1.45) + 'px;width:' + (w - 3) + 'px;height:' + (ts * 2.5 + 2) + 'px;font-size:' + ts + 'px;color:' + (o.tc || 'var(--lk-ink)') + '">' + e(P.t) + '</div>'; };
     const photo = () => P.pic ? '<img class="' + (P.cut ? 'lk-cut' : 'lk-raw') + '" src="' + e(P.pic) + '" alt="">' : '<span class="lk-nophoto">Photo</span>';
     const circ = (x, y, d, gap, bg) => { gap = gap == null ? 14 : gap; return '<div class="lk-abs lk-circ" style="left:' + x + 'px;top:' + y + 'px;width:' + d + 'px;height:' + d + 'px;background:' + (bg || 'var(--lk-paper)') + '">' + photo() + '</div>' +
       '<div class="lk-abs lk-ring" style="left:' + (x - gap) + 'px;top:' + (y - gap) + 'px;width:' + (d + 2 * gap) + 'px;height:' + (d + 2 * gap) + 'px"></div>'; };
@@ -43,7 +43,7 @@
     const post = (bg, inner, color) => '<div class="lk-post" style="background:' + bg + (color ? ';color:' + color : '') + '">' + inner + '</div>';
     return {
       'soft paper': [
-        post('#F4F2EE', logo(70, 70, 280) + circ(560, 170, 430) + '<div class="lk-abs lk-kick" style="left:70px;top:210px">Please welcome</div>' + name(66, 275, { fs: 130, dy: 175, rw: 540 }) + rows(70, 630, null, 28, 540) +
+        post('#F4F2EE', logo(70, 70, 280) + circ(560, 170, 430) + '<div class="lk-abs lk-kick" style="left:70px;top:210px">Please welcome</div>' + name(66, 275, { fs: 130, dy: 175, rw: 540 }) + rows(70, 645, null, 28, 540) +
           '<div class="lk-abs" style="left:70px;top:860px;width:940px;height:400px;background:#fff;border-radius:28px;border-left:12px solid var(--lk-red);padding:44px 52px"><div class="lk-lbl">About ' + e(P.f) + '</div><div class="lk-bio lk-fit" style="height:290px">' + bio + '</div></div>' + cr('var(--lk-muted)')),
         post('#F4F2EE', logo(70, 70, 280) + '<div class="lk-abs lk-kick" style="left:70px;top:230px">Big news</div><div class="lk-abs lk-hd" style="left:70px;top:290px;font-size:96px;width:900px">I’ve joined<br><span style="color:var(--lk-red)">Stewart Title</span></div>' +
           circ(620, 620, 380) + name(66, 560, { fs: 120, dy: 160, dx: 40, rw: 600 }) + rows(70, 920, null, 28, 600) + cr('var(--lk-muted)'))],
@@ -59,20 +59,20 @@
           circ(620, 700, 380, 14, '#2A2A2D') + name(66, 650, { fs: 120, fc: '#fff', lc: 'var(--lk-line)', tc: 'var(--lk-line)', dx: 40, dy: 160, rw: 600 }) + rows(70, 1000, '#fff', 28, 600) + cr('var(--lk-line)'), '#fff')],
       'welcome': [
         post('var(--lk-paper)', logo(70, 70, 260) + '<div class="lk-abs lk-hd" style="left:70px;top:190px;font-size:98px">Welcome</div>' + name(80, 330, { fs: 140, dx: 90, dy: 190, ls: 40, ts: 19, rw: 600 }) + rr(620, 160, 390, 500) +
-          '<div class="lk-abs" style="left:70px;top:700px;width:940px;height:400px;background:#fff;border-radius:28px;padding:56px 60px 0 150px"><div class="lk-abs" style="left:44px;top:0;font-size:170px;font-weight:800;color:var(--lk-red);line-height:1">“</div>' +
-          '<div class="lk-lbl">Get to know ' + e(P.f) + '</div><div class="lk-bio lk-fit" style="font-size:29px;height:270px">' + bio + '</div></div>' + line(1140, 'var(--lk-ink)', 'var(--lk-muted)') +
+          '<div class="lk-abs" style="left:70px;top:690px;width:940px;height:440px;background:#fff;border-radius:28px;padding:56px 60px 0 150px"><div class="lk-abs" style="left:44px;top:0;font-size:170px;font-weight:800;color:var(--lk-red);line-height:1">“</div>' +
+          '<div class="lk-lbl">Get to know ' + e(P.f) + '</div><div class="lk-bio lk-fit" style="font-size:29px;height:320px">' + bio + '</div></div>' + line(1160, 'var(--lk-ink)', 'var(--lk-muted)') +
           '<div class="lk-abs" style="left:0;right:0;top:1250px;text-align:center;font-size:20px;font-weight:700;letter-spacing:.25em;color:var(--lk-red)">SAY HELLO</div>' + cr('var(--lk-muted)')),
-        post('var(--lk-paper)', logo(70, 70, 260) + '<div class="lk-abs lk-hd" style="left:70px;top:190px;font-size:96px;width:940px">Hello from<br><span style="color:var(--lk-red)">Stewart Title</span></div>' + rr(70, 450, 440, 600) +
-          name(570, 470, { fs: 120, dx: 40, dy: 160, ls: 44, rw: 1030 }) + '<div class="lk-abs" style="left:590px;top:800px;width:420px;font-size:30px;font-weight:500;line-height:1.5;color:var(--lk-muted)">I’d love to help with your next closing. Let’s connect!</div>' + rows(70, 1100, null, 28, 940) + cr('var(--lk-muted)'))],
+        post('var(--lk-paper)', logo(70, 70, 260) + '<div class="lk-abs lk-hd" style="left:70px;top:190px;font-size:96px;width:940px">Hello from<br><span style="color:var(--lk-red)">Stewart Title</span></div>' + rr(70, 430, 440, 580) +
+          name(570, 450, { fs: 120, dx: 40, dy: 160, ls: 44, rw: 1030 }) + '<div class="lk-abs" style="left:590px;top:795px;width:420px;font-size:30px;font-weight:500;line-height:1.5;color:var(--lk-muted)">I’d love to help with your next closing. Let’s connect!</div>' + rows(70, 1050, null, 28, 940) + cr('var(--lk-muted)'))],
       'left edge': [
         post('#fff', edge + logo(90, 70, 260) + plain(600, 150, 410) + '<div class="lk-abs lk-kick" style="left:90px;top:220px">Say hello to</div>' +
-          '<div class="lk-abs lk-hd lk-fit" style="left:90px;top:275px;font-size:84px;width:500px;height:180px;white-space:nowrap">' + e(P.f) + '<br>' + e(P.l) + '</div><div class="lk-abs lk-tt lk-fit" style="left:92px;top:470px;width:498px;height:29px;font-size:22px;color:var(--lk-red)">' + e(P.t) + '</div>' +
-          '<div class="lk-abs" style="left:92px;top:520px;font-size:26px;font-weight:600;color:var(--lk-muted);width:470px;line-height:1.45">Our newest team member</div>' +
-          '<div class="lk-abs" style="left:90px;top:640px;width:920px;height:2px;background:var(--lk-line)"></div><div class="lk-abs" style="left:90px;top:690px;width:920px"><div class="lk-lbl">About ' + e(P.f) + '</div><div class="lk-bio lk-fit" style="height:260px">' + bio + '</div></div>' +
-          '<div class="lk-abs" style="left:90px;top:1010px;width:920px;height:2px;background:var(--lk-line)"></div>' + mew(90, 1050) + cr('var(--lk-muted)')),
+          '<div class="lk-abs lk-hd lk-fit" style="left:90px;top:275px;font-size:84px;width:500px;height:180px;white-space:nowrap">' + e(P.f) + '<br>' + e(P.l) + '</div><div class="lk-abs lk-tt lk-fit lk-tt2" style="left:92px;top:470px;width:498px;height:57px;font-size:22px;color:var(--lk-red)">' + e(P.t) + '</div>' +
+          '<div class="lk-abs" style="left:92px;top:540px;font-size:26px;font-weight:600;color:var(--lk-muted);width:470px;line-height:1.45">Our newest team member</div>' +
+          '<div class="lk-abs" style="left:90px;top:640px;width:920px;height:2px;background:var(--lk-line)"></div><div class="lk-abs" style="left:90px;top:690px;width:920px"><div class="lk-lbl">About ' + e(P.f) + '</div><div class="lk-bio lk-fit" style="height:300px">' + bio + '</div></div>' +
+          '<div class="lk-abs" style="left:90px;top:1050px;width:920px;height:2px;background:var(--lk-line)"></div>' + mew(90, 1080) + cr('var(--lk-muted)')),
         post('#fff', edge + logo(90, 70, 260) + '<div class="lk-abs lk-kick" style="left:90px;top:230px">Exciting news</div><div class="lk-abs lk-hd" style="left:90px;top:290px;font-size:80px;width:920px">I’ve joined the team<br>at <span style="color:var(--lk-red)">Stewart Title</span></div>' +
-          plain(600, 540, 410) + '<div class="lk-abs lk-hd lk-fit" style="left:90px;top:580px;font-size:64px;width:490px;height:140px;white-space:nowrap">' + e(P.f) + '<br>' + e(P.l) + '</div><div class="lk-abs lk-tt lk-fit" style="left:92px;top:740px;width:498px;height:26px;font-size:20px;color:var(--lk-red)">' + e(P.t) + '</div>' +
-          '<div class="lk-abs" style="left:92px;top:790px;font-size:26px;font-weight:500;color:var(--lk-muted);width:470px;line-height:1.45">I’d love to help with your next closing.</div>' + mew(90, 1040) + cr('var(--lk-muted)'))],
+          plain(600, 540, 410) + '<div class="lk-abs lk-hd lk-fit" style="left:90px;top:580px;font-size:64px;width:490px;height:140px;white-space:nowrap">' + e(P.f) + '<br>' + e(P.l) + '</div><div class="lk-abs lk-tt lk-fit lk-tt2" style="left:92px;top:740px;width:498px;height:52px;font-size:20px;color:var(--lk-red)">' + e(P.t) + '</div>' +
+          '<div class="lk-abs" style="left:92px;top:805px;font-size:26px;font-weight:500;color:var(--lk-muted);width:470px;line-height:1.45">I’d love to help with your next closing.</div>' + mew(90, 1040) + cr('var(--lk-muted)'))],
     };
   }
   const key = name => String(name || '').toLowerCase().replace(/^\d+\s*/, '').replace(/\s+/g, ' ').trim();
