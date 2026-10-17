@@ -4,7 +4,7 @@
 'use strict';
 
 const RC = { pieces: null, piecesBusy: false, up: null, showPieces: false, pieceAsk: null, list: null, days: 60, err: '', form: null, busy: false, confirm: null, opening: false, log: {}, note: {}, edit: null, meet: null, mail: null, called: null, saving: false };
-const rcFresh = () => ({ firstName: '', lastName: '', company: '', title: 'Sales Representative', area: '', phone: '', email: '', file: null, cut: '', cutting: false, cutFail: false });
+const rcFresh = () => ({ firstName: '', lastName: '', company: '', title: 'Sales Representative', area: '', phone: '', email: '', why: '', whyEdited: false, file: null, cut: '', cutting: false, cutFail: false });
 async function rcLoad() {
   if (RC.loading) return; RC.loading = true;
   try { const r = await api('recruiting'); RC.list = r.candidates || []; RC.days = r.days || 60; RC.board = r.board || null; RC.fwd = r.forwarded || []; RC.err = ''; if (r.moved) toast(r.moved === 1 ? 'A forwarded email was saved to its candidate.' : r.moved + ' forwarded emails were saved to their candidates.', 6000); }
@@ -82,13 +82,18 @@ function rcForm(f) {
     '<label class="field">Area<input type="text" data-rc="area" value="' + esc(f.area) + '" placeholder="e.g. East Bay"></label>' +
     '<label class="field">Their phone<input type="tel" data-rc="phone" value="' + esc(f.phone) + '"></label>' +
     '<label class="field">Their email<input type="email" data-rc="email" value="' + esc(f.email) + '"></label>' +
-    '</div></div>' +
+    '</div></div>' + rcWhyField('data-rc="why"', rcWhy(f)) +
     '<div class="preview rc-prev"><div class="cardlabel" style="color:var(--navmuted)">Live preview · contact block</div><div class="cblock" id="rc-cblock">' + rcBlock(f) + '</div>' +
     '<div class="small" style="color:var(--border)">How their details will look on the sample flyers and email signature.</div></div>' +
     '<div class="rc-note"><b>Samples use their own phone and email.</b> Stewart email and phone are never on them, and there are no downloads, so they can’t be used as real marketing.</div>' +
     '<div class="row" style="justify-content:space-between"><a href="#" data-act="rc-clear" style="font-weight:600">Clear</a><button type="button" class="btn primary" data-act="rc-add"' + (RC.busy || f.cutting ? ' disabled' : '') + '>' +
     (RC.busy ? '<span class="spin"></span> Saving…' : 'Make ' + esc(f.firstName.trim() ? f.firstName.trim() + '’s' : 'their') + ' samples ›') + '</button></div></section>';
 }
+// "Why Stewart": a short pre-written paragraph that sits where the bio goes on the welcome announcement samples; it follows the
+// first name until the manager changes it
+const rcWhy = f => f.whyEdited ? f.why : Samples.why(f.firstName.trim());
+const rcWhyField = (attr, v) => '<label class="field rc-why">Why Stewart <span class="muted small">Shows where the bio goes on the welcome announcement. Change it any way you like.</span>' +
+  '<textarea ' + attr + ' maxlength="' + Samples.WHY_MAX + '" rows="3">' + esc(v) + '</textarea></label>';
 // the same contact block the new hire form previews, with the candidate's own phone and email
 function rcBlock(f) {
   const name = (f.firstName + ' ' + f.lastName).trim();
@@ -145,6 +150,7 @@ function rcDetails(c, first) {
     return h + '<div class="cd-form">' + fld('firstName', 'First name') + fld('lastName', 'Last name') + fld('company', 'Current company', '', true) +
       '<label class="full">Title they’d have<select data-rce="title">' + titles.map(t => '<option' + (t === e.title ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></label>' +
       fld('area', 'Area', '', true) + fld('phone', 'Phone', 'tel') + fld('email', 'Email', 'email') + fld('workPhone', 'Work phone', 'tel') + fld('workEmail', 'Work email', 'email') +
+      '<label class="full">Why Stewart<textarea data-rce="why" maxlength="' + Samples.WHY_MAX + '" rows="4">' + esc(e.why) + '</textarea></label>' +
       '<div class="full cd-row"><button type="button" class="btn small" data-act="rc-edit-x">Cancel</button><button type="button" class="btn small primary" data-act="rc-edit-save" data-id="' + id + '"' + (RC.saving ? ' disabled' : '') + '>' + (RC.saving ? 'Saving…' : 'Save') + '</button></div></div></section>';
   }
   const tel = String(c.phone || '').replace(/[^\d+]/g, '');
@@ -284,7 +290,7 @@ ACT['rc-add'] = async el => {
   RC.busy = true; render();
   try {
     const fd = new FormData();
-    fd.append('fields', JSON.stringify({ firstName: f.firstName, lastName: f.lastName, company: f.company, title: f.title, area: f.area, phone: f.phone, email: f.email }));
+    fd.append('fields', JSON.stringify({ firstName: f.firstName, lastName: f.lastName, company: f.company, title: f.title, area: f.area, phone: f.phone, email: f.email, why: rcWhy(f) }));
     if (f.cut) fd.append('photo', new File([await (await fetch(f.cut)).blob()], 'photo.png', { type: 'image/png' }));
     else if (f.file) fd.append('photo', f.file, f.file.name || 'photo.jpg');
     const r = await api('recruiting', { method: 'POST', body: fd });
@@ -301,7 +307,7 @@ ACT['rc-open'] = async el => {
   RC.opening = false; render();
 };
 ACT['rc-edit'] = el => { const c = rcGet(el.dataset.id); if (!c) return; const [fn, ...ln] = c.name.split(' ');
-  RC.edit = { id: c.id, firstName: fn, lastName: ln.join(' '), company: c.company || '', title: c.title || 'Sales Representative', area: c.area || '', phone: c.phone || '', email: c.email || '', workPhone: c.workPhone || '', workEmail: c.workEmail || '' }; RC.mail = null; render(); };
+  RC.edit = { id: c.id, firstName: fn, lastName: ln.join(' '), company: c.company || '', title: c.title || 'Sales Representative', area: c.area || '', phone: c.phone || '', email: c.email || '', workPhone: c.workPhone || '', workEmail: c.workEmail || '', why: c.why || Samples.why(fn) }; RC.mail = null; render(); };
 ACT['rc-edit-x'] = () => { RC.edit = null; render(); };
 ACT['rc-edit-save'] = async el => {
   const e = RC.edit; if (!e) return;
@@ -309,7 +315,7 @@ ACT['rc-edit-save'] = async el => {
   RC.saving = true; render();
   try {
     await api('recruiting/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id, fields: e }) });
-    const c = rcGet(e.id); if (c) Object.assign(c, { name: (e.firstName.trim() + ' ' + e.lastName.trim()), company: e.company.trim(), title: e.title, area: e.area.trim(), phone: e.phone.trim(), email: e.email.trim(), workPhone: e.workPhone.trim(), workEmail: e.workEmail.trim() });
+    const c = rcGet(e.id); if (c) Object.assign(c, { name: (e.firstName.trim() + ' ' + e.lastName.trim()), company: e.company.trim(), title: e.title, area: e.area.trim(), phone: e.phone.trim(), email: e.email.trim(), workPhone: e.workPhone.trim(), workEmail: e.workEmail.trim(), why: e.why.trim() });
     RC.edit = null; RC.saving = false; render(); toast('Saved.');
   } catch (x) { RC.saving = false; render(); toast(x.message, 7000); }
 };
@@ -383,7 +389,9 @@ document.addEventListener('input', e => { const d = e.target.dataset || {};
   if (d.rce && RC.edit) { RC.edit[d.rce] = e.target.value; return; }
   if (d.rcm && RC.meet) { RC.meet[d.rcm] = e.target.value; return; }
   if (d.rcn) { const id = rcHash(); if (id) RC.note[id] = e.target.value; return; }
-  const k = d.rc; if (k && RC.form) { RC.form[k] = e.target.value; const pv = document.getElementById('rc-cblock'); if (pv) pv.innerHTML = rcBlock(RC.form); if (k === 'firstName') { const b = document.querySelector('[data-act=rc-add]'); if (b && !RC.busy) b.textContent = 'Make ' + (RC.form.firstName.trim() ? RC.form.firstName.trim() + '’s' : 'their') + ' samples ›'; } } });
+  const k = d.rc; if (k === 'why' && RC.form) { RC.form.why = e.target.value; RC.form.whyEdited = true; return; }
+  if (k === 'firstName' && RC.form && !RC.form.whyEdited) { const w = document.querySelector('[data-rc=why]'); if (w) w.value = Samples.why(e.target.value.trim()); }
+  if (k && RC.form) { RC.form[k] = e.target.value; const pv = document.getElementById('rc-cblock'); if (pv) pv.innerHTML = rcBlock(RC.form); if (k === 'firstName') { const b = document.querySelector('[data-act=rc-add]'); if (b && !RC.busy) b.textContent = 'Make ' + (RC.form.firstName.trim() ? RC.form.firstName.trim() + '’s' : 'their') + ' samples ›'; } } });
 document.addEventListener('change', async e => {
   const t = e.target;
   if (t.dataset && t.dataset.rcMi && RC.mailIn) { const k = t.dataset.rcMi; if (k === 'note') RC.mailIn.note = t.checked; else if (k === 'det') RC.mailIn.detKeep = t.checked; else RC.mailIn.files[+k.slice(1)].keep = t.checked; return; }

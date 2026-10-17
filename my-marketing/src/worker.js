@@ -151,14 +151,14 @@ async function readSigned(k, t) {
 async function sampleRow(env, cid) {
   const b = await boardByName(env, 'Manager Portal Recruiting');
   if (!b) return null;
-  const want = ['Title', 'Area', 'Phone', 'Email', 'Photo'].map(t => b.cols[t]).filter(Boolean);
+  const want = ['Title', 'Area', 'Phone', 'Email', 'Photo', 'Why Stewart'].map(t => b.cols[t]).filter(Boolean);
   const d = await gql(env, 'query($i:[ID!],$c:[String!]){items(ids:$i){id name state board{id} column_values(ids:$c){id text} assets{id public_url created_at}}}', { i: [String(cid)], c: want });
   const it = (d.items || [])[0];
   if (!it || String(it.board.id) !== b.id || (it.state && it.state !== 'active')) return null;
   const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
   const photoId = b.cols.Photo, hasPhoto = photoId && v[photoId];
   const asset = hasPhoto ? (it.assets || []).slice().sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0] : null;
-  return { name: it.name.trim(), title: v[b.cols.Title] || '', area: v[b.cols.Area] || '', phone: v[b.cols.Phone] || '', email: v[b.cols.Email] || '', photoUrl: asset ? asset.public_url : '' };
+  return { name: it.name.trim(), title: v[b.cols.Title] || '', area: v[b.cols.Area] || '', phone: v[b.cols.Phone] || '', email: v[b.cols.Email] || '', why: (b.cols['Why Stewart'] && v[b.cols['Why Stewart']]) || '', photoUrl: asset ? asset.public_url : '' };
 }
 async function sampleRoute(request, env, url) {
   const path = url.pathname, method = request.method, k = await sampleKey(env);
@@ -179,7 +179,7 @@ async function sampleRoute(request, env, url) {
   if (!s || !s.cid || !(s.exp > Date.now())) return fail(401, 'This sample view has closed.');
   const row = await sampleRow(env, s.cid);
   if (!row) return fail(404, 'This candidate was removed.');
-  if (path === '/api/sample/data') return json({ by: s.by, exp: s.exp, candidate: { name: row.name, title: row.title, area: row.area, phone: row.phone, email: row.email, photo: !!row.photoUrl } });
+  if (path === '/api/sample/data') return json({ by: s.by, exp: s.exp, candidate: { name: row.name, title: row.title, area: row.area, phone: row.phone, email: row.email, why: row.why, photo: !!row.photoUrl } });
   if (path === '/api/sample/pieces') return json({ pieces: (await samplePieces(env)).map(x => ({ id: x.id, name: x.name, kind: x.kind, layout: x.layout, img: '/api/sample/art/' + x.art.id })) });
   if (path.startsWith('/api/sample/art/')) {
     const id = path.split('/').pop().replace(/\D/g, ''), x = (await samplePieces(env)).find(p => p.art.id === id);
