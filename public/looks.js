@@ -49,7 +49,7 @@
           circ(620, 620, 380) + name(66, 560, { fs: 120, dy: 160, dx: 40, rw: 600 }) + rows(70, 920, null, 28, 600) + cr('var(--lk-muted)'))],
       'ink': [
         post('var(--lk-ink)', logo(70, 70, 220, true) + circ(370, 60, 340, 14, '#2A2A2D') + '<div class="lk-abs lk-kick" style="left:0;right:0;top:470px;text-align:center;color:var(--lk-line)">Welcome to the team</div>' +
-          '<div class="lk-abs" style="left:0;right:0;top:650px;text-align:center"><span class="lk-fn" style="display:inline-block;font-size:130px;color:#fff">' + e(P.f) + '</span></div>' +
+          '<div class="lk-abs" style="left:0;right:0;top:615px;text-align:center"><span class="lk-fn" style="display:inline-block;font-size:130px;color:#fff">' + e(P.f) + '</span></div>' +
           '<div class="lk-abs lk-ln lk-fit" style="left:60px;right:60px;top:805px;height:62px;text-align:center;font-size:48px;color:var(--lk-line)">' + e(P.l) + '</div>' +
           '<div class="lk-abs lk-tt lk-fit" style="left:60px;right:60px;top:877px;height:26px;text-align:center;font-size:20px;color:var(--lk-line)">' + e(P.t) + '</div>' +
           '<div class="lk-abs" style="left:490px;top:928px;width:100px;height:6px;background:var(--lk-red)"></div>' +
