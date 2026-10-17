@@ -32,6 +32,8 @@
 </head>
 <body oncontextmenu="return false">
 <div id="app"><div class="boot"><img src="logo-light.png" alt="Stewart Title" width="176"></div></div>
+<script>window.NH_FONT_URL = '/api/sample/font';</script>
+<script src="looks.js"></script>
 <script src="samples.js"></script>
 <script>
 'use strict';
@@ -49,13 +51,15 @@
     if (!s) { clearInterval(timer); exit(); }
   }
   function exit() { fetch('/api/sample/exit', { method: 'POST', credentials: 'same-origin' }).catch(() => {}).then(() => { gone('This sample view has closed.'); window.close(); }); }
-  fetch('/api/sample/data', { credentials: 'same-origin' }).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(({ ok, j }) => {
+  const pieces = fetch('/api/sample/pieces', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { pieces: [] }).then(j => j.pieces || []).catch(() => []);
+  fetch('/api/sample/data', { credentials: 'same-origin' }).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(async ({ ok, j }) => {
     if (!ok) return gone(j.error || 'This sample view isn’t available.');
+    const P = await pieces;
     const c = j.candidate, now = new Date(), first = esc(String(c.name || '').split(' ')[0]);
     app.innerHTML = '<div class="sbar"><span><b>Sample</b> for ' + esc(c.name) + ' · read only · opened by ' + esc(j.by || 'their manager') + ' from the Manager Portal · closes in <b id="left"></b></span><button type="button" id="exit">Exit</button></div>' +
       '<header class="shead"><div class="wrap"><div class="row1"><img src="logo-light.png" alt="Stewart Title"><nav aria-label="Sample sections"><b>Home</b><span>Branding</span><span>Flyers</span><span>Title Tips</span><span>Social</span><span>Newsletter</span><span>Videos</span></nav></div>' +
       '<div class="date">' + DAYS[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div><h1>Hi ' + first + '</h1><p>Here’s what would be waiting for you, ready to share.</p></div></header>' +
-      '<main class="sbody"><div class="wrap">' + Samples.html(c, c.photo ? '/api/sample/photo' : '', 'logo-dark.png') + '</div></main>';
+      '<main class="sbody"><div class="wrap">' + Samples.html(c, c.photo ? '/api/sample/photo' : '', P) + '</div></main>';
     Samples.fix(app);
     document.getElementById('exit').onclick = exit;
     tick(j.exp); timer = setInterval(() => tick(j.exp), 1000);

@@ -1,13 +1,14 @@
 // New hire looks: live previews on Onboarding › Choose a look, drawn with the new hire's own photo, name, contacts and bio
 // (the saved preview images show sample people). Same layouts as the InDesign templates in 2_Templates/0_New Hire/Announcements;
 // a look with no live layout here keeps its saved preview images.
+// A copy of this file is in my-marketing/public for the Recruiting sample view - change both together.
 (function () {
   const e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // the script first name uses the approved script font, served from the New Hire Packages board (never from this public repo)
   let fontState = '';
   function loadFont() {
     if (fontState || !window.FontFace) return; fontState = 'loading';
-    new FontFace('NHScript', 'url(api/pkgfont)').load().then(f => { document.fonts.add(f); fontState = 'ok'; fit(); }).catch(() => { fontState = 'none'; });
+    new FontFace('NHScript', 'url(' + (window.NH_FONT_URL || 'api/pkgfont') + ')').load().then(f => { document.fonts.add(f); fontState = 'ok'; fit(); }).catch(() => { fontState = 'none'; });
   }
   const CR = '© ' + new Date().getFullYear() + ' Stewart. All rights reserved. Trademarks are the property of their respective owners.';
   const ic = {
@@ -83,6 +84,13 @@
     loadFont(); setTimeout(fit, 0);
     return posts.map(p => '<span class="pk-live">' + p + '</span>');
   };
+  // the same posts for someone who isn't a new hire yet (Recruiting samples): P is { f, l, t, ph, em, a1, a2, bio, noBio, pic, cut }
+  window.nhLookPosts = function (name, P) {
+    const posts = build(P)[key(name)];
+    if (posts) loadFont();
+    return posts || null;
+  };
+  window.nhLookNames = ['Soft Paper', 'Ink', 'Welcome', 'Left Edge'];
   // scale each 1080 × 1350 post to the width of its box
   function fit() {
     document.querySelectorAll('.pk-live').forEach(el => { const p = el.firstElementChild; if (p) p.style.transform = 'scale(' + (el.clientWidth / 1080) + ')'; });

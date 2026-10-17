@@ -180,6 +180,20 @@ async function sampleRoute(request, env, url) {
   const row = await sampleRow(env, s.cid);
   if (!row) return fail(404, 'This candidate was removed.');
   if (path === '/api/sample/data') return json({ by: s.by, exp: s.exp, candidate: { name: row.name, title: row.title, area: row.area, phone: row.phone, email: row.email, photo: !!row.photoUrl } });
+  if (path === '/api/sample/pieces') return json({ pieces: (await samplePieces(env)).map(x => ({ id: x.id, name: x.name, kind: x.kind, layout: x.layout, img: '/api/sample/art/' + x.art.id })) });
+  if (path.startsWith('/api/sample/art/')) {
+    const id = path.split('/').pop().replace(/\D/g, ''), x = (await samplePieces(env)).find(p => p.art.id === id);
+    if (!x) return fail(404, 'Not found');
+    const r = await fetch(x.art.url);
+    if (!r.ok) { forget('samplePieces'); return fail(502, 'Could not load the piece'); }
+    return new Response(r.body, { headers: { 'Content-Type': r.headers.get('Content-Type') || 'image/jpeg', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' } });
+  }
+  if (path === '/api/sample/font') {
+    const f = await sampleFont(env);
+    const r = f ? await fetch(f.url) : null;
+    if (!r || !r.ok) return fail(404, 'No font');
+    return new Response(r.body, { headers: { 'Content-Type': { otf: 'font/otf', ttf: 'font/ttf', woff: 'font/woff', woff2: 'font/woff2' }[f.ext] || 'font/otf', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
+  }
   if (path === '/api/sample/photo') {
     if (!row.photoUrl) return fail(404, 'No photo');
     const r = await fetch(row.photoUrl);
@@ -187,6 +201,38 @@ async function sampleRoute(request, env, url) {
     return new Response(r.body, { headers: { 'Content-Type': r.headers.get('Content-Type') || 'image/png', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
   return fail(404, 'Not found');
+}
+// the Recruiting board's own copy of the marketing pieces (its "Sample pieces" group), live ones only - the Manager Portal adds them
+async function samplePieces(env) {
+  return cached('samplePieces', 600e3, async () => {
+    const b = await boardByName(env, 'Manager Portal Recruiting');
+    if (!b || !b.cols.Files) return [];
+    const d = await gql(env, 'query($b:[ID!]){boards(ids:$b){groups{id title}}}', { b: [b.id] });
+    const g = (d.boards[0].groups || []).find(x => nk(x.title) === nk('Sample pieces'));
+    if (!g) return [];
+    const want = ['Kind', 'Layout', 'Piece Status'].map(t => b.cols[t]).filter(Boolean);
+    let out = [], cursor = null;
+    do {
+      const q = cursor ? await gql(env, 'query($k:String!,$c:[String!],$f:[String!]){next_items_page(limit:200,cursor:$k){cursor items{id name column_values(ids:$c){id text} assets(column_ids:$f){id public_url created_at}}}}', { k: cursor, c: want, f: [b.cols.Files] })
+        : await gql(env, 'query($b:[ID!],$g:[String],$c:[String!],$f:[String!]){boards(ids:$b){groups(ids:$g){items_page(limit:200){cursor items{id name column_values(ids:$c){id text} assets(column_ids:$f){id public_url created_at}}}}}}', { b: [b.id], g: [g.id], c: want, f: [b.cols.Files] });
+      const pg = cursor ? q.next_items_page : q.boards[0].groups[0].items_page;
+      out = out.concat(pg.items); cursor = pg.cursor;
+    } while (cursor);
+    return out.map(it => {
+      const v = {}; it.column_values.forEach(c => v[c.id] = (c.text || '').trim());
+      const a = (it.assets || []).slice().sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
+      return { id: String(it.id), name: it.name.trim(), kind: v[b.cols.Kind] || '', layout: v[b.cols.Layout] || '', status: (v[b.cols['Piece Status']] || 'live').toLowerCase(), art: a ? { id: String(a.id), url: a.public_url } : null };
+    }).filter(x => x.art && x.status !== 'retired');
+  });
+}
+// the approved script font for the first name, from the "_Script font" row Marketing Tools keeps on the New Hire Packages board (licensed, so never in this repo)
+async function sampleFont(env) {
+  const b = await boardByName(env, 'New Hire Packages');
+  if (!b) return null;
+  const d = await gql(env, 'query($b:[ID!]){boards(ids:$b){items_page(limit:200){items{name assets{name file_extension public_url}}}}}', { b: [b.id] });
+  const it = d.boards[0].items_page.items.find(x => /^_script font$/i.test(x.name.trim()));
+  const a = it && (it.assets || []).find(x => /\.(otf|ttf|woff2?)$/i.test(x.name || ''));
+  return a ? { url: a.public_url, ext: a.name.split('.').pop().toLowerCase() } : null;
 }
 async function session(request, env) {
   const ck = request.headers.get('Cookie') || '';
